@@ -77,6 +77,10 @@ export type ActiveDeckView = {
      */
     question: string | null;
     /**
+     * Recipe
+     */
+    recipe: string | null;
+    /**
      * Schema Version
      */
     schema_version?: 2;
@@ -731,6 +735,10 @@ export type ProjectDashboardView = {
      */
     name: string;
     /**
+     * Primary Recipe
+     */
+    primary_recipe: string;
+    /**
      * Project Id
      */
     project_id: string;
@@ -826,6 +834,10 @@ export type ProjectSessionSnapshotView = {
      * Project Session Id
      */
     project_session_id: string;
+    /**
+     * Recipe
+     */
+    recipe: string;
     result: SessionResultView | null;
     /**
      * Size
@@ -1124,6 +1136,10 @@ export type SessionCardView = {
      */
     project_session_id: string;
     /**
+     * Recipe
+     */
+    recipe: string;
+    /**
      * Status
      */
     status: 'ready' | 'active' | 'paused' | 'done' | 'closed' | 'blocked';
@@ -1153,6 +1169,10 @@ export type SessionCompletionView = {
      * Project Session Id
      */
     project_session_id: string | null;
+    /**
+     * Recipe
+     */
+    recipe: string | null;
     result: SessionResultView | null;
     /**
      * Schema Version
@@ -1217,6 +1237,10 @@ export type SessionResultView = {
      * Project Session Id
      */
     project_session_id: string;
+    /**
+     * Recipe
+     */
+    recipe: string;
     /**
      * Repeat Result
      */

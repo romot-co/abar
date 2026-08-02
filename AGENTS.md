@@ -59,7 +59,9 @@ Repeat this sequence:
    creates the manifest. Use `--manifest ... --archive ...` only for a custom execution contract.
 4. Ask one useful question: create a short or standard Project Session against current best.
    Standard defaults to three evidence comparisons; set an explicit larger evidence count when
-   one question must be observed across more Materials. Best Update remains fixed at three.
+   one question must be observed across more Materials. Omit `--recipe` to inherit the Project
+   primary Recipe; pass it only for an intentional Session-level override. Best Update remains
+   fixed at three.
 5. Hand the Session to the human in `abar ui`, then follow the waiting boundary below.
 6. Report measurements by AudioContent or PreparedPair identity, then return to observation.
 

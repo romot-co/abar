@@ -90,7 +90,7 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
         {pending.length > 0 ? (
           <div className="queue-list">
             {pending.map((item, index) => (
-              <QueueRow key={item.project_session_id} session={item}>
+              <QueueRow key={item.project_session_id} session={item} primaryRecipe={project.primary_recipe}>
                 {item.status === "ready" && (
                   <button type="button" className={index === 0 ? "primary-action" : "secondary-action"} disabled={start.isPending} onClick={() => start.mutate(item.core_session_id)}>
                     聴く
@@ -180,8 +180,11 @@ function IndicatorRow({ item, role }: { item: IndicatorSummaryView; role: "targe
   );
 }
 
-function QueueRow({ session, children }: { session: SessionCardView; children?: ReactNode }) {
+function QueueRow({ session, primaryRecipe, children }: { session: SessionCardView; primaryRecipe: string; children?: ReactNode }) {
   const answered = session.answered_count > 0 ? ` · ${session.answered_count}/${session.comparison_count} 回答済み` : "";
+  const recipe = session.recipe === primaryRecipe
+    ? `Recipe ${session.recipe}`
+    : `Recipe ${session.recipe}（Project既定: ${primaryRecipe}）`;
   return (
     <div className="queue-row">
       <div className="queue-body">
@@ -189,6 +192,7 @@ function QueueRow({ session, children }: { session: SessionCardView; children?: 
           {session.current_best_check ? "現在最良チェック" : "観察"}{answered}
         </span>
         <p className="queue-focus">{session.focus}</p>
+        <span className="queue-recipe">{recipe}</span>
       </div>
       {children ?? <span className="queue-outcome">{session.status === "done" ? "完了" : session.status}</span>}
     </div>

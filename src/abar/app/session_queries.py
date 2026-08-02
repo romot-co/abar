@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Literal, cast
 
-from abar.app.query_support import labeled_identity, variant_label
+from abar.app.query_support import labeled_identity, recipe_label, variant_label
 from abar.app.repository import WorkspaceRepository
 from abar.app.state import ABARState
 from abar.app.views import (
@@ -74,6 +74,7 @@ def session_result_from_state(state: ABARState, project_session_id: str) -> Sess
     memos = state.research.session_memos.get(project_session_id, ())
     return SessionResultView(
         project_session_id=project_session_id,
+        recipe=recipe_label(project_session.recipe),
         evidence_count=len(project_session.evidence_item_ids),
         favored_required_count=favored_count(len(project_session.evidence_item_ids)),
         variant_labels={
@@ -253,6 +254,7 @@ def active_deck(
             criterion_text=None,
             question=None,
             current_best_check=False,
+            recipe=None,
             audio=(),
             identity_by_slot=None,
             can_reveal=False,
@@ -330,6 +332,7 @@ def active_deck(
         criterion_text=public.criterion,
         question=question,
         current_best_check=plan is not None,
+        recipe=None if project_session is None else recipe_label(project_session.recipe),
         audio=audio,
         identity_by_slot=labeled_identity(state, public.identity_by_slot),
         can_reveal=project_session is None and session.presentation == "blind",
@@ -421,6 +424,7 @@ def session_completion(
         project_session_id=None if linked is None else linked.id,
         focus=None if linked is None else linked.focus,
         current_best_check=current_best_check,
+        recipe=None if linked is None else recipe_label(linked.recipe),
         comparison_count=len(session.items),
         items=tuple(items),
         result=result,

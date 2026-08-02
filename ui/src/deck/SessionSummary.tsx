@@ -39,7 +39,10 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
 
   return (
     <main className="summary-shell">
-      <p className="result-eyebrow">{data.current_best_check ? "現在最良チェック" : "観察"} · 全{data.comparison_count}比較</p>
+      <p className="result-eyebrow">
+        {data.current_best_check ? "現在最良チェック" : "観察"} · 全{data.comparison_count}比較
+        {data.recipe ? ` · Recipe ${data.recipe}` : ""}
+      </p>
       <h1>{data.focus ?? "比較の結果"}</h1>
 
       <section className={result?.current_best_updated ? "verdict-card updated" : "verdict-card"}>
@@ -54,7 +57,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
           <span>判定</span>
           <span>メモ</span>
         </div>
-        {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} />)}
+        {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} />)}
       </section>
 
       <div className="summary-actions">
@@ -70,10 +73,11 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   );
 }
 
-function AnswerRow({ item }: { item: RelistenItemView }) {
+function AnswerRow({ item, result }: { item: RelistenItemView; result: SessionResultView | null }) {
   const preference = item.skipped ? null : item.judgment?.preference ?? null;
   const note = answerNote(item);
-  const judgment = preference === null ? "回答なし" : normalizedPreferenceText(item, preference);
+  const judgment = rowJudgment(item, preference, result);
+  const displayedJudgment = item.skipped && !["same", "repeat"].includes(item.role) ? "skip" : judgment;
   return (
     <div className="answer-table-row">
       <span>{item.sequence_index + 1}</span>
@@ -87,7 +91,7 @@ function AnswerRow({ item }: { item: RelistenItemView }) {
         <span className="answer-gauge" aria-label={judgment}>
           {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
         </span>
-        <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{item.skipped ? "skip" : judgment}</strong>
+        <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{displayedJudgment}</strong>
       </span>
       <span className="answer-note" title={note}>{note}</span>
     </div>
@@ -99,6 +103,27 @@ function normalizedPreferenceText(item: RelistenItemView, preference: 1 | 2 | 3 
   const slot = preference < 3 ? "A" : "B";
   const strength = preference === 1 || preference === 5 ? "明確に" : "わずかに";
   return `${slotLabel(item, slot)}を${strength}支持`;
+}
+
+function rowJudgment(
+  item: RelistenItemView,
+  preference: 1 | 2 | 3 | 4 | 5 | null,
+  result: SessionResultView | null,
+): string {
+  if (preference === null) {
+    if (item.role === "same") return "同一音: 未回答";
+    if (item.role === "repeat") return "再現性: 未回答";
+    return "回答なし";
+  }
+  if (item.role === "same") {
+    const strength = preference === 1 || preference === 5 ? "明確" : "わずか";
+    return result?.same_result === "tie" ? "同一音: 一致" : `同一音: 差を報告（${strength}）`;
+  }
+  if (item.role === "repeat") {
+    const current = normalizedPreferenceText(item, preference);
+    return `再現性: ${repeatResultLabel(result?.repeat_result)}（今回: ${current}）`;
+  }
+  return normalizedPreferenceText(item, preference);
 }
 
 function answerNote(item: RelistenItemView): string {
@@ -118,7 +143,7 @@ function answerNote(item: RelistenItemView): string {
 function verdictCopy(data: SessionCompletion): { title: string; detail: string } {
   const result = data.result;
   if (!result) return { title: "比較を記録しました", detail: "結果はProject Sessionへ記録されていません。" };
-  const detail = resultBreakdown(result);
+  const detail = `${resultBreakdown(result)}${qcBreakdown(result, data.items)}`;
   if (data.current_best_check) {
     return result.current_best_updated
       ? { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新しました`, detail }
@@ -144,6 +169,27 @@ function resultBreakdown(result: SessionResultView): string {
   const answered = Object.values(result.evidence_direction_counts).reduce((total, count) => total + count, 0);
   if (answered < result.evidence_count) counts.push(`未回答 ${result.evidence_count - answered}`);
   return `${counts.join(" / ")}（優勢条件 ${result.favored_required_count}/${result.evidence_count}）`;
+}
+
+function qcBreakdown(result: SessionResultView, items: RelistenItemView[]): string {
+  const checks: string[] = [];
+  if (items.some((item) => item.role === "same")) checks.push(`同一音: ${sameResultLabel(result.same_result)}`);
+  if (items.some((item) => item.role === "repeat")) checks.push(`再現性: ${repeatResultLabel(result.repeat_result)}`);
+  return checks.length > 0 ? ` · QC ${checks.join(" / ")}` : "";
+}
+
+function sameResultLabel(value: string | undefined): string {
+  return { tie: "一致", difference_reported: "差を報告", missing: "未回答" }[value ?? "missing"] ?? value ?? "未回答";
+}
+
+function repeatResultLabel(value: string | undefined): string {
+  return {
+    same_category: "同一強度",
+    same_direction: "同方向",
+    near: "片方tie",
+    reversed: "反転",
+    missing: "未回答",
+  }[value ?? "missing"] ?? value ?? "未回答";
 }
 
 function roleLabel(role: RelistenItemView["role"]): string {

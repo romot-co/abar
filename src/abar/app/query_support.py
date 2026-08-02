@@ -4,6 +4,7 @@ from typing import Literal, cast
 
 from abar.app.state import ABARState
 from abar.app.views import RevealedIdentityView, TimelineEntryView
+from abar.compare.models import RecipeRef
 from abar.foundation.json_types import JSONValue
 
 type Slot = Literal["A", "B"]
@@ -24,6 +25,10 @@ def variant_label(state: ABARState, variant_id: str) -> str:
     return "登録済みの版"
 
 
+def recipe_label(recipe: RecipeRef) -> str:
+    return f"{recipe.id}-v{recipe.version}"
+
+
 def labeled_identity(
     state: ABARState,
     identity: dict[str, dict[str, object]] | None,
@@ -38,7 +43,7 @@ def labeled_identity(
         variant_ref = provenance.get("variant_ref")
         name = provenance.get("name")
         label: str | None = None
-        if kind == "variant" and isinstance(variant_ref, str):
+        if kind in {"source", "variant"} and isinstance(variant_ref, str):
             label = variant_label(state, variant_ref)
         elif kind == "file" and isinstance(name, str):
             label = name

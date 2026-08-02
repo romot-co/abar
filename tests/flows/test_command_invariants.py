@@ -165,6 +165,73 @@ def test_project_session_close_uses_core_session_as_single_status_source(
     assert card.status == "closed"
 
 
+def test_observation_session_inherits_project_recipe_and_exposes_resolved_value(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    commands.init_project(
+        repository,
+        name="Project",
+        brief="Improve the sound",
+        material_paths=(wav_file("recipe-source.wav", 220.0),),
+    )
+    proposed = persist_finite_variant(repository, label="Proposal", same_as_source=False)
+
+    inherited_id = commands.create_observation_session(
+        repository,
+        first_variant="source",
+        second_variant=proposed,
+        focus="Use the Project default",
+        actor_id="agent-1",
+    )
+    explicit_id = commands.create_observation_session(
+        repository,
+        first_variant="source",
+        second_variant=proposed,
+        focus="Use an explicit override",
+        recipe=RecipeRef("native"),
+        actor_id="agent-1",
+    )
+
+    state = repository.state()
+    inherited = state.research.project_sessions[inherited_id]
+    explicit = state.research.project_sessions[explicit_id]
+    assert inherited.recipe == RecipeRef("matched")
+    assert explicit.recipe == RecipeRef("native")
+
+    dashboard = queries.project_dashboard(repository)
+    assert dashboard.primary_recipe == "matched-v1"
+    cards = {item.project_session_id: item for item in dashboard.sessions}
+    assert cards[inherited_id].recipe == "matched-v1"
+    assert cards[explicit_id].recipe == "native-v1"
+    details = {
+        item.project_session_id: item for item in queries.project_view(repository).session_details
+    }
+    assert details[inherited_id].recipe == "matched-v1"
+    assert details[explicit_id].recipe == "native-v1"
+
+    commands.start_session(repository, inherited.core_session_id, allocation_seed=1)
+    deck = queries.active_deck(
+        repository,
+        audio_url=lambda delivery_id, slot, _audio_id: f"/{delivery_id}/{slot}",
+    )
+    assert deck.recipe == "matched-v1"
+    delivery = next(
+        item
+        for item in repository.state().compare.deliveries.values()
+        if item.session_id == inherited.core_session_id
+    )
+    commands.record_judgment(repository, delivery.id, preference=3)
+    result = queries.session_result(repository, inherited_id)
+    assert result.recipe == "matched-v1"
+    completion = queries.session_completion(
+        repository,
+        inherited.core_session_id,
+        audio_url=lambda delivery_id, slot, _audio_id: f"/{delivery_id}/{slot}",
+    )
+    assert completion.recipe == "matched-v1"
+
+
 def test_standard_session_can_use_ten_materials_and_add_optional_checks(
     repository: WorkspaceRepository,
     wav_file: Callable[[str, float], Path],

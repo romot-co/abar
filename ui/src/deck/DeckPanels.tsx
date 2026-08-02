@@ -21,7 +21,7 @@ export function DeckHeader({ deck, onLeave }: { deck: Deck; onLeave: () => void 
     <header className="deck-header">
       <button type="button" className="weak-action" onClick={onLeave}><Icon name="arrow_back" />受信箱</button>
       <strong className="deck-progress">{index + 1} / {total}</strong>
-      <span />
+      <span className="deck-recipe">{deck.recipe ? `Recipe ${deck.recipe}` : ""}</span>
     </header>
   );
 }
@@ -31,13 +31,13 @@ export function SkipConfirmBar({ deck, pending, onConfirm, onCancel }: { deck: D
     ? `回答は記録されません。この比較は現在最良を判断する証拠${deck.comparison_count}件の1つで、飛ばすと支持が集まらず更新が成立しにくくなります。`
     : "回答は記録されず、次の比較へ進みます。";
   return (
-    <div className="confirm-bar" role="alertdialog" aria-label="skipの確認">
+    <dialog open className="confirm-bar" aria-label="skipの確認">
       <span>{message}</span>
       <span className="confirm-actions">
         <button type="button" className="primary-action" disabled={pending} onClick={onConfirm}>飛ばす</button>
         <button type="button" className="weak-action" disabled={pending} onClick={onCancel}>続ける</button>
       </span>
-    </div>
+    </dialog>
   );
 }
 

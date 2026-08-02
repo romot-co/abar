@@ -71,6 +71,12 @@ def test_standard_plan_updates_current_best_only_after_three_evidence_answers(
     )
     assert all(item.role == "evidence" for item in completion.items)
     assert {item.material_name for item in completion.items} == {"vocal.wav", "drums.wav"}
+    assert completion.recipe == "matched-v1"
+    assert any(
+        identity.label == "原音"
+        for item in completion.items
+        for identity in item.identity_by_slot.values()
+    )
     project_view = queries.project_view(repository)
     assert project_view.current_best_evidence == result.best_update_evidence
 

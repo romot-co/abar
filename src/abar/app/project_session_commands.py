@@ -196,7 +196,7 @@ def _create_project_session(
     else:
         if first_variant is None or second_variant is None or focus is None:
             raise CommandError("general Session requires pair and focus")
-        selected_recipe = recipe or RecipeRef("aligned")
+        selected_recipe = recipe or project.primary_recipe
         selected_focus = focus
     assert first_variant is not None and second_variant is not None
     count = resolve_evidence_count(size, evidence_count)

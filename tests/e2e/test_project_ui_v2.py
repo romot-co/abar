@@ -127,6 +127,7 @@ def _exercise_project_deck(page: Page, url: str) -> None:
     assert page.locator(".progress-track").count() == 0
     assert page.locator(".deck-header").get_by_text("この比較を飛ばす", exact=True).count() == 0
     page.get_by_role("button", name="回答せずにこの比較を飛ばす", exact=True).wait_for()
+    page.get_by_text("Recipe matched-v1", exact=True).wait_for()
 
     for remaining in (2, 1):
         page.locator(".slot-switcher button").nth(0).click()
@@ -164,5 +165,10 @@ def _exercise_project_deck(page: Page, url: str) -> None:
         exact=False,
     ).wait_for()
     page.get_by_text("優勢条件 2/3", exact=False).wait_for()
-    assert page.locator(".result-pair").count() == 3
+    page.get_by_text("QC 同一音: 差を報告 / 再現性: 片方tie", exact=False).wait_for()
+    page.get_by_text("同一音: 差を報告（明確）", exact=True).wait_for()  # noqa: RUF001
+    page.get_by_text("再現性: 片方tie（今回: 互角）", exact=True).wait_for()  # noqa: RUF001
+    page.get_by_text("原音", exact=True).first.wait_for()
+    page.get_by_text("Recipe matched-v1", exact=True).wait_for()
+    assert page.locator(".result-pair").count() == 5
     assert page.get_by_role("button", name="次を聴く", exact=False).count() == 0

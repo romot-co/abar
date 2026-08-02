@@ -51,6 +51,7 @@ class SessionCardView(PublicView):
     project_session_id: str
     core_session_id: str
     focus: str
+    recipe: str
     comparison_count: int
     answered_count: int
     status: Literal["ready", "active", "paused", "done", "closed", "blocked"]
@@ -171,6 +172,7 @@ class ProjectSessionSnapshotView(PublicView):
     focus: str
     topic_key: str | None
     size: Literal["short", "standard"]
+    recipe: str
     status: Literal["ready", "active", "paused", "ended", "closed", "blocked"]
     criterion: CriterionSnapshotView | None
     judgments: tuple[ProjectSessionJudgmentView, ...]
@@ -184,6 +186,7 @@ class ProjectDashboardView(PublicView):
     name: str
     brief: str
     current_best: str
+    primary_recipe: str
     sessions: tuple[SessionCardView, ...]
     indicators: tuple[IndicatorSummaryView, ...]
 
@@ -240,6 +243,7 @@ class ActiveDeckView(PublicView):
     criterion_text: str | None
     question: str | None
     current_best_check: bool
+    recipe: str | None
     audio: tuple[DeckAudioView, ...]
     identity_by_slot: dict[Literal["A", "B"], RevealedIdentityView] | None
     can_reveal: bool
@@ -263,6 +267,7 @@ class EvidenceResultView(PublicView):
 
 class SessionResultView(PublicView):
     project_session_id: str
+    recipe: str
     evidence_count: int
     favored_required_count: int
     variant_labels: dict[str, str]
@@ -311,6 +316,7 @@ class SessionCompletionView(PublicView):
     project_session_id: str | None
     focus: str | None
     current_best_check: bool
+    recipe: str | None
     comparison_count: int
     items: tuple[RelistenItemView, ...]
     result: SessionResultView | None

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Literal, cast
 
-from abar.app.query_support import variant_label
+from abar.app.query_support import recipe_label, variant_label
 from abar.app.repository import WorkspaceRepository
 from abar.app.session_queries import session_result_from_state
 from abar.app.state import ABARState
@@ -107,6 +107,7 @@ def project_dashboard(repository: WorkspaceRepository) -> ProjectDashboardView:
         name=project.name,
         brief=project.brief_text,
         current_best=variant_label(state, project.current_best_variant_id),
+        primary_recipe=recipe_label(project.primary_recipe),
         sessions=session_cards(state, repository.events.read_all()),
         indicators=indicator_summaries(state, project.current_best_variant_id),
     )
@@ -137,6 +138,7 @@ def session_cards(
                 project_session_id=item.id,
                 core_session_id=item.core_session_id,
                 focus=item.focus,
+                recipe=recipe_label(item.recipe),
                 comparison_count=len(state.compare.sessions[item.core_session_id].items),
                 answered_count=sum(
                     state.compare.effective_judgment(delivery_id) is not None

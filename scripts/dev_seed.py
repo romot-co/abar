@@ -188,19 +188,27 @@ def _answer_for_variant(
         )
 
 
-def _answer_one_for_variant(
+def _answer_observation_with_checks(
     repository: WorkspaceRepository,
-    core_session_id: str,
+    project_session_id: str,
     favored_variant_id: str,
 ) -> None:
     state = repository.state()
+    project_session = state.research.project_sessions[project_session_id]
     deliveries = sorted(
-        (item for item in state.compare.deliveries.values() if item.session_id == core_session_id),
+        (
+            item
+            for item in state.compare.deliveries.values()
+            if item.session_id == project_session.core_session_id
+        ),
         key=lambda item: item.sequence_index,
     )
-    for index, delivery in enumerate(deliveries):
-        preference = 3
-        if index == 0:
+    for delivery in deliveries:
+        if delivery.session_item_id == project_session.same_check_item_id:
+            preference = 1
+        elif delivery.session_item_id == project_session.repeat_check_item_id:
+            preference = 3
+        elif delivery.session_item_id == project_session.repeat_of_item_id:
             comparison = state.compare.comparisons[delivery.comparison_id]
             variant_by_key = {
                 item.input_key: str(item.provenance_ref.get("variant_ref", "source"))
@@ -212,6 +220,8 @@ def _answer_one_for_variant(
                 if variant_by_key[input_key] == favored_variant_id
             )
             preference = 1 if favored_slot == "A" else 5
+        else:
+            preference = 3
         commands.record_judgment(
             repository,
             delivery.id,
@@ -285,6 +295,8 @@ def seed(
                     second_variant=variant_dense,
                     focus=focus,
                     size="standard" if index == 0 else "short",
+                    same_check=index == 0,
+                    repeat_check=index == 0,
                     actor_id="human",
                     actor_type="human",
                 )
@@ -292,7 +304,7 @@ def seed(
                 done_core = state.research.project_sessions[done_id].core_session_id
                 commands.start_session(repository, done_core, allocation_seed=index + 20)
                 if index == 0:
-                    _answer_one_for_variant(repository, done_core, variant_dense)
+                    _answer_observation_with_checks(repository, done_id, variant_dense)
                 else:
                     _answer_all(repository, done_core, preferences=[3])
 
