@@ -282,6 +282,7 @@ def material_clip_add(
 def variant_add(
     context: typer.Context,
     manifest: Annotated[Path, typer.Option("--manifest", exists=True, dir_okay=False)],
+    archive: Annotated[Path | None, typer.Option("--archive", exists=True, dir_okay=False)] = None,
     params: Annotated[Path | None, typer.Option("--params", exists=True, dir_okay=False)] = None,
     label: Annotated[str | None, typer.Option("--label")] = None,
     provenance: Annotated[
@@ -291,19 +292,55 @@ def variant_add(
     cli = _ctx(context)
     _agent_required(cli)
     manifest_document = _json_file(manifest)
+    archive_bytes = None if archive is None else archive.read_bytes()
     params_document = {} if params is None else _json_file(params)
     provenance_document = None if provenance is None else _json_file(provenance)
     _run(
         cli,
-        lambda repository: commands.add_variant(
-            repository,
-            manifest_document,
-            params=params_document,
+        lambda repository: _add_variant(
+            repository=repository,
+            manifest_document=manifest_document,
+            archive_bytes=archive_bytes,
+            params_document=params_document,
             label=label,
-            provenance=provenance_document,
+            provenance_document=provenance_document,
             idempotency_key=cli.idempotency_key,
         ),
         "Variantを登録しました",
+    )
+
+
+def _add_variant(
+    *,
+    repository: WorkspaceRepository,
+    manifest_document: dict[str, JSONValue],
+    archive_bytes: bytes | None,
+    params_document: dict[str, JSONValue],
+    label: str | None,
+    provenance_document: dict[str, JSONValue] | None,
+    idempotency_key: str | None,
+) -> str:
+    resolved_manifest = dict(manifest_document)
+    if archive_bytes is not None:
+        stored = repository.objects.put(archive_bytes)
+        archive_ref: dict[str, JSONValue] = {
+            "object_id": stored.object_id,
+            "sha": f"sha256:{stored.sha256}",
+        }
+        declared = resolved_manifest.get("source_archive")
+        if declared is not None and declared != archive_ref:
+            raise commands.CommandError(
+                "source_archive_mismatch",
+                "--archive content does not match manifest source_archive",
+            )
+        resolved_manifest["source_archive"] = archive_ref
+    return commands.add_variant(
+        repository,
+        resolved_manifest,
+        params=params_document,
+        label=label,
+        provenance=provenance_document,
+        idempotency_key=idempotency_key,
     )
 
 

@@ -53,6 +53,9 @@ Repeat this sequence:
 1. Observe: run `abar --json status` and `abar --json project show --since <event_seq>`.
 2. Record understanding: update the Project note. Register an Indicator only when a measurement has a stable external definition.
 3. Prepare resources: add Material, Clips, and a reproducible Variant manifest with provenance.
+   For a command renderer, pass its immutable bundle with
+   `variant add --manifest <json> --archive <zip>`; ABAR imports the bundle and
+   writes its content identity into the stored manifest.
 4. Ask one useful question: create a short or standard Project Session against current best.
 5. Hand the Session to the human in `abar ui`, then follow the waiting boundary below.
 6. Report measurements by AudioContent or PreparedPair identity, then return to observation.
