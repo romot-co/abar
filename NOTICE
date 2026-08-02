@@ -1,0 +1,22 @@
+ABAR — A/B · Audit · Refine
+Copyright 2026 the ABAR authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components
+----------------------
+The web UI bundles the "IBM Plex Sans JP" font (Regular and Medium
+weights, WOFF2), copyright IBM Corp., licensed under the SIL Open Font
+License 1.1. The license text is distributed alongside the font files
+at ui/public/fonts/OFL-IBMPlexSansJP.txt.
+
+The web UI bundles the Material Icons Filled font through Fontsource,
+copyright Google Inc., licensed under the SIL Open Font License 1.1.
+The license text is distributed alongside the font file at
+ui/public/fonts/OFL-MaterialIcons.txt.
+
+This distribution depends on the "soundfile" Python package, whose
+binary wheels bundle libsndfile (LGPL-2.1-or-later). libsndfile is
+dynamically linked and is not modified by this project. See
+THIRD_PARTY_NOTICES for dependency license references. Authoritative license
+texts are provided by the separately distributed upstream packages.

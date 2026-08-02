@@ -1,0 +1,102 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "abar"
+version = "2.0.0"
+description = "Local A/B comparison and agent-guided audio refinement"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES"]
+authors = [{ name = "ABAR authors" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+dependencies = [
+  "fastapi>=0.115",
+  "numpy>=2.0",
+  "platformdirs>=4.3",
+  "pydantic>=2.10",
+  "python-multipart>=0.0.20",
+  "scipy>=1.14",
+  "soundfile>=0.13",
+  "typer>=0.15",
+  "uvicorn>=0.34",
+]
+
+[project.scripts]
+abar = "abar.cli:app"
+
+[dependency-groups]
+dev = [
+  "hypothesis>=6.120",
+  "httpx2>=2.7",
+  "playwright>=1.49",
+  "pyright>=1.1.390",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.9",
+]
+mutation = ["mutmut>=3.3"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/abar"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/scripts",
+  "/ui",
+  "/tests",
+  "/README.md",
+  "/LICENSE",
+  "/NOTICE",
+  "/THIRD_PARTY_NOTICES",
+  "/pyproject.toml",
+]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+addopts = ["--strict-config", "--strict-markers"]
+markers = ["browser: exercises the built React UI in Chromium"]
+pythonpath = ["."]
+testpaths = [
+  "tests/contracts",
+  "tests/core",
+  "tests/project",
+  "tests/research",
+  "tests/flows",
+  "tests/e2e",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.coverage.run]
+branch = true
+source = ["abar"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

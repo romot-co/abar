@@ -1,0 +1,28 @@
+ABAR third-party notices
+========================
+
+ABAR depends on separately distributed open-source packages. Their upstream
+packages contain the authoritative license texts.
+
+Python runtime dependencies
+---------------------------
+
+- FastAPI — MIT License
+- NumPy — BSD 3-Clause License
+- Pydantic — MIT License
+- SciPy — BSD 3-Clause License
+- SoundFile — BSD 3-Clause License
+- libsndfile, distributed by SoundFile binary wheels — LGPL-2.1-or-later
+- Typer — MIT License
+- Uvicorn — BSD 3-Clause License
+
+Bundled web application dependencies
+------------------------------------
+
+- React and React DOM — MIT License
+- TanStack Query — MIT License
+- Material Icons, packaged by Fontsource — SIL Open Font License 1.1
+
+Build and development tools are not incorporated into the distributed ABAR
+runtime. Their licenses remain available in their respective upstream
+distributions and lockfiles.
