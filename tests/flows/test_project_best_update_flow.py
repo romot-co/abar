@@ -58,6 +58,9 @@ def test_standard_plan_updates_current_best_only_after_three_evidence_answers(
     assert result.best_update_evidence.answered_count == 3
     assert result.best_update_evidence.score_sum == 6
     assert result.best_update_evidence.blocker_count == 0
+    assert len(result.evidence) == 3
+    assert {item.material_name for item in result.evidence} == {"vocal.wav", "drums.wav"}
+    assert all(item.favored_variant_id == proposed for item in result.evidence)
     project_view = queries.project_view(repository)
     assert project_view.current_best_evidence == result.best_update_evidence
 

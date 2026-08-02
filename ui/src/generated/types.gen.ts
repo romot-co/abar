@@ -231,6 +231,28 @@ export type ClipRequest = {
 };
 
 /**
+ * ClipSnapshotView
+ */
+export type ClipSnapshotView = {
+    /**
+     * Duration Seconds
+     */
+    duration_seconds: number;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Role
+     */
+    role: string | null;
+    /**
+     * Start Seconds
+     */
+    start_seconds: number;
+};
+
+/**
  * ConfigRequest
  */
 export type ConfigRequest = {
@@ -301,6 +323,68 @@ export type EntityView = {
 };
 
 /**
+ * EvidenceResultView
+ */
+export type EvidenceResultView = {
+    /**
+     * Blockers By Variant
+     */
+    blockers_by_variant: {
+        [key: string]: Array<string>;
+    };
+    /**
+     * Clip Id
+     */
+    clip_id: string;
+    /**
+     * Favored Variant Id
+     */
+    favored_variant_id: string | null;
+    /**
+     * Favored Variant Label
+     */
+    favored_variant_label: string | null;
+    /**
+     * Item Id
+     */
+    item_id: string;
+    /**
+     * Material Id
+     */
+    material_id: string;
+    /**
+     * Material Name
+     */
+    material_name: string;
+    /**
+     * Preference
+     */
+    preference: 1 | 2 | 3 | 4 | 5 | null;
+    /**
+     * Score By Variant
+     */
+    score_by_variant: {
+        [key: string]: number;
+    };
+    /**
+     * Sequence Index
+     */
+    sequence_index: number | null;
+    /**
+     * Variant By Slot
+     */
+    variant_by_slot: {
+        [key: string]: string;
+    };
+    /**
+     * Variant Label By Slot
+     */
+    variant_label_by_slot: {
+        [key: string]: string;
+    };
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -314,6 +398,7 @@ export type HttpValidationError = {
  * HealthView
  */
 export type HealthView = {
+    degradation?: ReplayDegradationView | null;
     /**
      * Last Event Seq
      */
@@ -544,7 +629,7 @@ export type MaterialSnapshotView = {
     /**
      * Clips
      */
-    clips: number;
+    clips: Array<ClipSnapshotView>;
     /**
      * Id
      */
@@ -587,6 +672,10 @@ export type ObservationSessionRequest = {
      * Clip Ids
      */
     clip_ids?: Array<string>;
+    /**
+     * Evidence Count
+     */
+    evidence_count?: number | null;
     /**
      * First Variant
      */
@@ -879,6 +968,32 @@ export type RelistenItemView = {
 };
 
 /**
+ * ReplayDegradationView
+ */
+export type ReplayDegradationView = {
+    /**
+     * Event Seq
+     */
+    event_seq: number;
+    /**
+     * Event Type
+     */
+    event_type: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Recovery
+     */
+    recovery: string;
+    /**
+     * Schema Version
+     */
+    schema_version: number;
+};
+
+/**
  * ResolvedOperandSnapshotView
  */
 export type ResolvedOperandSnapshotView = {
@@ -1048,6 +1163,10 @@ export type SessionResultView = {
      * Difference Profile
      */
     difference_profile: string;
+    /**
+     * Evidence
+     */
+    evidence: Array<EvidenceResultView>;
     /**
      * Evidence Direction Counts
      */

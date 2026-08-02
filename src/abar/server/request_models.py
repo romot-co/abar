@@ -2,9 +2,10 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from abar.foundation.json_types import JSONValue
+from abar.research.session_sizes import resolve_evidence_count
 
 
 class RequestModel(BaseModel):
@@ -23,11 +24,28 @@ class ObservationSessionRequest(RequestModel):
     second_variant: str
     focus: Annotated[str, Field(min_length=1, max_length=200)]
     size: Literal["short", "standard"] = "short"
+    evidence_count: (
+        Annotated[
+            int,
+            Field(
+                ge=1,
+                description=(
+                    "Omit for the size default; short accepts 1 and standard accepts 3 or more"
+                ),
+            ),
+        ]
+        | None
+    ) = None
     recipe: Literal["native", "aligned", "matched"] | None = None
     topic_key: str | None = None
     clip_ids: tuple[str, ...] = ()
     same_check: bool = False
     repeat_check: bool = False
+
+    @model_validator(mode="after")
+    def validate_evidence_count(self) -> "ObservationSessionRequest":
+        resolve_evidence_count(self.size, self.evidence_count)
+        return self
 
 
 class BestUpdateSessionRequest(RequestModel):

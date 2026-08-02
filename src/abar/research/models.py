@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from abar.compare.models import RecipeRef, VariantRef
+from abar.research.session_sizes import SessionSize, resolve_evidence_count
 
 _INDICATOR_ID = re.compile(r"^ind_[a-z0-9][a-z0-9_-]*_v[1-9][0-9]*$")
 
@@ -17,7 +18,7 @@ class ProjectSession:
     core_session_id: str
     focus: str
     topic_key: str | None
-    size: Literal["short", "standard"]
+    size: SessionSize
     pair: tuple[VariantRef, VariantRef]
     recipe: RecipeRef
     evidence_item_ids: tuple[str, ...]
@@ -35,9 +36,13 @@ class ProjectSession:
     def __post_init__(self) -> None:
         if not self.focus.strip() or len(self.focus) > 200 or "\n" in self.focus:
             raise ValueError("focus must be a non-empty single line of at most 200 code points")
-        expected = 1 if self.size == "short" else 3
-        if len(self.evidence_item_ids) != expected:
-            raise ValueError("Project Session evidence count does not match size")
+        resolve_evidence_count(self.size, len(self.evidence_item_ids))
+        if len(self.evidence_clip_ids) != len(self.evidence_item_ids):
+            raise ValueError("Project Session requires one Clip for each evidence item")
+        if len(set(self.evidence_item_ids)) != len(self.evidence_item_ids):
+            raise ValueError("Project Session evidence item IDs must be distinct")
+        if len(set(self.evidence_clip_ids)) != len(self.evidence_clip_ids):
+            raise ValueError("Project Session evidence Clip IDs must be distinct")
         if self.selection_algorithm_version < 1:
             raise ValueError("selection algorithm version must be positive")
         if self.selection_algorithm_id == "explicit" and self.selection_seed is not None:

@@ -51,7 +51,10 @@ class WorkspaceRepository:
     def state(self) -> ABARState:
         result = self.replay()
         if result.degraded is not None:
+            degraded = result.degraded
             raise WorkspaceDegraded(
-                f"event {result.degraded.event_seq} degraded replay: {result.degraded.reason}"
+                f"event {degraded.event_seq} ({degraded.event_type}, schema "
+                f"{degraded.schema_version}) degraded replay: {degraded.reason}. "
+                "Preserve this Workspace and create a new one; pre-release events are not migrated."
             )
         return result.state

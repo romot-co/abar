@@ -41,6 +41,7 @@ def random_selection(
         raise ValueError("not enough eligible Clips")
 
     generator = random.Random(seed)
+    algorithm_version = 1
     if count == 3 and len(by_material) >= 2:
         first_material, second_material = generator.sample(tuple(by_material), 2)
         selected = [
@@ -50,6 +51,15 @@ def random_selection(
         remaining = tuple(clip_id for clip_id in eligible if clip_id not in selected)
         selected.append(generator.choice(remaining))
         generator.shuffle(selected)
+    elif count > 3:
+        algorithm_version = 2
+        material_order = list(by_material)
+        generator.shuffle(material_order)
+        selected = [generator.choice(by_material[item]) for item in material_order[:count]]
+        if len(selected) < count:
+            remaining = tuple(clip_id for clip_id in eligible if clip_id not in selected)
+            selected.extend(generator.sample(remaining, count - len(selected)))
+        generator.shuffle(selected)
     else:
         selected = generator.sample(eligible, count)
-    return EvidenceClipSelection(tuple(selected), "uniform-random", 1, seed)
+    return EvidenceClipSelection(tuple(selected), "uniform-random", algorithm_version, seed)

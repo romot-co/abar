@@ -10,12 +10,14 @@ from abar.app.views import (
     ActiveDeckView,
     BestUpdateEvidenceView,
     DeckAudioView,
+    EvidenceResultView,
     RelistenItemView,
     ResultBlockerView,
     ResultJudgmentView,
     SessionCompletionView,
     SessionResultView,
 )
+from abar.compare.models import Delivery
 from abar.compare.sealing import public_delivery
 from abar.research.models import ProjectSession
 from abar.research.results import ProjectSessionResult, calculate_result
@@ -86,7 +88,85 @@ def session_result_from_state(state: ABARState, project_session_id: str) -> Sess
         if plan is None
         else best_update_evidence_view(plan.proposed_variant_id, plan.evidence_item_ids, result),
         memo=memos[-1].text if memos else None,
+        evidence=_evidence_result_views(state, project_session, deliveries),
     )
+
+
+def _evidence_result_views(
+    state: ABARState,
+    project_session: ProjectSession,
+    deliveries: dict[str, Delivery],
+) -> tuple[EvidenceResultView, ...]:
+    output: list[EvidenceResultView] = []
+    for item_id, clip_id in zip(
+        project_session.evidence_item_ids,
+        project_session.evidence_clip_ids,
+        strict=True,
+    ):
+        delivery = deliveries.get(item_id)
+        clip = state.compare.clips[clip_id]
+        material = state.compare.materials[clip.material_id]
+        if delivery is None:
+            output.append(
+                EvidenceResultView(
+                    item_id=item_id,
+                    clip_id=clip_id,
+                    material_id=material.id,
+                    material_name=material.name,
+                    sequence_index=None,
+                    preference=None,
+                    variant_by_slot={},
+                    variant_label_by_slot={},
+                    favored_variant_id=None,
+                    favored_variant_label=None,
+                    score_by_variant={},
+                    blockers_by_variant={},
+                )
+            )
+            continue
+        comparison = state.compare.comparisons[delivery.comparison_id]
+        variant_by_key = {
+            entry.input_key: str(entry.provenance_ref.get("variant_ref", "source"))
+            for entry in comparison.pair
+        }
+        variant_by_slot: dict[Literal["A", "B"], str] = {
+            slot: variant_by_key[input_key] for slot, input_key in delivery.slot_assignment.items()
+        }
+        judgment = state.compare.effective_judgment(delivery.id)
+        score_by_variant: dict[str, int] = {}
+        blockers_by_variant: dict[str, tuple[str, ...]] = {}
+        favored: str | None = None
+        if judgment is not None:
+            signed_for_a = 3 - judgment.preference
+            variant_a = variant_by_slot["A"]
+            variant_b = variant_by_slot["B"]
+            score_by_variant = {variant_a: signed_for_a, variant_b: -signed_for_a}
+            favored = variant_a if signed_for_a > 0 else variant_b if signed_for_a < 0 else None
+            blockers: dict[str, list[str]] = {variant_a: [], variant_b: []}
+            for slot, variant in (("a", variant_a), ("b", variant_b)):
+                blocker = judgment.blockers[slot]  # type: ignore[index]
+                if blocker.selected:
+                    blockers[variant].append(blocker.note or "blocker")
+            blockers_by_variant = {key: tuple(value) for key, value in blockers.items()}
+        output.append(
+            EvidenceResultView(
+                item_id=item_id,
+                clip_id=clip_id,
+                material_id=material.id,
+                material_name=material.name,
+                sequence_index=delivery.sequence_index,
+                preference=None if judgment is None else judgment.preference,
+                variant_by_slot=variant_by_slot,
+                variant_label_by_slot={
+                    slot: variant_label(state, variant) for slot, variant in variant_by_slot.items()
+                },
+                favored_variant_id=favored,
+                favored_variant_label=None if favored is None else variant_label(state, favored),
+                score_by_variant=score_by_variant,
+                blockers_by_variant=blockers_by_variant,
+            )
+        )
+    return tuple(output)
 
 
 def current_best_evidence(state: ABARState) -> BestUpdateEvidenceView | None:

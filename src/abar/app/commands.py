@@ -3,7 +3,9 @@
 from abar.app.catalog_commands import (
     add_clip,
     add_material,
+    add_materials,
     add_variant,
+    add_variant_archive,
     import_audio,
     init_project,
 )
@@ -24,6 +26,7 @@ from abar.app.project_commands import (
     set_current_best_manual,
 )
 from abar.app.project_session_commands import (
+    SessionPreparationProgress,
     close_project_session,
     create_best_update_session,
     create_observation_session,
@@ -40,10 +43,13 @@ from abar.app.session_commands import (
 
 __all__ = [
     "CommandError",
+    "SessionPreparationProgress",
     "abandon_session",
     "add_clip",
     "add_material",
+    "add_materials",
     "add_variant",
+    "add_variant_archive",
     "change_brief",
     "close_project_session",
     "configure_project",

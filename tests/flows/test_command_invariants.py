@@ -50,6 +50,38 @@ def test_same_audio_can_be_registered_as_distinct_materials(
     assert state.compare.materials[second].name == "evaluation"
 
 
+def test_material_set_import_is_resumable_and_project_view_lists_clips(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    commands.init_project(repository, name="Project", brief="Improve the sound")
+    paths = (wav_file("one.wav", 220.0), wav_file("two.wav", 330.0))
+
+    first = commands.add_materials(
+        repository,
+        paths,
+        source_group="corpus",
+        idempotency_key="material-set",
+    )
+    repeated = commands.add_materials(
+        repository,
+        paths,
+        source_group="corpus",
+        idempotency_key="material-set",
+    )
+
+    assert repeated == first
+    view = queries.project_view(repository)
+    assert {item.id for item in view.materials} == set(first)
+    assert all(item.source_group == "corpus" for item in view.materials)
+    assert all(item.clips for item in view.materials)
+    assert all(
+        clip.duration_seconds == pytest.approx(4.0)
+        for item in view.materials
+        for clip in item.clips
+    )
+
+
 def test_variant_content_identity_cannot_overwrite_display_definition(
     repository: WorkspaceRepository,
     wav_file: Callable[[str, float], Path],
@@ -130,6 +162,99 @@ def test_project_session_close_uses_core_session_as_single_status_source(
         if item.project_session_id == project_session_id
     )
     assert card.status == "closed"
+
+
+def test_standard_session_can_use_ten_materials_and_add_optional_checks(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    material_paths = tuple(
+        wav_file(f"corpus-{index}.wav", 220.0 + index * 20.0) for index in range(10)
+    )
+    commands.init_project(
+        repository,
+        name="Project",
+        brief="Improve the sound",
+        material_paths=material_paths,
+    )
+    proposed = persist_finite_variant(
+        repository,
+        label="Proposal",
+        same_as_source=False,
+    )
+
+    project_session_id = commands.create_observation_session(
+        repository,
+        first_variant="source",
+        second_variant=proposed,
+        focus="Check the proposal across the corpus",
+        size="standard",
+        evidence_count=10,
+        same_check=True,
+        repeat_check=True,
+        actor_id="agent-1",
+    )
+
+    state = repository.state()
+    project_session = state.research.project_sessions[project_session_id]
+    core_session = state.compare.sessions[project_session.core_session_id]
+    materials = {
+        state.compare.clips[clip_id].material_id for clip_id in project_session.evidence_clip_ids
+    }
+    assert project_session.size == "standard"
+    assert len(project_session.evidence_item_ids) == 10
+    assert len(project_session.evidence_clip_ids) == 10
+    assert len(materials) == 10
+    assert len(core_session.items) == 12
+    assert project_session.same_check_item_id is not None
+    assert project_session.repeat_check_item_id is not None
+
+
+def test_explicit_large_session_preserves_clips_from_one_material(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    commands.init_project(
+        repository,
+        name="Project",
+        brief="Improve the sound",
+        material_paths=(wav_file("single-material.wav", 220.0),),
+    )
+    project = repository.state().project.project
+    assert project is not None
+    material_id = project.material_ids[0]
+    clips = tuple(
+        commands.add_clip(
+            repository,
+            material_id,
+            start_seconds=index * 0.5,
+            duration_seconds=0.4,
+            role=f"region-{index}",
+        )
+        for index in range(10)
+    )
+    proposed = persist_finite_variant(repository, label="Proposal", same_as_source=False)
+    progress: list[commands.SessionPreparationProgress] = []
+
+    project_session_id = commands.create_observation_session(
+        repository,
+        first_variant="source",
+        second_variant=proposed,
+        focus="Check ten regions",
+        size="standard",
+        evidence_count=10,
+        recipe=RecipeRef("native"),
+        clip_ids=clips,
+        actor_id="agent-1",
+        progress=progress.append,
+    )
+
+    session = repository.state().research.project_sessions[project_session_id]
+    assert session.evidence_clip_ids == clips
+    assert session.selection_algorithm_id == "explicit"
+    assert [(item.stage, item.current) for item in progress] == [
+        (stage, index) for index in range(1, 11) for stage in ("started", "completed")
+    ]
 
 
 def test_reversed_comparison_does_not_mutate_existing_plan(

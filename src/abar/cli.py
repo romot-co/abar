@@ -14,8 +14,9 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from abar.app import commands
 from abar.app.actors import Actor
-from abar.app.queries import entity, history, project_view, status
+from abar.app.queries import entity, history, project_view, session_result, status
 from abar.app.repository import WorkspaceError, WorkspaceRepository, default_workspace_path
+from abar.compare.bundles import build_command_bundle
 from abar.compare.models import RecipeRef
 from abar.foundation.json_types import JSONValue
 
@@ -94,7 +95,13 @@ def project_init(
     material: Annotated[
         list[Path] | None, typer.Option("--material", help=_AUDIO_FILE_HELP)
     ] = None,
-    material_id: Annotated[list[str] | None, typer.Option("--material-id")] = None,
+    existing_material: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--existing-material",
+            help="Existing Material ID to attach; repeat for multiple IDs",
+        ),
+    ] = None,
     current_best: Annotated[str, typer.Option("--current-best")] = "source",
 ) -> None:
     cli = _ctx(context)
@@ -105,7 +112,7 @@ def project_init(
             name=name,
             brief=brief,
             material_paths=tuple(material or ()),
-            material_ids=tuple(material_id or ()),
+            material_ids=tuple(existing_material or ()),
             current_best=current_best,
             idempotency_key=cli.idempotency_key,
         ),
@@ -237,20 +244,50 @@ def project_export(
 @material_app.command("add")
 def material_add(
     context: typer.Context,
-    file: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help=_AUDIO_FILE_HELP)],
+    files: Annotated[
+        list[Path],
+        typer.Argument(
+            exists=True,
+            dir_okay=False,
+            help=f"{_AUDIO_FILE_HELP}; accepts multiple files",
+        ),
+    ],
     source_group: Annotated[str | None, typer.Option("--source-group")] = None,
 ) -> None:
     cli = _ctx(context)
     _agent_required(cli)
     _run(
         cli,
-        lambda repository: commands.add_material(
+        lambda repository: _add_material_set(
             repository,
-            file,
+            tuple(files),
             source_group=source_group,
             idempotency_key=cli.idempotency_key,
         ),
         "素材を追加しました",
+    )
+
+
+def _add_material_set(
+    repository: WorkspaceRepository,
+    files: tuple[Path, ...],
+    *,
+    source_group: str | None,
+    idempotency_key: str | None,
+) -> tuple[dict[str, object], ...]:
+    material_ids = commands.add_materials(
+        repository,
+        files,
+        source_group=source_group,
+        idempotency_key=idempotency_key,
+    )
+    state = repository.state()
+    return tuple(
+        {
+            "material_id": material_id,
+            "clip_ids": list(state.compare.materials[material_id].clip_ids),
+        }
+        for material_id in material_ids
     )
 
 
@@ -281,8 +318,34 @@ def material_clip_add(
 @variant_app.command("add")
 def variant_add(
     context: typer.Context,
-    manifest: Annotated[Path, typer.Option("--manifest", exists=True, dir_okay=False)],
+    manifest: Annotated[
+        Path | None,
+        typer.Option(
+            "--manifest",
+            exists=True,
+            dir_okay=False,
+            help="Advanced Variant manifest; use --bundle for the standard command contract",
+        ),
+    ] = None,
     archive: Annotated[Path | None, typer.Option("--archive", exists=True, dir_okay=False)] = None,
+    bundle: Annotated[
+        Path | None,
+        typer.Option(
+            "--bundle",
+            exists=True,
+            file_okay=False,
+            help="Renderer directory to package deterministically",
+        ),
+    ] = None,
+    entry: Annotated[
+        str | None,
+        typer.Option(
+            "--entry",
+            help="Bundle-relative executable using INPUT_WAV PARAMS_JSON OUTPUT_WAV arguments",
+        ),
+    ] = None,
+    timeout: Annotated[int, typer.Option("--timeout", min=1, max=120)] = 120,
+    seeded: Annotated[bool, typer.Option("--seeded")] = False,
     params: Annotated[Path | None, typer.Option("--params", exists=True, dir_okay=False)] = None,
     label: Annotated[str | None, typer.Option("--label")] = None,
     provenance: Annotated[
@@ -291,56 +354,53 @@ def variant_add(
 ) -> None:
     cli = _ctx(context)
     _agent_required(cli)
-    manifest_document = _json_file(manifest)
-    archive_bytes = None if archive is None else archive.read_bytes()
+    if bundle is not None:
+        if manifest is not None or archive is not None:
+            raise typer.BadParameter("--bundle cannot be combined with --manifest or --archive")
+        if entry is None:
+            raise typer.BadParameter("--bundle requires --entry")
+        built = build_command_bundle(
+            bundle,
+            entry,
+            timeout_seconds=timeout,
+            seed_mode="required" if seeded else "none",
+        )
+        manifest_document = built.manifest
+        archive_bytes = built.archive
+    else:
+        if manifest is None:
+            raise typer.BadParameter("provide --bundle with --entry, or provide --manifest")
+        if entry is not None or seeded or timeout != 120:
+            raise typer.BadParameter("--entry, --seeded, and --timeout belong to --bundle")
+        manifest_document = _json_file(manifest)
+        archive_bytes = None if archive is None else archive.read_bytes()
     params_document = {} if params is None else _json_file(params)
     provenance_document = None if provenance is None else _json_file(provenance)
+
+    def register(repository: WorkspaceRepository) -> str:
+        if archive_bytes is None:
+            return commands.add_variant(
+                repository,
+                manifest_document,
+                params=params_document,
+                label=label,
+                provenance=provenance_document,
+                idempotency_key=cli.idempotency_key,
+            )
+        return commands.add_variant_archive(
+            repository,
+            manifest_document,
+            archive_bytes,
+            params=params_document,
+            label=label,
+            provenance=provenance_document,
+            idempotency_key=cli.idempotency_key,
+        )
+
     _run(
         cli,
-        lambda repository: _add_variant(
-            repository=repository,
-            manifest_document=manifest_document,
-            archive_bytes=archive_bytes,
-            params_document=params_document,
-            label=label,
-            provenance_document=provenance_document,
-            idempotency_key=cli.idempotency_key,
-        ),
+        register,
         "Variantを登録しました",
-    )
-
-
-def _add_variant(
-    *,
-    repository: WorkspaceRepository,
-    manifest_document: dict[str, JSONValue],
-    archive_bytes: bytes | None,
-    params_document: dict[str, JSONValue],
-    label: str | None,
-    provenance_document: dict[str, JSONValue] | None,
-    idempotency_key: str | None,
-) -> str:
-    resolved_manifest = dict(manifest_document)
-    if archive_bytes is not None:
-        stored = repository.objects.put(archive_bytes)
-        archive_ref: dict[str, JSONValue] = {
-            "object_id": stored.object_id,
-            "sha": f"sha256:{stored.sha256}",
-        }
-        declared = resolved_manifest.get("source_archive")
-        if declared is not None and declared != archive_ref:
-            raise commands.CommandError(
-                "source_archive_mismatch",
-                "--archive content does not match manifest source_archive",
-            )
-        resolved_manifest["source_archive"] = archive_ref
-    return commands.add_variant(
-        repository,
-        resolved_manifest,
-        params=params_document,
-        label=label,
-        provenance=provenance_document,
-        idempotency_key=idempotency_key,
     )
 
 
@@ -351,11 +411,24 @@ def session_create(
     second: Annotated[str, typer.Option("--b")],
     focus: Annotated[str, typer.Option("--focus")],
     size: Annotated[Literal["short", "standard"], typer.Option("--size")] = "short",
+    evidence_count: Annotated[
+        int | None,
+        typer.Option(
+            "--evidence-count",
+            help="Evidence comparisons for a standard Session (default 3, minimum 3)",
+        ),
+    ] = None,
     recipe: Annotated[
         Literal["native", "aligned", "matched"] | None, typer.Option("--recipe")
     ] = None,
     topic: Annotated[str | None, typer.Option("--topic")] = None,
-    clip: Annotated[list[str] | None, typer.Option("--clip")] = None,
+    clip: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--clip",
+            help="Evidence Clip ID; repeat once per comparison. Explicit order is preserved.",
+        ),
+    ] = None,
     same_check: Annotated[bool, typer.Option("--same-check")] = False,
     repeat_check: Annotated[bool, typer.Option("--repeat-check")] = False,
 ) -> None:
@@ -369,6 +442,7 @@ def session_create(
             second_variant=second,
             focus=focus,
             size=size,
+            evidence_count=evidence_count,
             recipe=None if recipe is None else RecipeRef(recipe),
             topic_key=topic,
             clip_ids=tuple(clip or ()),
@@ -377,6 +451,7 @@ def session_create(
             actor_id=cli.actor or "human",
             actor_type="agent" if cli.actor else "human",
             idempotency_key=cli.idempotency_key,
+            progress=_session_progress(cli),
         ),
         "Sessionを準備しました",
     )
@@ -401,6 +476,7 @@ def session_best_update(
             actor_id=cli.actor or "human",
             actor_type="agent" if cli.actor else "human",
             idempotency_key=cli.idempotency_key,
+            progress=_session_progress(cli),
         ),
         "Current Best確認Sessionを準備しました",
     )
@@ -421,6 +497,19 @@ def session_close(
             idempotency_key=cli.idempotency_key,
         ),
         "Sessionを閉じました",
+    )
+
+
+@project_session_app.command("result")
+def session_result_command(
+    context: typer.Context,
+    project_session_id: Annotated[str, typer.Argument()],
+) -> None:
+    cli = _ctx(context)
+    _read(
+        cli,
+        lambda repository: session_result(repository, project_session_id),
+        "Session結果を表示しました",
     )
 
 
@@ -740,6 +829,38 @@ def _run[ValueT](
         _emit(cli, {"schema_version": 2, "result": value}, message)
     except (commands.CommandError, WorkspaceError, ValueError, OSError) as error:
         _fail(cli, getattr(error, "code", "operation_failed"), str(error))
+
+
+def _session_progress(
+    cli: Context,
+) -> Callable[[commands.SessionPreparationProgress], None]:
+    def emit(progress: commands.SessionPreparationProgress) -> None:
+        if cli.json_output:
+            typer.echo(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "type": "session_preparation_progress",
+                        "stage": progress.stage,
+                        "current": progress.current,
+                        "total": progress.total,
+                        "clip_id": progress.clip_id,
+                        "material_id": progress.material_id,
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
+                err=True,
+            )
+        else:
+            label = "準備中" if progress.stage == "started" else "準備完了"
+            typer.echo(
+                f"{label} {progress.current}/{progress.total}: {progress.material_id}",
+                err=True,
+            )
+
+    return emit
 
 
 def _read[ValueT: BaseModel](

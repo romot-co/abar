@@ -11,10 +11,19 @@ class PublicView(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+class ReplayDegradationView(PublicView):
+    event_seq: int
+    event_type: str
+    schema_version: int
+    reason: str
+    recovery: str
+
+
 class HealthView(PublicView):
     status: Literal["ok", "degraded"]
     reasons: tuple[str, ...] = ()
     last_event_seq: int = 0
+    degradation: ReplayDegradationView | None = None
 
 
 class WorkspaceSummaryView(PublicView):
@@ -96,11 +105,18 @@ class BestUpdateEvidenceView(PublicView):
     blocker_count: int
 
 
+class ClipSnapshotView(PublicView):
+    id: str
+    start_seconds: float
+    duration_seconds: float
+    role: str | None
+
+
 class MaterialSnapshotView(PublicView):
     id: str
     name: str
     source_group: str | None
-    clips: int
+    clips: tuple[ClipSnapshotView, ...]
 
 
 class IndicatorValueSnapshotView(PublicView):
@@ -230,6 +246,21 @@ class ActiveDeckView(PublicView):
     ended: bool
 
 
+class EvidenceResultView(PublicView):
+    item_id: str
+    clip_id: str
+    material_id: str
+    material_name: str
+    sequence_index: int | None
+    preference: Literal[1, 2, 3, 4, 5] | None
+    variant_by_slot: dict[Literal["A", "B"], str]
+    variant_label_by_slot: dict[Literal["A", "B"], str]
+    favored_variant_id: str | None
+    favored_variant_label: str | None
+    score_by_variant: dict[str, int]
+    blockers_by_variant: dict[str, tuple[str, ...]]
+
+
 class SessionResultView(PublicView):
     project_session_id: str
     evidence_direction_counts: dict[str, int]
@@ -243,6 +274,7 @@ class SessionResultView(PublicView):
     current_best_updated: bool
     best_update_evidence: BestUpdateEvidenceView | None
     memo: str | None
+    evidence: tuple[EvidenceResultView, ...]
 
 
 class ResultBlockerView(PublicView):

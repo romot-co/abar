@@ -39,7 +39,8 @@ abar --workspace /absolute/path/to/project-workspace --json \
 ```
 
 Reuse one idempotency key if this logical initialization must be retried. Attach additional
-Material and Clips as needed, then write the initial Project note. Before asking the human to
+   Material and Clips as needed, then write the initial Project note. Attach an already registered
+   Material with `--existing-material <id>`; `--material` always imports a file. Before asking the human to
 listen, ensure that the UI is available from the same Workspace. Launch
 `abar --workspace <directory> ui` when necessary and give the resulting UI to the human.
 
@@ -53,24 +54,28 @@ Repeat this sequence:
 1. Observe: run `abar --json status` and `abar --json project show --since <event_seq>`.
 2. Record understanding: update the Project note. Register an Indicator only when a measurement has a stable external definition.
 3. Prepare resources: add Material, Clips, and a reproducible Variant manifest with provenance.
-   For a command renderer, pass its immutable bundle with
-   `variant add --manifest <json> --archive <zip>`; ABAR imports the bundle and
-   writes its content identity into the stored manifest.
+   For a command renderer using the standard three-path contract, use
+   `variant add --bundle <directory> --entry <relative-file>`; ABAR packages the directory and
+   creates the manifest. Use `--manifest ... --archive ...` only for a custom execution contract.
 4. Ask one useful question: create a short or standard Project Session against current best.
+   Standard defaults to three evidence comparisons; set an explicit larger evidence count when
+   one question must be observed across more Materials. Best Update remains fixed at three.
 5. Hand the Session to the human in `abar ui`, then follow the waiting boundary below.
 6. Report measurements by AudioContent or PreparedPair identity, then return to observation.
 
 Use `--json --actor <stable-agent-id>` for agent writes. Keep one idempotency key per logical operation when retrying.
 
-Canonical agent write commands are `project init`, `project brief set`, `project recipe set`,
+`material add` accepts multiple file arguments and returns each Material ID with its default
+Clip IDs. Canonical agent write commands are `project init`, `project brief set`, `project recipe set`,
 `project config set`, `material add`, `material clip add`, `variant add`, `note write`,
 `project session create`, `project session best-update`, `project session close`,
 `project simplification create`, `indicator add`, `indicator set`, and
 `indicator value record`. Changing the brief through the JSON path also requires a verbatim
 human `--quote`.
 
-Read with `abar --json status`, `project show`, and `history`; do not invent finer-grained
-listing commands.
+Read with `abar --json status`, `project show`, and `history`. After a Session ends, use
+`project session result <id>` for its bounded Material-by-Material result. Do not invent
+finer-grained listing commands.
 
 ## Waiting and resuming
 
@@ -85,6 +90,18 @@ return control to the human without simulating progress or answering the Session
 Whenever work resumes, start again with `status` and `project show --since <event_seq>`.
 Treat the newly observed events and current authority as the source of truth rather than
 continuing from assumptions made before the wait.
+If status reports a degraded pre-release Workspace, preserve it unchanged and create a new
+Workspace. The health response identifies the event sequence, type, and schema that stopped replay.
+
+## Dogfooding feedback
+
+When operating ABAR from its development checkout, treat friction observed in a real Project
+as product feedback. If `.dev-docs/dogfooding.md` exists, record the goal, exact observed
+behavior, impact, workaround, desired behavior, and status there. Record only behavior that
+actually occurred; label unverified explanations as hypotheses. Keep ABAR product feedback out
+of the audio Project note, which belongs to the research record. A workaround does not resolve
+an entry. Mark it resolved only after the product change and regression verification are both
+recorded.
 
 ## Choosing the next comparison
 
@@ -94,6 +111,9 @@ continuing from assumptions made before the wait.
 - Use `project session best-update --proposed <variant>` only when the proposal is ready to be judged against the complete Project brief. Do not use a local property as its criterion.
 - Separate attributes through Variant design instead of multiplying questions. Keep the human answer as an overall A/B preference under one criterion.
 - Use `same-check` or `repeat-check` sparingly when the comparison itself needs a perceptual consistency observation. These checks never vote on current best.
+- Omit `--clip` to let ABAR spread automatic selection across Materials. When exact regions
+  matter, repeat `--clip <id>` once per evidence item; ABAR preserves the specified order and
+  does not impose Material diversity on explicit selection.
 
 ## What to revisit
 

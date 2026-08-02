@@ -11,6 +11,7 @@ from abar.app.views import (
     HealthView,
     IndicatorSummaryView,
     ProjectDashboardView,
+    ReplayDegradationView,
     SessionCardView,
     SimplificationPromptView,
     StatusView,
@@ -21,7 +22,39 @@ from abar.research.models import ProjectSession
 
 
 def status(repository: WorkspaceRepository, *, cursor: int = 0) -> StatusView:
-    state = repository.state()
+    replay = repository.replay()
+    if replay.degraded is not None:
+        degraded = replay.degraded
+        recovery = (
+            "Preserve this Workspace unchanged and create a new Workspace. "
+            "ABAR pre-release does not migrate unsupported events."
+        )
+        return StatusView(
+            health=HealthView(
+                status="degraded",
+                reasons=(degraded.reason,),
+                last_event_seq=degraded.event_seq,
+                degradation=ReplayDegradationView(
+                    event_seq=degraded.event_seq,
+                    event_type=degraded.event_type,
+                    schema_version=degraded.schema_version,
+                    reason=degraded.reason,
+                    recovery=recovery,
+                ),
+            ),
+            project_name=None,
+            brief=None,
+            current_best=None,
+            in_use=None,
+            indicators=(),
+            sessions=(),
+            ready_count=0,
+            active_count=0,
+            ready_limit=None,
+            material_count=0,
+            pending_simplifications=(),
+        )
+    state = replay.state
     events = repository.events.read_all(since=cursor, limit=101)
     project = state.project.project
     sessions = session_cards(state, repository.events.read_all())
@@ -30,6 +63,7 @@ def status(repository: WorkspaceRepository, *, cursor: int = 0) -> StatusView:
             status="ok",
             reasons=(),
             last_event_seq=events[-1].event_seq if events else cursor,
+            degradation=None,
         ),
         project_name=None if project is None else project.name,
         brief=None if project is None else project.brief_text,

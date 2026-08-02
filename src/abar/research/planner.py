@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from abar.compare.models import RecipeRef
 from abar.foundation.canonical_json import canonical_sha256
 from abar.foundation.json_types import JSONValue
+from abar.research.session_sizes import resolve_evidence_count
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,15 +15,17 @@ class PlannedRole:
 
 
 def item_roles(
-    size: str, *, same_check: bool = False, repeat_check: bool = False
+    size: str,
+    *,
+    evidence_count: int | None = None,
+    same_check: bool = False,
+    repeat_check: bool = False,
 ) -> tuple[PlannedRole, ...]:
-    if size not in {"short", "standard"}:
-        raise ValueError("Session size must be short or standard")
+    count = resolve_evidence_count(size, evidence_count)
     roles: list[PlannedRole] = [PlannedRole("evidence", 0)]
     if same_check:
         roles.append(PlannedRole("same", 0))
-    if size == "standard":
-        roles.extend((PlannedRole("evidence", 1), PlannedRole("evidence", 2)))
+    roles.extend(PlannedRole("evidence", index) for index in range(1, count))
     if repeat_check:
         roles.append(PlannedRole("repeat", 0))
     return tuple(roles)

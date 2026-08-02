@@ -11,6 +11,7 @@ from abar.app.session_queries import current_best_evidence, session_result_from_
 from abar.app.state import ABARState
 from abar.app.views import (
     BriefHistoryView,
+    ClipSnapshotView,
     CriterionSnapshotView,
     EntityView,
     HistoryView,
@@ -63,7 +64,18 @@ def project_view(repository: WorkspaceRepository, *, since: int = 0) -> ProjectV
                 id=item.id,
                 name=item.name,
                 source_group=item.source_group,
-                clips=len(item.clip_ids),
+                clips=tuple(
+                    ClipSnapshotView(
+                        id=clip.id,
+                        start_seconds=clip.start_frame
+                        / state.compare.audio[item.source_audio_id].sample_rate,
+                        duration_seconds=clip.frames
+                        / state.compare.audio[item.source_audio_id].sample_rate,
+                        role=clip.role,
+                    )
+                    for clip_id in item.clip_ids
+                    if (clip := state.compare.clips.get(clip_id)) is not None
+                ),
             )
             for item in state.compare.materials.values()
             if item.id in project.material_ids

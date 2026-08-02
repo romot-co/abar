@@ -1,6 +1,8 @@
 """Project Session planning and inventory lifecycle commands."""
 
 import secrets
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Literal, cast
 
 from abar.app.command_support import (
@@ -51,12 +53,23 @@ from abar.research.planner import (
     item_roles,
     observation_session_fingerprint,
 )
+from abar.research.session_sizes import SessionSize, resolve_evidence_count
 
 __all__ = [
+    "SessionPreparationProgress",
     "close_project_session",
     "create_best_update_session",
     "create_observation_session",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionPreparationProgress:
+    stage: Literal["started", "completed"]
+    current: int
+    total: int
+    clip_id: str
+    material_id: str
 
 
 def create_observation_session(
@@ -65,7 +78,8 @@ def create_observation_session(
     first_variant: str,
     second_variant: str,
     focus: str,
-    size: Literal["short", "standard"] = "short",
+    size: SessionSize = "short",
+    evidence_count: int | None = None,
     recipe: RecipeRef | None = None,
     topic_key: str | None = None,
     clip_ids: tuple[str, ...] = (),
@@ -74,6 +88,7 @@ def create_observation_session(
     actor_id: str,
     actor_type: Literal["agent", "human"] = "agent",
     idempotency_key: str | None = None,
+    progress: Callable[[SessionPreparationProgress], None] | None = None,
 ) -> str:
     return _create_project_session(
         repository,
@@ -81,6 +96,7 @@ def create_observation_session(
         second_variant=second_variant,
         focus=focus,
         size=size,
+        evidence_count=evidence_count,
         recipe=recipe,
         topic_key=topic_key,
         clip_ids=clip_ids,
@@ -89,6 +105,7 @@ def create_observation_session(
         actor_id=actor_id,
         actor_type=actor_type,
         idempotency_key=idempotency_key,
+        progress=progress,
     )
 
 
@@ -101,6 +118,7 @@ def create_best_update_session(
     actor_id: str,
     actor_type: Literal["agent", "human"] = "agent",
     idempotency_key: str | None = None,
+    progress: Callable[[SessionPreparationProgress], None] | None = None,
 ) -> str:
     return _create_project_session(
         repository,
@@ -111,6 +129,7 @@ def create_best_update_session(
         actor_id=actor_id,
         actor_type=actor_type,
         idempotency_key=idempotency_key,
+        progress=progress,
     )
 
 
@@ -122,7 +141,8 @@ def _create_project_session(
     proposed_variant: str | None = None,
     update_best: bool = False,
     focus: str | None = None,
-    size: Literal["short", "standard"] = "short",
+    size: SessionSize = "short",
+    evidence_count: int | None = None,
     recipe: RecipeRef | None = None,
     topic_key: str | None = None,
     clip_ids: tuple[str, ...] = (),
@@ -131,24 +151,28 @@ def _create_project_session(
     actor_id: str,
     actor_type: Literal["agent", "human"] = "agent",
     idempotency_key: str | None = None,
+    progress: Callable[[SessionPreparationProgress], None] | None = None,
 ) -> str:
     key = operation_key(idempotency_key)
+    request_data: dict[str, JSONValue] = {
+        "first_variant": first_variant,
+        "second_variant": second_variant,
+        "proposed_variant": proposed_variant,
+        "focus": focus,
+        "size": size,
+        "recipe": None if recipe is None else _recipe_payload(recipe),
+        "topic_key": topic_key,
+        "clip_ids": list(clip_ids),
+        "same_check": same_check,
+        "repeat_check": repeat_check,
+        "actor_id": actor_id,
+        "actor_type": actor_type,
+    }
+    if evidence_count is not None:
+        request_data["evidence_count"] = evidence_count
     request_hash = _request_hash(
         "best_update_session.create" if update_best else "observation_session.create",
-        {
-            "first_variant": first_variant,
-            "second_variant": second_variant,
-            "proposed_variant": proposed_variant,
-            "focus": focus,
-            "size": size,
-            "recipe": None if recipe is None else _recipe_payload(recipe),
-            "topic_key": topic_key,
-            "clip_ids": list(clip_ids),
-            "same_check": same_check,
-            "repeat_check": repeat_check,
-            "actor_id": actor_id,
-            "actor_type": actor_type,
-        },
+        request_data,
     )
     existing = _existing_operation(
         repository, key, "project_session.created", request_hash=request_hash
@@ -166,6 +190,7 @@ def _create_project_session(
         if first_variant == second_variant:
             raise CommandError("Best Update proposal must differ from Current Best")
         size = "standard"
+        evidence_count = 3
         selected_recipe = project.primary_recipe
         selected_focus = focus or "現在最良を更新できるか"
     else:
@@ -174,7 +199,7 @@ def _create_project_session(
         selected_recipe = recipe or RecipeRef("aligned")
         selected_focus = focus
     assert first_variant is not None and second_variant is not None
-    count = 1 if size == "short" else 3
+    count = resolve_evidence_count(size, evidence_count)
     selection = _select_evidence_clips(state, clip_ids, count)
     selected_clips = selection.clip_ids
     _check_wip(state, project.id)
@@ -202,7 +227,10 @@ def _create_project_session(
             raise CommandError("an unfinished Session with the same fingerprint already exists")
     evidence_data: list[PreparedComparison] = []
     render_cache: dict[str, AudioObject] = {}
-    for clip_id in selected_clips:
+    for index, clip_id in enumerate(selected_clips, start=1):
+        material_id = state.compare.clips[clip_id].material_id
+        if progress is not None:
+            progress(SessionPreparationProgress("started", index, count, clip_id, material_id))
         left_text = _variant_operand(first_variant, clip_id, state)
         right_text = _variant_operand(second_variant, clip_id, state)
         built = build_comparison(
@@ -214,7 +242,14 @@ def _create_project_session(
             render_cache=render_cache,
         )
         evidence_data.append(built)
-    roles = item_roles(size, same_check=same_check, repeat_check=repeat_check)
+        if progress is not None:
+            progress(SessionPreparationProgress("completed", index, count, clip_id, material_id))
+    roles = item_roles(
+        size,
+        evidence_count=count,
+        same_check=same_check,
+        repeat_check=repeat_check,
+    )
     ordered_comparisons: list[ComparisonPlan] = []
     same_comparison: ComparisonPlan | None = None
     for role in roles:
@@ -434,11 +469,6 @@ def _select_evidence_clips(
             )
         except ValueError as error:
             raise CommandError(str(error)) from error
-    selected = selection.clip_ids
-    if count == 3 and len(project.material_ids) >= 2:
-        materials = {state.compare.clips[item].material_id for item in selected}
-        if len(materials) < 2:
-            raise CommandError("Best Update Plan evidence must cover at least two Materials")
     return selection
 
 

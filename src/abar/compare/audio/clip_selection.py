@@ -8,9 +8,9 @@ from abar.compare.audio.content import DecodedAudio
 from abar.foundation.canonical_json import canonical_sha256
 from abar.foundation.json_types import JSONValue
 
-SELECTOR_ID = "activity-transient-low-v1"
-SELECTOR_VERSION = 1
-WINDOW_SECONDS = 12
+SELECTOR_ID = "activity-transient-low-v2"
+SELECTOR_VERSION = 2
+WINDOW_SECONDS = 4
 
 
 @dataclass(frozen=True, slots=True)

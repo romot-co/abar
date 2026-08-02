@@ -187,6 +187,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
             second_variant=body.second_variant,
             focus=body.focus,
             size=body.size,
+            evidence_count=body.evidence_count,
             recipe=None if body.recipe is None else RecipeRef(body.recipe),
             topic_key=body.topic_key,
             clip_ids=body.clip_ids,

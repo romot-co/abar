@@ -5,6 +5,7 @@ from typing import Literal
 
 from abar.compare.models import ComparisonPlan, Delivery, Judgment
 from abar.research.models import ProjectSession
+from abar.research.session_sizes import favored_count
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +59,7 @@ def calculate_result(
             if blocker.selected:
                 blockers[variant].append(blocker.note or "blocker")
     favored: str | None = None
-    required = 1 if project_session.size == "short" else 2
+    required = favored_count(len(project_session.evidence_item_ids))
     for variant in pair:
         if counts[variant] >= required and scores[variant] > 0:
             favored = variant

@@ -10,6 +10,8 @@ from abar.app.events import child_key, draft
 from abar.app.repository import WorkspaceRepository
 from abar.compare.audio.clip_selection import manual_clip_id
 from abar.compare.audio.importing import import_input_audio_file, import_material_file, slice_audio
+from abar.compare.bundles import validate_command_archive
+from abar.compare.manifests import VariantManifest
 from abar.compare.models import RecipeRef
 from abar.compare.variants import register_variant
 from abar.foundation.json_types import JSONValue
@@ -62,7 +64,10 @@ def init_project(
     imports = [import_material_file(path, objects=repository.objects) for path in material_paths]
     for material_id in material_ids:
         if material_id not in state.compare.materials:
-            raise CommandError(f"unknown Material: {material_id}")
+            raise CommandError(
+                "unknown_existing_material",
+                f"unknown existing Material: {material_id}; use --material to import a file",
+            )
     project_id = new_id("prj_")
     with repository.events.transaction(causation_id=key) as tx:
         index = 0
@@ -180,6 +185,29 @@ def add_material(
     return imported.material.id
 
 
+def add_materials(
+    repository: WorkspaceRepository,
+    paths: tuple[Path, ...],
+    *,
+    source_group: str | None = None,
+    idempotency_key: str | None = None,
+) -> tuple[str, ...]:
+    """Import a set with stable per-file idempotency and partial-resume semantics."""
+
+    if not paths:
+        raise CommandError("material set must contain at least one file")
+    key = operation_key(idempotency_key)
+    return tuple(
+        add_material(
+            repository,
+            path,
+            source_group=source_group,
+            idempotency_key=child_key(key, index),
+        )
+        for index, path in enumerate(paths)
+    )
+
+
 def import_audio(
     repository: WorkspaceRepository,
     path: Path,
@@ -294,9 +322,7 @@ def add_variant(
     )
     manifest = registration.manifest
     archive_bytes = repository.objects.read(manifest.source_archive.object_id)
-    archive_sha = f"sha256:{hashlib.sha256(archive_bytes).hexdigest()}"
-    if archive_sha != manifest.source_archive.sha:
-        raise CommandError("Variant source archive hash mismatch")
+    _validate_variant_archive(manifest, archive_bytes)
     state = repository.state()
     existing_variant = state.compare.variants.get(registration.variant.id)
     if existing_variant is not None and existing_variant != registration.variant:
@@ -358,3 +384,64 @@ def add_variant(
                 )
             )
     return registration.variant.id
+
+
+def add_variant_archive(
+    repository: WorkspaceRepository,
+    manifest_document: dict[str, JSONValue],
+    archive_bytes: bytes,
+    *,
+    params: dict[str, JSONValue] | None = None,
+    label: str | None = None,
+    provenance: dict[str, JSONValue] | None = None,
+    idempotency_key: str | None = None,
+) -> str:
+    """Validate and import a Variant archive through one application boundary."""
+
+    digest = hashlib.sha256(archive_bytes).hexdigest()
+    archive_ref: dict[str, JSONValue] = {
+        "object_id": f"obj_{digest}",
+        "sha": f"sha256:{digest}",
+    }
+    resolved_manifest = dict(manifest_document)
+    declared = resolved_manifest.get("source_archive")
+    if declared is not None and declared != archive_ref:
+        raise CommandError(
+            "source_archive_mismatch",
+            "archive content does not match manifest source_archive",
+        )
+    resolved_manifest["source_archive"] = archive_ref
+    registration = register_variant(
+        resolved_manifest,
+        resolved_params=params,
+        label=label,
+        provenance=provenance,
+    )
+    _validate_variant_archive(registration.manifest, archive_bytes)
+    stored = repository.objects.put(archive_bytes)
+    if (
+        stored.object_id != archive_ref["object_id"]
+        or f"sha256:{stored.sha256}" != archive_ref["sha"]
+    ):
+        raise CommandError("source archive object identity mismatch")
+    return add_variant(
+        repository,
+        resolved_manifest,
+        params=params,
+        label=label,
+        provenance=provenance,
+        idempotency_key=idempotency_key,
+    )
+
+
+def _validate_variant_archive(manifest: VariantManifest, archive_bytes: bytes) -> None:
+    validated = manifest
+    archive_sha = f"sha256:{hashlib.sha256(archive_bytes).hexdigest()}"
+    if archive_sha != validated.source_archive.sha:
+        raise CommandError("Variant source archive hash mismatch")
+    if validated.renderer.kind == "command":
+        assert validated.renderer.command is not None
+        try:
+            validate_command_archive(archive_bytes, validated.renderer.command)
+        except ValueError as error:
+            raise CommandError("invalid_renderer_bundle", str(error)) from error
