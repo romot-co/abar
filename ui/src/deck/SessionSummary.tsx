@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Action, type Project, type SessionCompletion } from "../api";
 import { humanError } from "../errors";
-import type { RelistenItemView } from "../generated";
+import type { RelistenItemView, SessionResultView } from "../generated";
 
-export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: string; onBack: () => void; onNext: () => void }) {
+export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: string; onBack: () => void; onNext?: () => void }) {
   const queryClient = useQueryClient();
   const completion = useQuery({
     queryKey: ["completion", sessionId],
@@ -12,8 +12,11 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   const project = useQuery({
     queryKey: ["project", "completion"],
     queryFn: () => api<Project>("/api/project"),
+    enabled: onNext !== undefined,
   });
-  const readyNext = project.data?.sessions.find((item) => item.status === "ready") ?? null;
+  const readyNext = onNext
+    ? project.data?.sessions.find((item) => item.status === "ready") ?? null
+    : null;
   const start = useMutation({
     mutationFn: (coreSessionId: string) =>
       api<Action>(`/api/sessions/${coreSessionId}/start`, {
@@ -22,7 +25,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["project"] });
-      onNext();
+      onNext?.();
     },
   });
 
@@ -31,7 +34,6 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
 
   const data = completion.data;
   const result = data.result;
-  const identity = data.items[0]?.identity_by_slot ?? null;
   const readyCount = project.data?.sessions.filter((item) => item.status === "ready").length ?? 0;
   const verdict = verdictCopy(data);
 
@@ -46,16 +48,9 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
       </section>
 
       <section className="answer-record" aria-label="回答の記録">
-        {identity && (
-          <p className="result-identity">
-            {(["A", "B"] as const).map((slot) => (
-              <span key={slot}><strong>{slot}</strong> = <code>{identityLabel(identity[slot])}</code></span>
-            ))}
-          </p>
-        )}
         <div className="answer-table-head">
           <span>#</span>
-          <span>A ← → B</span>
+          <span>比較</span>
           <span>判定</span>
           <span>メモ</span>
         </div>
@@ -78,20 +73,32 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
 function AnswerRow({ item }: { item: RelistenItemView }) {
   const preference = item.skipped ? null : item.judgment?.preference ?? null;
   const note = answerNote(item);
+  const judgment = preference === null ? "回答なし" : normalizedPreferenceText(item, preference);
   return (
     <div className="answer-table-row">
       <span>{item.sequence_index + 1}</span>
-      <span className="answer-gauge" aria-label={preference === null ? "回答なし" : preferenceText(preference)}>
-        {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
+      <span className="result-pair" title={item.clip_id ?? undefined}>
+        <span className={`result-role ${item.role}`}>{roleLabel(item.role)}</span>
+        <span><strong>A</strong> {slotLabel(item, "A")}</span>
+        <span><strong>B</strong> {slotLabel(item, "B")}</span>
+        {item.material_name && <small>{item.material_name}</small>}
       </span>
-      <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{preference === null ? "skip" : preferenceText(preference)}</strong>
+      <span className="result-judgment">
+        <span className="answer-gauge" aria-label={judgment}>
+          {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
+        </span>
+        <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{item.skipped ? "skip" : judgment}</strong>
+      </span>
       <span className="answer-note" title={note}>{note}</span>
     </div>
   );
 }
 
-function preferenceText(preference: 1 | 2 | 3 | 4 | 5): string {
-  return ["明確にA", "わずかにA", "互角", "わずかにB", "明確にB"][preference - 1] ?? "";
+function normalizedPreferenceText(item: RelistenItemView, preference: 1 | 2 | 3 | 4 | 5): string {
+  if (preference === 3) return "互角";
+  const slot = preference < 3 ? "A" : "B";
+  const strength = preference === 1 || preference === 5 ? "明確に" : "わずかに";
+  return `${slotLabel(item, slot)}を${strength}支持`;
 }
 
 function answerNote(item: RelistenItemView): string {
@@ -101,7 +108,7 @@ function answerNote(item: RelistenItemView): string {
   for (const slot of ["a", "b"] as const) {
     const blocker = item.judgment.blockers[slot];
     if (!blocker?.selected) continue;
-    const name = slot.toUpperCase();
+    const name = slotLabel(item, slot === "a" ? "A" : "B");
     notes.push(`${name}に問題${blocker.note ? `（${blocker.note}）` : ""}`);
   }
   if (item.judgment.comment) notes.push(item.judgment.comment);
@@ -111,20 +118,41 @@ function answerNote(item: RelistenItemView): string {
 function verdictCopy(data: SessionCompletion): { title: string; detail: string } {
   const result = data.result;
   if (!result) return { title: "比較を記録しました", detail: "結果はProject Sessionへ記録されていません。" };
+  const detail = resultBreakdown(result);
   if (data.current_best_check) {
     return result.current_best_updated
-      ? { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新しました`, detail: "" }
-      : { title: "現在最良を維持します", detail: "" };
+      ? { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新しました`, detail }
+      : { title: "現在最良を維持します", detail };
   }
-  const favored = result.favored_variant_label ? `${result.favored_variant_label} が優勢` : "互角";
+  const directional = Object.keys(result.variant_labels).map((variantId) => result.evidence_direction_counts[variantId] ?? 0);
+  const tieCount = result.evidence_direction_counts.tie ?? 0;
+  let conclusion: string;
+  if (result.favored_variant_label) conclusion = `${result.favored_variant_label} が優勢`;
+  else if (tieCount === result.evidence_count) conclusion = "全比較で互角";
+  else if (directional.every((count) => count === 0)) conclusion = "判定できる回答が不足しています";
+  else if (directional.length === 2 && directional[0] === directional[1]) conclusion = "判断が素材によって分かれました";
+  else conclusion = "支持が多い方向はありますが、優勢条件には届きませんでした";
   return {
     title: "観察として記録しました（現在最良は変わりません）",
-    detail: `${favored} · 差の傾向 ${differenceLabel(result.difference_profile)}`,
+    detail: `${conclusion} · ${detail}`,
   };
 }
 
-function differenceLabel(value: string): string {
-  return { clear: "明確", mixed: "混在", subtle: "微妙" }[value] ?? value;
+function resultBreakdown(result: SessionResultView): string {
+  const counts = Object.entries(result.variant_labels).map(([variantId, label]) => `${label} ${result.evidence_direction_counts[variantId] ?? 0}`);
+  counts.push(`互角 ${result.evidence_direction_counts.tie ?? 0}`);
+  const answered = Object.values(result.evidence_direction_counts).reduce((total, count) => total + count, 0);
+  if (answered < result.evidence_count) counts.push(`未回答 ${result.evidence_count - answered}`);
+  return `${counts.join(" / ")}（優勢条件 ${result.favored_required_count}/${result.evidence_count}）`;
+}
+
+function roleLabel(role: RelistenItemView["role"]): string {
+  return { evidence: "素材", same: "同一音チェック", repeat: "再現性チェック", other: "比較" }[role];
+}
+
+function slotLabel(item: RelistenItemView, slot: "A" | "B"): string {
+  if (item.role === "same") return "同一音";
+  return identityLabel(item.identity_by_slot[slot]);
 }
 
 function identityLabel(value: Record<string, unknown> | undefined): string {

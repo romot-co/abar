@@ -263,6 +263,9 @@ class EvidenceResultView(PublicView):
 
 class SessionResultView(PublicView):
     project_session_id: str
+    evidence_count: int
+    favored_required_count: int
+    variant_labels: dict[str, str]
     evidence_direction_counts: dict[str, int]
     score_by_variant: dict[str, int]
     favored_variant_id: str | None
@@ -290,7 +293,12 @@ class ResultJudgmentView(PublicView):
 
 class RelistenItemView(PublicView):
     delivery_id: str
+    session_item_id: str
     sequence_index: int
+    role: Literal["evidence", "same", "repeat", "other"]
+    clip_id: str | None
+    material_id: str | None
+    material_name: str | None
     audio: tuple[DeckAudioView, ...]
     identity_by_slot: dict[Literal["A", "B"], RevealedIdentityView]
     judgment: ResultJudgmentView | None

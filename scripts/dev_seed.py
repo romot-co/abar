@@ -188,6 +188,38 @@ def _answer_for_variant(
         )
 
 
+def _answer_one_for_variant(
+    repository: WorkspaceRepository,
+    core_session_id: str,
+    favored_variant_id: str,
+) -> None:
+    state = repository.state()
+    deliveries = sorted(
+        (item for item in state.compare.deliveries.values() if item.session_id == core_session_id),
+        key=lambda item: item.sequence_index,
+    )
+    for index, delivery in enumerate(deliveries):
+        preference = 3
+        if index == 0:
+            comparison = state.compare.comparisons[delivery.comparison_id]
+            variant_by_key = {
+                item.input_key: str(item.provenance_ref.get("variant_ref", "source"))
+                for item in comparison.pair
+            }
+            favored_slot = next(
+                slot
+                for slot, input_key in delivery.slot_assignment.items()
+                if variant_by_key[input_key] == favored_variant_id
+            )
+            preference = 1 if favored_slot == "A" else 5
+        commands.record_judgment(
+            repository,
+            delivery.id,
+            preference=preference,
+            telemetry=Telemetry({"a": 9_000, "b": 8_400}, 3, 21_000),
+        )
+
+
 def seed(
     workspace: Path,
     *,
@@ -252,19 +284,17 @@ def seed(
                     first_variant="source",
                     second_variant=variant_dense,
                     focus=focus,
-                    size="short",
+                    size="standard" if index == 0 else "short",
                     actor_id="human",
                     actor_type="human",
                 )
                 state = repository.state()
                 done_core = state.research.project_sessions[done_id].core_session_id
                 commands.start_session(repository, done_core, allocation_seed=index + 20)
-                _answer_all(
-                    repository,
-                    done_core,
-                    preferences=[4 if index == 0 else 3],
-                    blocker_slot="a" if index == 0 else None,
-                )
+                if index == 0:
+                    _answer_one_for_variant(repository, done_core, variant_dense)
+                else:
+                    _answer_all(repository, done_core, preferences=[3])
 
             # 進行中Session: 現在最良チェック(3比較、1問だけ回答済み)
             check_id = commands.create_best_update_session(

@@ -21,6 +21,7 @@ from abar.compare.models import Delivery
 from abar.compare.sealing import public_delivery
 from abar.research.models import ProjectSession
 from abar.research.results import ProjectSessionResult, calculate_result
+from abar.research.session_sizes import favored_count
 
 
 def session_result(repository: WorkspaceRepository, project_session_id: str) -> SessionResultView:
@@ -73,6 +74,11 @@ def session_result_from_state(state: ABARState, project_session_id: str) -> Sess
     memos = state.research.session_memos.get(project_session_id, ())
     return SessionResultView(
         project_session_id=project_session_id,
+        evidence_count=len(project_session.evidence_item_ids),
+        favored_required_count=favored_count(len(project_session.evidence_item_ids)),
+        variant_labels={
+            variant_id: variant_label(state, variant_id) for variant_id in project_session.pair
+        },
         evidence_direction_counts=result.evidence_direction_counts,
         score_by_variant=result.score_by_variant,
         favored_variant_id=result.favored_variant_id,
@@ -344,6 +350,8 @@ def session_completion(
     runtime = state.compare.session_runtime[session_id]
     if runtime.status != "ended" or not (session.presentation == "open" or runtime.revealed):
         raise ValueError("Session is not available for completion view")
+    linked = _project_session_for_core(state, session_id)
+    item_contexts = _completion_item_contexts(state, linked)
     deliveries = sorted(
         (item for item in state.compare.deliveries.values() if item.session_id == session_id),
         key=lambda item: item.sequence_index,
@@ -363,10 +371,19 @@ def session_completion(
         revealed_identity = labeled_identity(state, public.identity_by_slot)
         assert revealed_identity is not None
         judgment = state.compare.effective_judgment(delivery.id)
+        role, clip_id, material_id, material_name = item_contexts.get(
+            delivery.session_item_id,
+            ("other", None, None, None),
+        )
         items.append(
             RelistenItemView(
                 delivery_id=delivery.id,
+                session_item_id=delivery.session_item_id,
                 sequence_index=delivery.sequence_index,
+                role=role,
+                clip_id=clip_id,
+                material_id=material_id,
+                material_name=material_name,
                 audio=tuple(
                     DeckAudioView(
                         slot=slot,  # type: ignore[arg-type]
@@ -395,7 +412,6 @@ def session_completion(
                 skipped=delivery.session_item_id in runtime.skipped_item_ids,
             )
         )
-    linked = _project_session_for_core(state, session_id)
     current_best_check = any(
         item.session_id == session_id for item in state.project.best_update_plans.values()
     )
@@ -409,3 +425,50 @@ def session_completion(
         items=tuple(items),
         result=result,
     )
+
+
+def _completion_item_contexts(
+    state: ABARState,
+    project_session: ProjectSession | None,
+) -> dict[
+    str,
+    tuple[Literal["evidence", "same", "repeat", "other"], str | None, str | None, str | None],
+]:
+    if project_session is None:
+        return {}
+    clip_by_item = dict(
+        zip(
+            project_session.evidence_item_ids,
+            project_session.evidence_clip_ids,
+            strict=True,
+        )
+    )
+    role_by_item: dict[str, Literal["evidence", "same", "repeat", "other"]] = {
+        item_id: "evidence" for item_id in project_session.evidence_item_ids
+    }
+    if project_session.same_check_item_id is not None:
+        role_by_item[project_session.same_check_item_id] = "same"
+        clip_by_item[project_session.same_check_item_id] = project_session.evidence_clip_ids[0]
+    if project_session.repeat_check_item_id is not None:
+        role_by_item[project_session.repeat_check_item_id] = "repeat"
+        repeated_clip = clip_by_item.get(project_session.repeat_of_item_id or "")
+        if repeated_clip is not None:
+            clip_by_item[project_session.repeat_check_item_id] = repeated_clip
+    output: dict[
+        str,
+        tuple[
+            Literal["evidence", "same", "repeat", "other"],
+            str | None,
+            str | None,
+            str | None,
+        ],
+    ] = {}
+    for item_id, role in role_by_item.items():
+        clip_id = clip_by_item.get(item_id)
+        if clip_id is None:
+            output[item_id] = role, None, None, None
+            continue
+        clip = state.compare.clips[clip_id]
+        material = state.compare.materials[clip.material_id]
+        output[item_id] = role, clip_id, material.id, material.name
+    return output

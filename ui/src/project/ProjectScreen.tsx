@@ -13,10 +13,11 @@ type ProjectScreenProps = {
   switchingWorkspace: boolean;
   onSelectWorkspace: (workspaceId: string) => void;
   onOpenDeck: () => void;
+  onOpenCompletion: (coreSessionId: string) => void;
   onChanged: () => void;
 };
 
-export function ProjectScreen({ status, project, projectError, workspaces, switchingWorkspace, onSelectWorkspace, onOpenDeck, onChanged }: ProjectScreenProps) {
+export function ProjectScreen({ status, project, projectError, workspaces, switchingWorkspace, onSelectWorkspace, onOpenDeck, onOpenCompletion, onChanged }: ProjectScreenProps) {
   const start = useMutation({
     mutationFn: (sessionId: string) =>
       api<Action>(`/api/sessions/${sessionId}/start`, {
@@ -118,11 +119,17 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
           <summary>完了したセッション {completed.length} 件を見る</summary>
           <div className="completed-list">
             {completed.map((item) => (
-              <div className="completed-row" key={item.project_session_id}>
+              <button
+                type="button"
+                className="completed-row"
+                key={item.project_session_id}
+                aria-label={`結果を見る: ${item.focus}`}
+                onClick={() => onOpenCompletion(item.core_session_id)}
+              >
                 <span className="completed-date">{formatDate(item.completed_at)}</span>
                 <p><span>{item.current_best_check ? "現在最良チェック" : "観察"}</span>{item.focus}</p>
                 <strong>{item.outcome ?? "完了"}</strong>
-              </div>
+              </button>
             ))}
           </div>
         </details>

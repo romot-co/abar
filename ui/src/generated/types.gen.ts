@@ -947,6 +947,10 @@ export type RelistenItemView = {
      */
     audio: Array<DeckAudioView>;
     /**
+     * Clip Id
+     */
+    clip_id: string | null;
+    /**
      * Delivery Id
      */
     delivery_id: string;
@@ -958,9 +962,25 @@ export type RelistenItemView = {
     };
     judgment: ResultJudgmentView | null;
     /**
+     * Material Id
+     */
+    material_id: string | null;
+    /**
+     * Material Name
+     */
+    material_name: string | null;
+    /**
+     * Role
+     */
+    role: 'evidence' | 'same' | 'repeat' | 'other';
+    /**
      * Sequence Index
      */
     sequence_index: number;
+    /**
+     * Session Item Id
+     */
+    session_item_id: string;
     /**
      * Skipped
      */
@@ -1168,11 +1188,19 @@ export type SessionResultView = {
      */
     evidence: Array<EvidenceResultView>;
     /**
+     * Evidence Count
+     */
+    evidence_count: number;
+    /**
      * Evidence Direction Counts
      */
     evidence_direction_counts: {
         [key: string]: number;
     };
+    /**
+     * Favored Required Count
+     */
+    favored_required_count: number;
     /**
      * Favored Variant Id
      */
@@ -1202,6 +1230,12 @@ export type SessionResultView = {
      */
     score_by_variant: {
         [key: string]: number;
+    };
+    /**
+     * Variant Labels
+     */
+    variant_labels: {
+        [key: string]: string;
     };
 };
 

@@ -49,6 +49,7 @@ from abar.foundation.time_ids import new_id
 from abar.project.current_best import evaluate_best_update
 from abar.project.models import BestEvidence, BestUpdatePlan
 from abar.research.models import ProjectSession
+from abar.research.planner import presentation_order
 
 __all__ = [
     "abandon_session",
@@ -182,6 +183,12 @@ def start_session(
         )
         opposite = {"A": original.slot_assignment["B"], "B": original.slot_assignment["A"]}
         deliveries[repeat_index] = replace(deliveries[repeat_index], slot_assignment=opposite)
+    if linked is not None:
+        delivery_by_item = {item.session_item_id: item for item in deliveries}
+        deliveries = [
+            replace(delivery_by_item[item_id], sequence_index=index)
+            for index, item_id in enumerate(presentation_order(linked, seed=selected_seed))
+        ]
     invalid_ids = {item_id for item_id, _ in invalid_items}
     deliveries = [item for item in deliveries if item.session_item_id not in invalid_ids]
     with repository.events.transaction(causation_id=key) as tx:

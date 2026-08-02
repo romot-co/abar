@@ -147,10 +147,22 @@ def _exercise_project_deck(page: Page, url: str) -> None:
         "現在最良を維持します",
         "現在最良を dense-chorus-v2 に更新しました",
     }
-    assert page.locator(".result-identity").count() == 1
+    assert page.locator(".result-identity").count() == 0
     assert page.locator(".answer-table-row").count() == 3
+    assert page.locator(".result-pair").count() == 3
+    assert page.get_by_text("素材", exact=True).count() == 3
     assert page.locator(".answer-gauge").count() == 3
     assert page.locator(".verdict-stats").count() == 0
     assert page.get_by_role("heading", name="聴き直す").count() == 0
     assert page.get_by_role("textbox").count() == 0
-    page.get_by_role("button", name="受信箱へ", exact=True).wait_for()
+    page.get_by_role("button", name="受信箱へ", exact=True).click()
+
+    page.locator(".completed-sessions summary").click()
+    page.get_by_role("button", name="結果を見る: リバーブテイルの濁り").click()
+    page.get_by_text(
+        "支持が多い方向はありますが、優勢条件には届きませんでした",
+        exact=False,
+    ).wait_for()
+    page.get_by_text("優勢条件 2/3", exact=False).wait_for()
+    assert page.locator(".result-pair").count() == 3
+    assert page.get_by_role("button", name="次を聴く", exact=False).count() == 0

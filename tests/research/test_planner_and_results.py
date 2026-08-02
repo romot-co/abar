@@ -12,7 +12,7 @@ from abar.compare.models import (
     Telemetry,
 )
 from abar.research.models import ProjectSession
-from abar.research.planner import PlannedRole, item_roles
+from abar.research.planner import PlannedRole, item_roles, presentation_order
 from abar.research.results import calculate_result
 
 
@@ -37,6 +37,39 @@ def test_standard_evidence_count_has_no_product_maximum() -> None:
     roles = item_roles("standard", evidence_count=12)
 
     assert len(roles) == 12
+
+
+def test_presentation_order_is_seeded_and_keeps_checks_unpredictable() -> None:
+    evidence = tuple(f"item-{index}" for index in range(5))
+    project_session = ProjectSession(
+        "ps",
+        "p",
+        "ses",
+        "focus",
+        None,
+        "standard",
+        ("v1", "v2"),
+        RecipeRef(),
+        evidence,
+        tuple(f"clip-{index}" for index in range(5)),
+        "explicit",
+        1,
+        None,
+        "same",
+        "repeat",
+        evidence[0],
+        "agent",
+        "agent-1",
+        "fp",
+    )
+
+    first = presentation_order(project_session, seed=42)
+    repeated = presentation_order(project_session, seed=42)
+
+    assert repeated == first
+    assert set(first) == {*evidence, "same", "repeat"}
+    assert first[0] not in {"same", "repeat"}
+    assert first.index("repeat") - first.index(evidence[0]) >= 3
 
 
 def test_short_result_favors_non_tie_direction() -> None:

@@ -19,6 +19,7 @@ from abar.app.views import (
 from abar.foundation.events import EventEnvelope
 from abar.project.service import simplification_is_stale
 from abar.research.models import ProjectSession
+from abar.research.session_sizes import favored_count
 
 
 def status(repository: WorkspaceRepository, *, cursor: int = 0) -> StatusView:
@@ -195,10 +196,24 @@ def _session_outcome(state: ABARState, project_session: ProjectSession) -> str:
         if result.current_best_updated:
             return f"{variant_label(state, plan.proposed_variant_id)} に更新"
         return "現在最良を維持"
-    if result.favored_variant_id is None:
-        outcome = "互角"
-    else:
+    if result.favored_variant_id is not None:
         outcome = f"{variant_label(state, result.favored_variant_id)} 優勢"
+    elif result.evidence_direction_counts["tie"] == len(project_session.evidence_item_ids):
+        outcome = "全比較で互角"
+    else:
+        first, second = project_session.pair
+        counts = result.evidence_direction_counts
+        parts = [
+            f"{variant_label(state, first)} {counts[first]}",
+            f"{variant_label(state, second)} {counts[second]}",
+            f"互角 {counts['tie']}",
+        ]
+        evidence_count = len(project_session.evidence_item_ids)
+        missing = evidence_count - sum(counts.values())
+        if missing:
+            parts.append(f"未回答 {missing}")
+        required = favored_count(evidence_count)
+        outcome = f"{' / '.join(parts)}（{required}件の優勢条件に未達）"  # noqa: RUF001
     if any(result.blockers_by_variant.values()):
         outcome += " · blocker"
     return outcome

@@ -6,6 +6,7 @@ import pytest
 from abar.app import commands, queries, session_commands
 from abar.app.repository import WorkspaceRepository
 from abar.compare.models import RecipeRef
+from abar.research.planner import presentation_order
 from tests.conftest import persist_finite_variant
 
 
@@ -208,6 +209,40 @@ def test_standard_session_can_use_ten_materials_and_add_optional_checks(
     assert len(core_session.items) == 12
     assert project_session.same_check_item_id is not None
     assert project_session.repeat_check_item_id is not None
+
+    commands.start_session(repository, core_session.id, allocation_seed=1234)
+    state = repository.state()
+    deliveries = sorted(
+        (
+            delivery
+            for delivery in state.compare.deliveries.values()
+            if delivery.session_id == core_session.id
+        ),
+        key=lambda delivery: delivery.sequence_index,
+    )
+    realized = tuple(delivery.session_item_id for delivery in deliveries)
+    assert realized == presentation_order(project_session, seed=1234)
+    assert realized[0] not in {
+        project_session.same_check_item_id,
+        project_session.repeat_check_item_id,
+    }
+    original_index = realized.index(project_session.repeat_of_item_id)
+    repeat_index = realized.index(project_session.repeat_check_item_id)
+    assert repeat_index - original_index >= 3
+    original = next(
+        delivery
+        for delivery in deliveries
+        if delivery.session_item_id == project_session.repeat_of_item_id
+    )
+    repeat = next(
+        delivery
+        for delivery in deliveries
+        if delivery.session_item_id == project_session.repeat_check_item_id
+    )
+    assert repeat.slot_assignment == {
+        "A": original.slot_assignment["B"],
+        "B": original.slot_assignment["A"],
+    }
 
 
 def test_explicit_large_session_preserves_clips_from_one_material(

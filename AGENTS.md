@@ -112,8 +112,9 @@ recorded.
 - Separate attributes through Variant design instead of multiplying questions. Keep the human answer as an overall A/B preference under one criterion.
 - Use `same-check` or `repeat-check` sparingly when the comparison itself needs a perceptual consistency observation. These checks never vote on current best.
 - Omit `--clip` to let ABAR spread automatic selection across Materials. When exact regions
-  matter, repeat `--clip <id>` once per evidence item; ABAR preserves the specified order and
-  does not impose Material diversity on explicit selection.
+  matter, repeat `--clip <id>` once per evidence item. ABAR preserves that order in the Plan and
+  does not impose Material diversity on explicit selection, while the blind presentation order
+  is randomized from the recorded Session seed.
 
 ## What to revisit
 

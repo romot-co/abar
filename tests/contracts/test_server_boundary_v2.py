@@ -86,6 +86,8 @@ def test_interaction_capability_and_blind_sealing(
         assert completion.json()["items"][0]["identity_by_slot"] is not None
         assert completion.json()["items"][0]["judgment"]["preference"] == 3
         assert completion.json()["items"][0]["skipped"] is False
+        assert completion.json()["items"][0]["role"] == "other"
+        assert completion.json()["items"][0]["session_item_id"] is not None
 
 
 def test_browser_cookie_grants_interaction_after_bootstrap(tmp_path: Path) -> None:

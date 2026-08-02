@@ -3,13 +3,15 @@ import { useState } from "react";
 import { api, type Action, type Project, type Status, type WorkspaceCatalog } from "./api";
 import { humanError } from "./errors";
 import { DeckScreen } from "./deck/DeckScreen";
+import { SessionSummary } from "./deck/SessionSummary";
 import { ProjectScreen } from "./project/ProjectScreen";
 
-type Screen = "project" | "deck";
+type Screen = "project" | "deck" | "completion";
 
 export function App() {
   const queryClient = useQueryClient();
   const [screen, setScreen] = useState<Screen>("project");
+  const [completionSessionId, setCompletionSessionId] = useState<string | null>(null);
   const workspaces = useQuery({
     queryKey: ["workspaces"],
     queryFn: () => api<WorkspaceCatalog>("/api/workspaces"),
@@ -31,6 +33,7 @@ export function App() {
     mutationFn: (workspaceId: string) => api<Action>(`/api/workspaces/${workspaceId}/select`, { method: "POST" }),
     onSuccess: async () => {
       setScreen("project");
+      setCompletionSessionId(null);
       await queryClient.invalidateQueries();
     },
   });
@@ -55,6 +58,10 @@ export function App() {
           switchingWorkspace={selectWorkspace.isPending}
           onSelectWorkspace={(workspaceId) => selectWorkspace.mutate(workspaceId)}
           onOpenDeck={() => setScreen("deck")}
+          onOpenCompletion={(sessionId) => {
+            setCompletionSessionId(sessionId);
+            setScreen("completion");
+          }}
           onChanged={() => void refresh()}
         />
       )}
@@ -63,6 +70,15 @@ export function App() {
           onBack={() => {
             setScreen("project");
             void refresh();
+          }}
+        />
+      )}
+      {screen === "completion" && completionSessionId && (
+        <SessionSummary
+          sessionId={completionSessionId}
+          onBack={() => {
+            setCompletionSessionId(null);
+            setScreen("project");
           }}
         />
       )}
