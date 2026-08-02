@@ -21,7 +21,11 @@ AUTHORITATIVE = (
     "comparison.skipped",
     "comparison.protocol_invalidated",
 )
-OBSERVATIONAL = ("variant.provenance.observed", "render.nondeterministic_detected")
+OBSERVATIONAL = (
+    "variant.provenance.observed",
+    "variant.materialized",
+    "render.nondeterministic_detected",
+)
 
 EVENT_SCHEMAS = {
     **{

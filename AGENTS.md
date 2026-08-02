@@ -57,6 +57,9 @@ Repeat this sequence:
    For a command renderer using the standard three-path contract, use
    `variant add --bundle <directory> --entry <relative-file>`; ABAR packages the directory and
    creates the manifest. Use `--manifest ... --archive ...` only for a custom execution contract.
+   When an external measurement needs the exact audio for a registered Variant, use
+   `variant materialize <variant> --clip <id> --output <directory>`. This records audio
+   derivation facts but never changes current best or in-use.
 4. Ask one useful question: create a short or standard Project Session against current best.
    Standard defaults to three evidence comparisons; set an explicit larger evidence count when
    one question must be observed across more Materials. Omit `--recipe` to inherit the Project
@@ -72,7 +75,8 @@ Clip IDs. Canonical agent write commands are `project init`, `project brief set`
 `project config set`, `material add`, `material clip add`, `variant add`, `note write`,
 `project session create`, `project session best-update`, `project session close`,
 `project simplification create`, `indicator add`, `indicator set`, and
-`indicator value record`. Changing the brief through the JSON path also requires a verbatim
+`indicator value record`. `variant materialize` is the non-authoritative write boundary for
+external measurements. Changing the brief through the JSON path also requires a verbatim
 human `--quote`.
 
 Read with `abar --json status`, `project show`, and `history`. After a Session ends, use
@@ -138,20 +142,36 @@ Indicators are observational. They help the agent generate and screen proposals,
 not replace the Project brief or vote on current best. ABAR does not calculate, validate,
 combine, or optimize Indicator values.
 
-Develop an Indicator through this sequence:
+### Exploring a possible Indicator
 
-1. Preserve the human's perceptual language and state one bounded hypothesis in the Project
-   note. Do not translate a phrase such as "more dense" directly into a metric name.
-2. Design Variants that isolate the hypothesized property while controlling obvious
-   counterparts and regressions.
-3. Create a general Project Session for that local hypothesis. Never use a local property as
-   the criterion of a best-update Session.
-4. Compute external measurements for the exact AudioContent or PreparedPair subjects and
-   compare their behavior with the human A/B evidence.
-5. Record the supported scope, conflicting examples, and remaining uncertainty in the note.
-   Do not describe an Indicator as validated because it matched one Session.
-6. Register an Indicator only when its external measurement definition is stable. Give it a
-   short human-readable description and cite the supporting Session IDs.
+An empty Indicator registry is valid and does not put the Project into a special mode. Continue
+blind A/B work without an Indicator whenever no useful measurement is known.
+
+When evaluating a possible measurement, keep three claims separate:
+
+1. **Mechanism evidence:** the value describes what a particular implementation changes.
+2. **Perceptual evidence:** in controlled listening comparisons, the value's movement relates
+   to human preference or a repeated defect description.
+3. **Operating scope:** the relation remains useful on the Materials and mechanisms for which
+   the agent intends to use it, without repeatedly violating a guard quality.
+
+A moving value establishes only mechanism evidence. A full product-versus-source comparison
+tests the value of the whole product configuration; it does not by itself attribute the result
+to one metric. Conversely, a controlled mechanism comparison tests attribution but does not by
+itself establish product value. There is no required ordering between them: prepare the
+comparison that answers the current uncertainty.
+
+Preserve the human's perceptual language, state a bounded hypothesis in the Project note, and
+use general Sessions to test it. Materialize exact Variant/Clip audio with
+`variant materialize`, compute measurements externally, and report values against the returned
+AudioContent IDs. Record supporting and conflicting examples plus the scope in the note. A
+relation supported only for one mechanism may still be useful when registered with that narrow
+scope; additional Materials or mechanisms increase confidence but are not a registration gate.
+
+Register an Indicator only after its formula, unit, subject kind, input contract, description,
+and intended direction are stable enough to reproduce. Cite the relevant Sessions and state
+known confounds and guard observations. Registration records a bounded working relationship;
+it does not declare a universal metric or convert the Project into a scalar optimizer.
 
 A `target` is a measured direction worth pursuing. It is a candidate operational explanation
 of preference, not the formal purpose and not a weighted objective score. Use target reports

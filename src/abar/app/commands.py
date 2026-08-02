@@ -10,6 +10,7 @@ from abar.app.catalog_commands import (
     init_project,
 )
 from abar.app.command_support import CommandError, operation_key
+from abar.app.materialization_commands import materialize_variant
 from abar.app.observation_commands import (
     record_indicator_value,
     record_session_memo,
@@ -61,6 +62,7 @@ __all__ = [
     "export_project",
     "import_audio",
     "init_project",
+    "materialize_variant",
     "operation_key",
     "pause_session",
     "record_indicator_value",

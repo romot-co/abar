@@ -9,6 +9,7 @@ from abar.app import commands
 from abar.app.repository import WorkspaceRepository
 from abar.compare.models import RecipeRef
 from abar.server import create_app
+from tests.conftest import persist_finite_variant
 
 
 def test_interaction_capability_and_blind_sealing(
@@ -143,3 +144,55 @@ def test_interaction_can_switch_workspace_without_moving_automation(
         assert client.get("/api/project", headers=interaction).json()["name"] == "Second"
         assert client.get("/api/project", headers=automation).status_code == 403
         assert client.get("/api/project/snapshot", headers=automation).json()["name"] == "First"
+
+
+def test_automation_can_materialize_variant_audio_without_project_authority(
+    tmp_path: Path,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    root = tmp_path / "server-workspace"
+    repository = WorkspaceRepository.open(root)
+    try:
+        commands.init_project(
+            repository,
+            name="Product",
+            brief="Improve the sound",
+            material_paths=(wav_file("materialize.wav", 220.0),),
+        )
+        variant_id = persist_finite_variant(
+            repository,
+            label="Proposal",
+            same_as_source=False,
+        )
+        project = repository.state().project.project
+        assert project is not None
+        clip_id = repository.state().compare.materials[project.material_ids[0]].clip_ids[0]
+    finally:
+        repository.close()
+    application = create_app(
+        root,
+        automation_token="automation",
+        interaction_token="interaction",
+        allowed_origins=frozenset({"http://testserver"}),
+    )
+    automation = {"Authorization": "Bearer automation", "X-ABAR-Actor": "agent-1"}
+
+    with TestClient(application) as client:
+        response = client.post(
+            f"/api/variants/{variant_id}/materializations",
+            headers=automation,
+            json={"clip_ids": [clip_id], "output": str(tmp_path / "measurements")},
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["variant_id"] == variant_id
+    assert payload["items"][0]["clip_id"] == clip_id
+    assert Path(payload["items"][0]["output"]).is_file()
+    repository = WorkspaceRepository.open(root)
+    try:
+        project = repository.state().project.project
+        assert project is not None
+        assert project.in_use_variant_id is None
+    finally:
+        repository.close()

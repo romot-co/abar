@@ -11,7 +11,7 @@ from abar.app import commands
 from abar.app.actors import Actor
 from abar.app.queries import session_result
 from abar.app.repository import WorkspaceRepository
-from abar.app.views import ActionView, SessionResultView
+from abar.app.views import ActionView, SessionResultView, VariantMaterializationView
 from abar.compare.models import RecipeRef
 from abar.server.dependencies import Capability, ServerDependencies
 from abar.server.request_models import (
@@ -27,6 +27,7 @@ from abar.server.request_models import (
     ProjectExportRequest,
     QuickListenRequest,
     SimplificationRequest,
+    VariantMaterializationRequest,
     VariantRequest,
 )
 
@@ -125,6 +126,25 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
             idempotency_key=key,
         )
         return ActionView(result="registered", id=variant_id)
+
+    @router.post(
+        "/api/variants/{variant_id}/materializations",
+        response_model=VariantMaterializationView,
+    )
+    def materialize_variant(
+        variant_id: str,
+        body: VariantMaterializationRequest,
+        key: Annotated[str, Depends(dependencies.idempotency_key)],
+        _actor: Annotated[str, Depends(dependencies.actor_id)],
+        repository: WorkspaceRepository = repository_dependency,
+    ) -> VariantMaterializationView:
+        return commands.materialize_variant(
+            repository,
+            variant_id,
+            clip_ids=tuple(body.clip_ids),
+            output=Path(body.output),
+            idempotency_key=key,
+        )
 
     @router.post("/api/project/brief", response_model=ActionView)
     def brief(

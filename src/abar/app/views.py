@@ -120,6 +120,24 @@ class MaterialSnapshotView(PublicView):
     clips: tuple[ClipSnapshotView, ...]
 
 
+class MaterializedAudioView(PublicView):
+    clip_id: str
+    material_id: str
+    audio_id: str
+    pcm_sha: str
+    sample_rate: int
+    channel_layout: Literal["mono", "stereo"]
+    frames: int
+    output: str
+
+
+class VariantMaterializationView(PublicView):
+    schema_version: Literal[2] = 2
+    variant_id: str
+    output_directory: str
+    items: tuple[MaterializedAudioView, ...]
+
+
 class IndicatorValueSnapshotView(PublicView):
     indicator_id: str
     subject_id: str

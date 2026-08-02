@@ -128,6 +128,11 @@ class VariantRequest(RequestModel):
     provenance: dict[str, JSONValue] | None = None
 
 
+class VariantMaterializationRequest(RequestModel):
+    clip_ids: Annotated[list[str], Field(min_length=1)]
+    output: str
+
+
 class NoteRequest(RequestModel):
     markdown: str
 

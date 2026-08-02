@@ -404,6 +404,34 @@ def variant_add(
     )
 
 
+@variant_app.command("materialize")
+def variant_materialize(
+    context: typer.Context,
+    variant: Annotated[str, typer.Argument()],
+    clip: Annotated[
+        list[str],
+        typer.Option(
+            "--clip",
+            help="Attached Project Clip ID; repeat for multiple exact WAV outputs",
+        ),
+    ],
+    output: Annotated[Path, typer.Option("--output", file_okay=False)],
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run_view(
+        cli,
+        lambda repository: commands.materialize_variant(
+            repository,
+            variant,
+            clip_ids=tuple(clip),
+            output=output,
+            idempotency_key=cli.idempotency_key,
+        ),
+        "Variant音声をmaterializeしました",
+    )
+
+
 @project_session_app.command("create")
 def session_create(
     context: typer.Context,
@@ -876,6 +904,22 @@ def _read[ValueT: BaseModel](
             repository.close()
         _emit(cli, value, message)
     except (WorkspaceError, ValueError, OSError) as error:
+        _fail(cli, getattr(error, "code", "operation_failed"), str(error))
+
+
+def _run_view[ValueT: BaseModel](
+    cli: Context,
+    operation: Callable[[WorkspaceRepository], ValueT],
+    message: str,
+) -> None:
+    try:
+        repository = WorkspaceRepository.open(cli.workspace)
+        try:
+            value = operation(repository)
+        finally:
+            repository.close()
+        _emit(cli, value, message)
+    except (commands.CommandError, WorkspaceError, ValueError, OSError) as error:
         _fail(cli, getattr(error, "code", "operation_failed"), str(error))
 
 

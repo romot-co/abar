@@ -5,8 +5,78 @@ from collections.abc import Sequence
 from abar.app.event_payloads import audio_payload, comparison_payload, prepared_payload
 from abar.app.events import child_key, draft
 from abar.compare.models import ComparisonPlan, PreparedPair
+from abar.compare.operands import OperandResolution
 from abar.compare.service import PreparedComparison
 from abar.infrastructure.sqlite_event_store import EventTransaction
+
+
+def append_resolution_effects(
+    tx: EventTransaction,
+    operation_key: str,
+    resolutions: Sequence[OperandResolution],
+    *,
+    start_index: int = 0,
+    seen_audio: set[str] | None = None,
+) -> int:
+    """Persist the audio derivations produced while resolving operands."""
+    index = start_index
+    persisted_audio: set[str] = set() if seen_audio is None else seen_audio
+    for resolution in resolutions:
+        for effect in resolution.effects:
+            if effect.audio.id in persisted_audio:
+                continue
+            persisted_audio.add(effect.audio.id)
+            event_type = (
+                "render.completed"
+                if effect.kind == "render"
+                else "audio.slice.created"
+                if effect.kind == "slice"
+                else "audio.imported"
+            )
+            payload = audio_payload(
+                effect.audio,
+                provenance=effect.kind,
+                input_source=effect.input_source,
+            )
+            if effect.kind == "slice":
+                payload.update(
+                    {
+                        "source_audio_id": effect.source_audio_id,
+                        "start_frame": effect.start_frame,
+                    }
+                )
+            if effect.render is not None:
+                payload.update(
+                    {
+                        "variant_id": str(resolution.operand.provenance_ref.get("variant_ref")),
+                        "material_id": effect.render.material_id,
+                        "runtime_fingerprint": effect.render.runtime_fingerprint,
+                        "raw_render_id": effect.render.raw_render_id,
+                        "invocation_identity": effect.render.invocation_identity,
+                    }
+                )
+            tx.append(
+                draft(
+                    event_type,
+                    payload,
+                    idempotency_key=child_key(operation_key, index),
+                )
+            )
+            index += 1
+            if effect.render is not None and effect.render.nondeterministic_hashes is not None:
+                tx.append(
+                    draft(
+                        "render.nondeterministic_detected",
+                        {
+                            "variant_id": str(resolution.operand.provenance_ref.get("variant_ref")),
+                            "material_id": effect.render.material_id,
+                            "output_hashes": list(effect.render.nondeterministic_hashes),
+                        },
+                        idempotency_key=child_key(operation_key, index),
+                    )
+                )
+                index += 1
+    return index
 
 
 def append_prepared_comparisons(
@@ -24,63 +94,13 @@ def append_prepared_comparisons(
     for built in comparisons:
         pair = built.prepared_pair
         comparison = built.comparison
-        for resolution in (built.left, built.right):
-            for effect in resolution.effects:
-                if effect.audio.id in seen_audio:
-                    continue
-                seen_audio.add(effect.audio.id)
-                event_type = (
-                    "render.completed"
-                    if effect.kind == "render"
-                    else "audio.slice.created"
-                    if effect.kind == "slice"
-                    else "audio.imported"
-                )
-                payload = audio_payload(
-                    effect.audio,
-                    provenance=effect.kind,
-                    input_source=effect.input_source,
-                )
-                if effect.kind == "slice":
-                    payload.update(
-                        {
-                            "source_audio_id": effect.source_audio_id,
-                            "start_frame": effect.start_frame,
-                        }
-                    )
-                if effect.render is not None:
-                    payload.update(
-                        {
-                            "variant_id": str(resolution.operand.provenance_ref.get("variant_ref")),
-                            "material_id": effect.render.material_id,
-                            "runtime_fingerprint": effect.render.runtime_fingerprint,
-                            "raw_render_id": effect.render.raw_render_id,
-                            "invocation_identity": effect.render.invocation_identity,
-                        }
-                    )
-                tx.append(
-                    draft(
-                        event_type,
-                        payload,
-                        idempotency_key=child_key(operation_key, index),
-                    )
-                )
-                index += 1
-                if effect.render is not None and effect.render.nondeterministic_hashes is not None:
-                    tx.append(
-                        draft(
-                            "render.nondeterministic_detected",
-                            {
-                                "variant_id": str(
-                                    resolution.operand.provenance_ref.get("variant_ref")
-                                ),
-                                "material_id": effect.render.material_id,
-                                "output_hashes": list(effect.render.nondeterministic_hashes),
-                            },
-                            idempotency_key=child_key(operation_key, index),
-                        )
-                    )
-                    index += 1
+        index = append_resolution_effects(
+            tx,
+            operation_key,
+            (built.left, built.right),
+            start_index=index,
+            seen_audio=seen_audio,
+        )
         for audio in built.output_audio:
             if audio.id in seen_audio:
                 continue

@@ -649,6 +649,44 @@ export type MaterialSnapshotView = {
 };
 
 /**
+ * MaterializedAudioView
+ */
+export type MaterializedAudioView = {
+    /**
+     * Audio Id
+     */
+    audio_id: string;
+    /**
+     * Channel Layout
+     */
+    channel_layout: 'mono' | 'stereo';
+    /**
+     * Clip Id
+     */
+    clip_id: string;
+    /**
+     * Frames
+     */
+    frames: number;
+    /**
+     * Material Id
+     */
+    material_id: string;
+    /**
+     * Output
+     */
+    output: string;
+    /**
+     * Pcm Sha
+     */
+    pcm_sha: string;
+    /**
+     * Sample Rate
+     */
+    sample_rate: number;
+};
+
+/**
  * MemoRequest
  */
 export type MemoRequest = {
@@ -1476,6 +1514,42 @@ export type ValidationError = {
      * Error Type
      */
     type: string;
+};
+
+/**
+ * VariantMaterializationRequest
+ */
+export type VariantMaterializationRequest = {
+    /**
+     * Clip Ids
+     */
+    clip_ids: Array<string>;
+    /**
+     * Output
+     */
+    output: string;
+};
+
+/**
+ * VariantMaterializationView
+ */
+export type VariantMaterializationView = {
+    /**
+     * Items
+     */
+    items: Array<MaterializedAudioView>;
+    /**
+     * Output Directory
+     */
+    output_directory: string;
+    /**
+     * Schema Version
+     */
+    schema_version?: 2;
+    /**
+     * Variant Id
+     */
+    variant_id: string;
 };
 
 /**
@@ -2958,6 +3032,50 @@ export type VariantsApiVariantsPostResponses = {
 };
 
 export type VariantsApiVariantsPostResponse = VariantsApiVariantsPostResponses[keyof VariantsApiVariantsPostResponses];
+
+export type MaterializeVariantApiVariantsVariantIdMaterializationsPostData = {
+    body: VariantMaterializationRequest;
+    headers?: {
+        /**
+         * Value
+         */
+        value?: string | null;
+        /**
+         * X-Abar-Actor
+         */
+        'x-abar-actor'?: string | null;
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Variant Id
+         */
+        variant_id: string;
+    };
+    query?: never;
+    url: '/api/variants/{variant_id}/materializations';
+};
+
+export type MaterializeVariantApiVariantsVariantIdMaterializationsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MaterializeVariantApiVariantsVariantIdMaterializationsPostError = MaterializeVariantApiVariantsVariantIdMaterializationsPostErrors[keyof MaterializeVariantApiVariantsVariantIdMaterializationsPostErrors];
+
+export type MaterializeVariantApiVariantsVariantIdMaterializationsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: VariantMaterializationView;
+};
+
+export type MaterializeVariantApiVariantsVariantIdMaterializationsPostResponse = MaterializeVariantApiVariantsVariantIdMaterializationsPostResponses[keyof MaterializeVariantApiVariantsVariantIdMaterializationsPostResponses];
 
 export type GetWorkspacesApiWorkspacesGetData = {
     body?: never;
