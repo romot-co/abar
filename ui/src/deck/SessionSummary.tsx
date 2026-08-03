@@ -41,7 +41,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
     <main className="summary-shell">
       <p className="result-eyebrow">
         {data.current_best_check ? "現在最良チェック" : "観察"} · 全{data.comparison_count}比較
-        {data.recipe ? ` · Recipe ${data.recipe}` : ""}
+        {data.recipe ? <> · <span>{`Recipe ${data.recipe}`}</span></> : ""}
       </p>
       <h1>{data.focus ?? "比較の結果"}</h1>
 
@@ -63,7 +63,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
       <div className="summary-actions">
         <button type="button" className="secondary-action" onClick={onBack}>受信箱へ</button>
         {readyNext && (
-          <button type="button" className="primary-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.core_session_id)}>
+          <button type="button" className="primary-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.project_session_id)}>
             次を聴く（残り {readyCount}）
           </button>
         )}
@@ -83,8 +83,8 @@ function AnswerRow({ item, result }: { item: RelistenItemView; result: SessionRe
       <span>{item.sequence_index + 1}</span>
       <span className="result-pair" title={item.clip_id ?? undefined}>
         <span className={`result-role ${item.role}`}>{roleLabel(item.role)}</span>
-        <span><strong>A</strong> {slotLabel(item, "A")}</span>
-        <span><strong>B</strong> {slotLabel(item, "B")}</span>
+        <span><strong>A</strong> <span>{slotLabel(item, "A")}</span></span>
+        <span><strong>B</strong> <span>{slotLabel(item, "B")}</span></span>
         {item.material_name && <small>{item.material_name}</small>}
       </span>
       <span className="result-judgment">

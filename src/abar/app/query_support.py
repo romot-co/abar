@@ -8,6 +8,15 @@ from abar.compare.models import RecipeRef
 from abar.foundation.json_types import JSONValue
 
 type Slot = Literal["A", "B"]
+type PublicSessionStatus = Literal["ready", "active", "paused", "done", "closed", "blocked"]
+
+
+def public_session_status(status: str) -> PublicSessionStatus:
+    if status == "ended":
+        return "done"
+    if status in {"ready", "active", "paused", "closed", "blocked"}:
+        return cast(PublicSessionStatus, status)
+    raise ValueError(f"unknown Session status: {status}")
 
 
 def variant_label(state: ABARState, variant_id: str) -> str:
@@ -60,7 +69,6 @@ def timeline_entry(event_seq: int, event_type: str) -> TimelineEntryView:
         "project.brief.changed": "目的を更新",
         "current_best.changed": "現在最良を更新",
         "session.ended": "Sessionを完了",
-        "session.memo.recorded": "Sessionメモを記録",
         "indicator.value.recorded": "指標値を記録",
     }
     return TimelineEntryView(

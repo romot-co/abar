@@ -59,18 +59,20 @@ def build_dependencies(
         if value != "automation":
             raise AccessError("automation capability is required")
 
-    def actor_id(
+    def actor(
         access: Annotated[Capability, Depends(capability)],
         x_abar_actor: Annotated[str | None, Header()] = None,
-    ) -> str:
+    ) -> Actor:
         if access == "automation" and not x_abar_actor:
             raise AccessError("X-ABAR-Actor is required for automation writes")
-        return x_abar_actor or "human"
+        return Actor(x_abar_actor or "human", "agent" if access == "automation" else "human")
 
-    def actor(value: Annotated[str, Depends(actor_id)]) -> Actor:
-        return Actor(value, "human" if value == "human" else "agent")
+    def actor_id(value: Annotated[Actor, Depends(actor)]) -> str:
+        return value.id
 
-    def idempotency_key(value: Annotated[str | None, Header()] = None) -> str:
+    def idempotency_key(
+        value: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> str:
         return value or operation_key()
 
     def selected_workspace(

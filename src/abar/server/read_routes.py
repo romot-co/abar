@@ -86,9 +86,8 @@ def build_read_router(
     @router.get("/api/status", response_model=StatusView)
     def get_status(
         repository: Annotated[WorkspaceRepository, Depends(dependencies.repository)],
-        cursor: int = 0,
     ) -> StatusView:
-        return status(repository, cursor=cursor)
+        return status(repository)
 
     @router.get("/api/project", response_model=ProjectDashboardView)
     def get_project(

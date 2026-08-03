@@ -60,6 +60,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
         _actor: Annotated[str, Depends(dependencies.actor_id)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
+        repository.state()
         suffix = Path(file.filename or "upload.wav").suffix
         temporary = repository.root / f".upload-{secrets.token_urlsafe(12)}{suffix}"
         try:
@@ -77,6 +78,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
         source_group: str | None = None,
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
+        repository.state()
         suffix = Path(file.filename or "material.wav").suffix
         temporary = repository.root / f".material-{secrets.token_urlsafe(12)}{suffix}"
         try:
@@ -198,7 +200,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
     def observation_sessions(
         body: ObservationSessionRequest,
         key: Annotated[str, Depends(dependencies.idempotency_key)],
-        actor_id: Annotated[str, Depends(dependencies.actor_id)],
+        authenticated_actor: Annotated[Actor, Depends(dependencies.actor)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
         project_session_id = commands.create_observation_session(
@@ -213,8 +215,8 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
             clip_ids=body.clip_ids,
             same_check=body.same_check,
             repeat_check=body.repeat_check,
-            actor_id=actor_id,
-            actor_type="human" if actor_id == "human" else "agent",
+            actor_id=authenticated_actor.id,
+            actor_type=authenticated_actor.role,
             idempotency_key=key,
         )
         return ActionView(result="created", id=project_session_id)
@@ -223,7 +225,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
     def best_update_sessions(
         body: BestUpdateSessionRequest,
         key: Annotated[str, Depends(dependencies.idempotency_key)],
-        actor_id: Annotated[str, Depends(dependencies.actor_id)],
+        authenticated_actor: Annotated[Actor, Depends(dependencies.actor)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
         project_session_id = commands.create_best_update_session(
@@ -231,8 +233,8 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
             proposed_variant=body.proposed_variant,
             topic_key=body.topic_key,
             clip_ids=body.clip_ids,
-            actor_id=actor_id,
-            actor_type="human" if actor_id == "human" else "agent",
+            actor_id=authenticated_actor.id,
+            actor_type=authenticated_actor.role,
             idempotency_key=key,
         )
         return ActionView(result="created", id=project_session_id)

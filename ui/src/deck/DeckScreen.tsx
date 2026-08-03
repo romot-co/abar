@@ -47,7 +47,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
     mutationFn: ({ deliveryId, request }: { deliveryId: string; request: Judgment }) => api<Action>(`/api/deliveries/${deliveryId}/judgments`, { method: "POST", body: JSON.stringify(request) }),
     onSuccess: (accepted) => {
       player.pause();
-      void queryClient.invalidateQueries({ queryKey: ["status"] });
+      void queryClient.invalidateQueries({ queryKey: ["project"] });
       if (accepted.result === "ended" && deck?.session_id) setCompletedSessionId(deck.session_id);
       else void loadDeck();
     },
@@ -55,7 +55,6 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
   const lifecycle = useMutation({
     mutationFn: (path: string) => api<Action>(path, { method: "POST" }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["status"] });
       void queryClient.invalidateQueries({ queryKey: ["project"] });
     },
   });
@@ -63,10 +62,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
     mutationFn: ({ deliveryId, confirmed }: { deliveryId: string; confirmed: boolean }) => api<Action>(`/api/deliveries/${deliveryId}/skip`, { method: "POST", body: JSON.stringify({ confirmed }) }),
     onSuccess: async () => {
       setSkipConfirm(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["project"] }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: ["project"] });
       const sessionId = deck?.session_id;
       const next = await loadDeck();
       if (sessionId && next?.session_id === null) setCompletedSessionId(sessionId);

@@ -43,13 +43,12 @@ class IndicatorSummaryView(PublicView):
     description: str
     role: Literal["target", "guard", "none"]
     unit: str
-    latest_value: float | None
+    value: float | None
     guard_result: Literal["pass", "fail"] | None
 
 
 class SessionCardView(PublicView):
     project_session_id: str
-    core_session_id: str
     focus: str
     recipe: str
     comparison_count: int
@@ -74,14 +73,10 @@ class StatusView(PublicView):
     brief: str | None
     current_best: str | None
     in_use: str | None
-    indicators: tuple[IndicatorSummaryView, ...]
-    sessions: tuple[SessionCardView, ...]
     ready_count: int
     active_count: int
     ready_limit: int | None
     material_count: int
-    pending_simplifications: tuple[SimplificationPromptView, ...]
-    next_cursor: int | None = None
 
 
 class BriefHistoryView(PublicView):
@@ -186,27 +181,27 @@ class ProjectSessionJudgmentView(PublicView):
 
 class ProjectSessionSnapshotView(PublicView):
     project_session_id: str
-    core_session_id: str
     focus: str
     topic_key: str | None
     size: Literal["short", "standard"]
     recipe: str
-    status: Literal["ready", "active", "paused", "ended", "closed", "blocked"]
+    status: Literal["ready", "active", "paused", "done", "closed", "blocked"]
     criterion: CriterionSnapshotView | None
     judgments: tuple[ProjectSessionJudgmentView, ...]
     result: "SessionResultView | None"
-    memo: str | None
 
 
 class ProjectDashboardView(PublicView):
     schema_version: Literal[2] = 2
-    project_id: str
-    name: str
-    brief: str
-    current_best: str
-    primary_recipe: str
+    health: HealthView
+    project_id: str | None
+    name: str | None
+    brief: str | None
+    current_best: str | None
+    primary_recipe: str | None
     sessions: tuple[SessionCardView, ...]
     indicators: tuple[IndicatorSummaryView, ...]
+    pending_simplifications: tuple[SimplificationPromptView, ...]
 
 
 class ProjectView(PublicView):
@@ -251,7 +246,6 @@ class DeckAudioView(PublicView):
 class ActiveDeckView(PublicView):
     schema_version: Literal[2] = 2
     session_id: str | None
-    project_session_id: str | None
     status: Literal["active", "paused"] | None
     delivery_id: str | None
     sequence_index: int | None
@@ -265,7 +259,6 @@ class ActiveDeckView(PublicView):
     audio: tuple[DeckAudioView, ...]
     identity_by_slot: dict[Literal["A", "B"], RevealedIdentityView] | None
     can_reveal: bool
-    ended: bool
 
 
 class EvidenceResultView(PublicView):
@@ -299,7 +292,6 @@ class SessionResultView(PublicView):
     difference_profile: str
     current_best_updated: bool
     best_update_evidence: BestUpdateEvidenceView | None
-    memo: str | None
     evidence: tuple[EvidenceResultView, ...]
 
 
@@ -331,7 +323,6 @@ class RelistenItemView(PublicView):
 class SessionCompletionView(PublicView):
     schema_version: Literal[2] = 2
     session_id: str
-    project_session_id: str | None
     focus: str | None
     current_best_check: bool
     recipe: str | None

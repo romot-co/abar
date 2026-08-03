@@ -90,6 +90,7 @@ def create_quick_listen(
     )
     if existing is not None:
         return cast(str, existing.payload["session_id"])
+    repository.state()
     first, second = _apply_automatic_file_range(repository, first, second)
     state = repository.state()
     built = build_comparison(
@@ -132,7 +133,7 @@ def start_session(
     if prior_blocked is not None:
         if prior_blocked.payload.get("request_hash") != request_hash:
             raise CommandError("idempotency key was reused with a different request")
-        raise CommandError(str(prior_blocked.payload["reason"]))
+        raise CommandError("project_session_blocked", str(prior_blocked.payload["reason"]))
     if (
         _existing_operation(
             repository,
@@ -149,11 +150,11 @@ def start_session(
     if session is None or state.compare.session_runtime[session_id].status != "ready":
         raise CommandError("Session is not ready")
     linked = _project_session_for_core(state, session_id)
-    if linked is not None:
-        for other in state.research.project_sessions.values():
-            runtime = state.compare.session_runtime[other.core_session_id]
-            if other.core_session_id != session_id and runtime.status in {"active", "paused"}:
-                raise CommandError("another Project Session is active")
+    if any(
+        other_session_id != session_id and runtime.status in {"active", "paused"}
+        for other_session_id, runtime in state.compare.session_runtime.items()
+    ):
+        raise CommandError("another Session is active")
     invalid_items: list[tuple[str, str]] = []
     for item in session.items:
         comparison = state.compare.comparisons[item.comparison_id]
@@ -163,14 +164,32 @@ def start_session(
             if not repository.objects.exists(audio.object_id):
                 invalid_items.append((item.id, "object_missing"))
                 break
-            decoded = decode_wav_bytes(repository.objects.read(audio.object_id))
+            try:
+                decoded = decode_wav_bytes(repository.objects.read(audio.object_id))
+            except (OSError, ValueError):
+                invalid_items.append((item.id, "object_invalid"))
+                break
             pcm_sha = f"sha256:{hashlib.sha256(decoded.pcm.tobytes(order='C')).hexdigest()}"
             if pcm_sha != audio.pcm_sha:
                 invalid_items.append((item.id, "object_hash_mismatch"))
                 break
-    evidence_invalid = False
-    if linked is not None:
-        evidence_invalid = any(item_id in linked.evidence_item_ids for item_id, _ in invalid_items)
+    if invalid_items:
+        repository.events.append(
+            draft(
+                "session.blocked",
+                {
+                    "session_id": session_id,
+                    "reason": "Session audio validation failed",
+                    "invalid_items": [
+                        {"session_item_id": item_id, "reason": reason}
+                        for item_id, reason in invalid_items
+                    ],
+                    "request_hash": request_hash,
+                },
+                idempotency_key=key,
+            )
+        )
+        raise CommandError("project_session_blocked", "Session audio validation failed")
     deliveries = list(allocate_deliveries(session, seed=selected_seed))
     if linked is not None and linked.repeat_check_item_id is not None:
         original = next(
@@ -189,55 +208,26 @@ def start_session(
             replace(delivery_by_item[item_id], sequence_index=index)
             for index, item_id in enumerate(presentation_order(linked, seed=selected_seed))
         ]
-    invalid_ids = {item_id for item_id, _ in invalid_items}
-    deliveries = [item for item in deliveries if item.session_item_id not in invalid_ids]
     with repository.events.transaction(causation_id=key) as tx:
-        index = 0
-        for item_id, reason in invalid_items:
+        tx.append(
+            draft(
+                "session.started",
+                {
+                    "session_id": session_id,
+                    "allocation_seed": selected_seed,
+                    "request_hash": request_hash,
+                },
+                idempotency_key=child_key(key, 0),
+            )
+        )
+        for index, delivery in enumerate(deliveries, start=1):
             tx.append(
                 draft(
-                    "comparison.protocol_invalidated",
-                    {"session_id": session_id, "session_item_id": item_id, "reason": reason},
+                    "comparison.delivered",
+                    _delivery_payload(delivery),
                     idempotency_key=child_key(key, index),
                 )
             )
-            index += 1
-        if evidence_invalid:
-            tx.append(
-                draft(
-                    "session.blocked",
-                    {
-                        "session_id": session_id,
-                        "reason": "evidence protocol invalid",
-                        "request_hash": request_hash,
-                    },
-                    idempotency_key=child_key(key, index),
-                )
-            )
-        else:
-            tx.append(
-                draft(
-                    "session.started",
-                    {
-                        "session_id": session_id,
-                        "allocation_seed": selected_seed,
-                        "request_hash": request_hash,
-                    },
-                    idempotency_key=child_key(key, index),
-                )
-            )
-            index += 1
-            for delivery in deliveries:
-                tx.append(
-                    draft(
-                        "comparison.delivered",
-                        _delivery_payload(delivery),
-                        idempotency_key=child_key(key, index),
-                    )
-                )
-                index += 1
-    if evidence_invalid:
-        raise CommandError("evidence protocol invalid")
 
 
 def record_judgment(
@@ -295,6 +285,8 @@ def record_judgment(
     runtime = state.compare.session_runtime[session.id]
     if state.compare.effective_judgment(delivery_id) is not None:
         raise CommandError("Judgment is immutable once recorded")
+    if delivery.session_item_id in runtime.skipped_item_ids:
+        raise CommandError("skipped Delivery cannot be answered")
     if runtime.status not in {"active", "paused"}:
         raise CommandError("Judgment requires an active Session")
     identity_visible = session.presentation == "open" or runtime.revealed
@@ -652,8 +644,6 @@ def _would_complete(
     for item in session.items:
         delivery = delivery_by_item.get(item.id)
         if delivery is None:
-            if item.id in runtime.invalid_item_ids:
-                continue
             return False
         if delivery.id in {replacement_delivery_id, skipped_delivery_id}:
             continue

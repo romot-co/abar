@@ -17,7 +17,6 @@ from abar.server.errors import error_response
 from abar.server.request_models import (
     JudgmentRequest,
     ManualBestRequest,
-    MemoRequest,
     SessionStartRequest,
     SimplificationDecisionRequest,
     SkipRequest,
@@ -73,7 +72,7 @@ def build_interaction_router(
     ) -> ActionView:
         commands.start_session(
             repository,
-            session_id,
+            _core_session_id(repository, session_id),
             allocation_seed=body.allocation_seed,
             idempotency_key=key,
         )
@@ -86,7 +85,12 @@ def build_interaction_router(
         _human: Annotated[None, Depends(dependencies.interaction)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
-        commands.pause_session(repository, session_id, paused=True, idempotency_key=key)
+        commands.pause_session(
+            repository,
+            _core_session_id(repository, session_id),
+            paused=True,
+            idempotency_key=key,
+        )
         return ActionView(result="paused", id=session_id)
 
     @router.post("/api/sessions/{session_id}/resume", response_model=ActionView)
@@ -96,7 +100,12 @@ def build_interaction_router(
         _human: Annotated[None, Depends(dependencies.interaction)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
-        commands.pause_session(repository, session_id, paused=False, idempotency_key=key)
+        commands.pause_session(
+            repository,
+            _core_session_id(repository, session_id),
+            paused=False,
+            idempotency_key=key,
+        )
         return ActionView(result="active", id=session_id)
 
     @router.post("/api/sessions/{session_id}/abandon", response_model=ActionView)
@@ -106,7 +115,11 @@ def build_interaction_router(
         _human: Annotated[None, Depends(dependencies.interaction)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
-        commands.abandon_session(repository, session_id, idempotency_key=key)
+        commands.abandon_session(
+            repository,
+            _core_session_id(repository, session_id),
+            idempotency_key=key,
+        )
         return ActionView(result="ended", id=session_id)
 
     @router.post("/api/sessions/{session_id}/reveal", response_model=ActionView)
@@ -116,7 +129,11 @@ def build_interaction_router(
         _human: Annotated[None, Depends(dependencies.interaction)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
-        commands.reveal_session(repository, session_id, idempotency_key=key)
+        commands.reveal_session(
+            repository,
+            _core_session_id(repository, session_id),
+            idempotency_key=key,
+        )
         return ActionView(result="revealed", id=session_id)
 
     @router.get("/api/deck/active", response_model=ActiveDeckView)
@@ -183,17 +200,6 @@ def build_interaction_router(
         )
         return ActionView(result="skipped", id=delivery_id)
 
-    @router.post("/api/project-sessions/{project_session_id}/memo", response_model=ActionView)
-    def memo(
-        project_session_id: str,
-        body: MemoRequest,
-        key: Annotated[str, Depends(dependencies.idempotency_key)],
-        _human: Annotated[None, Depends(dependencies.interaction)],
-        repository: WorkspaceRepository = repository_dependency,
-    ) -> ActionView:
-        commands.record_session_memo(repository, project_session_id, body.text, idempotency_key=key)
-        return ActionView(result="recorded", id=project_session_id)
-
     @router.get("/api/audio/{token}")
     def audio(token: str) -> Response:
         record = audio_tokens.consume(token)
@@ -212,3 +218,8 @@ def build_interaction_router(
             repository.close()
 
     return router
+
+
+def _core_session_id(repository: WorkspaceRepository, public_session_id: str) -> str:
+    project_session = repository.state().research.project_sessions.get(public_session_id)
+    return public_session_id if project_session is None else project_session.core_session_id

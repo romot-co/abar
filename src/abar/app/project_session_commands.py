@@ -196,6 +196,8 @@ def _create_project_session(
     else:
         if first_variant is None or second_variant is None or focus is None:
             raise CommandError("general Session requires pair and focus")
+        if first_variant == second_variant:
+            raise CommandError("observation variants must differ")
         selected_recipe = recipe or project.primary_recipe
         selected_focus = focus
     assert first_variant is not None and second_variant is not None
@@ -223,7 +225,11 @@ def _create_project_session(
     )
     for existing in state.research.project_sessions.values():
         runtime = state.compare.session_runtime[existing.core_session_id]
-        if existing.fingerprint == fingerprint and runtime.status not in {"ended", "closed"}:
+        if existing.fingerprint == fingerprint and runtime.status not in {
+            "ended",
+            "closed",
+            "blocked",
+        }:
             raise CommandError("an unfinished Session with the same fingerprint already exists")
     evidence_data: list[PreparedComparison] = []
     render_cache: dict[str, AudioObject] = {}
@@ -342,7 +348,7 @@ def _create_project_session(
     )
     plan_id: str | None = None
     if update_best:
-        if all(item.prepared_pair.no_effect for item in evidence_data):
+        if any(item.prepared_pair.no_effect for item in evidence_data):
             raise CommandError(
                 "Best Update has no audible evidence; create a Simplification Plan instead"
             )

@@ -4,7 +4,6 @@ import type {
   JudgmentRequest,
   ProjectDashboardView,
   SessionCompletionView,
-  StatusView,
   WorkspaceCatalogView,
 } from "./generated";
 
@@ -13,7 +12,6 @@ export type Deck = ActiveDeckView;
 export type Judgment = JudgmentRequest;
 export type Project = ProjectDashboardView;
 export type SessionCompletion = SessionCompletionView;
-export type Status = StatusView;
 export type WorkspaceCatalog = WorkspaceCatalogView;
 
 export class ApiError extends Error {

@@ -85,8 +85,8 @@ finer-grained listing commands.
 
 ## Waiting and resuming
 
-Only the human may answer a listening question, write a Session memo, manually set current
-best, or accept a Simplification Plan. Never call Judgment, memo, manual-best, or
+Only the human may answer a listening question, manually set current best, or accept a
+Simplification Plan. Never call Judgment, manual-best, or
 Simplification-decision interaction routes.
 
 ABAR does not run, schedule, or restart the external agent. While a Session awaits an answer,
@@ -122,6 +122,22 @@ recorded.
   does not impose Material diversity on explicit selection, while the blind presentation order
   is randomized from the recorded Session seed.
 
+### Calibrate meaning and mechanism large-first
+
+When a local Session asks whether a perceptual word describes a mechanism, or whether a new
+mechanism is audible at all, begin with a bounded dose that should be clearly discriminable. The
+first question is what the mechanism sounds like and which defects it causes, not whether a
+product-scale dose wins by a slight preference. Record expected defects as blockers and keep the
+Session non-authoritative.
+
+Do not compensate for an under-dosed proposal by adding more comparisons or asking the human to
+resolve repeated subtle differences. If the listener reports that the difference is too small to
+judge, preserve the partial Session as a bounded observation, stop that dose, and prepare a
+stronger isolated Variant. After the perceptual meaning or mechanism winner is established, run a
+separate dose-down comparison to find the smallest useful amount and then a complete-product
+comparison against current best. Large-first does not waive mechanical safety checks, comparison
+matching, blocker recording, or the sealed human-judgment boundary.
+
 ## What to revisit
 
 Prepare a new confirmation Session when:
@@ -134,7 +150,7 @@ Prepare a new confirmation Session when:
 
 ## Purpose and language
 
-The Project brief is the only formal purpose. Notes hold the agent's current understanding and hypotheses; they never override the brief. When the human uses useful perceptual language, preserve it in notes and Session memos rather than translating it prematurely into a metric.
+The Project brief is the only formal purpose. Notes hold the agent's current understanding and hypotheses; they never override the brief. Preserve useful perceptual language in comparison comments and Project notes rather than translating it prematurely into a metric.
 
 ## Developing Indicators
 
@@ -178,16 +194,17 @@ of preference, not the formal purpose and not a weighted objective score. Use ta
 to guide candidate generation only within the scope supported by the listening evidence.
 
 A `guard` is a regression signal for a quality that should not be lost. Derive guard candidates
-from constraints in the Project brief, human blockers and Session memos, and regressions seen
+from constraints in the Project brief, human blockers and comparison comments, and regressions seen
 in losing Variants. Stress the suspected tradeoff through Variant design, confirm that the
 quality matters through a general Session, then define the measurement and any `pass` or
 `fail` rule. Report `pass` or `fail` only when that external definition supports the result;
 otherwise report the guard as unconfirmed.
 
 Each reported value must name both the exact AudioContent or PreparedPair subject and the
-Variant that produced it. ABAR shows only the latest report for Project current best and does
-not reuse a previous Variant's report. A promising target or guard must continue to earn its
-role through human A/B evidence.
+Variant that produced it. For Project current best, ABAR summarizes the latest report for each
+subject with a median value; a guard fails if any summarized subject fails and is clear only
+when every summarized subject passes. ABAR does not reuse a previous Variant's report. A
+promising target or guard must continue to earn its role through human A/B evidence.
 
 ## Simplification boundary
 

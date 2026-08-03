@@ -694,11 +694,9 @@ def indicator_value_record(
 
 
 @app.command("status")
-def status_command(
-    context: typer.Context, cursor: Annotated[int, typer.Option("--cursor")] = 0
-) -> None:
+def status_command(context: typer.Context) -> None:
     cli = _ctx(context)
-    _read(cli, lambda repository: status(repository, cursor=cursor), "状態を表示しました")
+    _read(cli, status, "状態を表示しました")
 
 
 @app.command("history")

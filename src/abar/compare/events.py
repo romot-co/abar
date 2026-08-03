@@ -19,7 +19,6 @@ AUTHORITATIVE = (
     "comparison.delivered",
     "judgment.recorded",
     "comparison.skipped",
-    "comparison.protocol_invalidated",
 )
 OBSERVATIONAL = (
     "variant.provenance.observed",

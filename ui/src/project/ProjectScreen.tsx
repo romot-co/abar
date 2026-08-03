@@ -1,14 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { api, type Action, type Project, type Status, type WorkspaceCatalog } from "../api";
+import { api, type Action, type Project, type WorkspaceCatalog } from "../api";
 import { humanError } from "../errors";
 import type { IndicatorSummaryView, SessionCardView, SimplificationPromptView } from "../generated";
 import { Icon } from "../Icon";
 
 type ProjectScreenProps = {
-  status: Status;
-  project: Project | null;
-  projectError: string | null;
+  project: Project;
   workspaces: WorkspaceCatalog;
   switchingWorkspace: boolean;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -17,7 +15,7 @@ type ProjectScreenProps = {
   onChanged: () => void;
 };
 
-export function ProjectScreen({ status, project, projectError, workspaces, switchingWorkspace, onSelectWorkspace, onOpenDeck, onOpenCompletion, onChanged }: ProjectScreenProps) {
+export function ProjectScreen({ project, workspaces, switchingWorkspace, onSelectWorkspace, onOpenDeck, onOpenCompletion, onChanged }: ProjectScreenProps) {
   const start = useMutation({
     mutationFn: (sessionId: string) =>
       api<Action>(`/api/sessions/${sessionId}/start`, {
@@ -35,18 +33,24 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
     onSuccess: onChanged,
   });
 
-  if (!project) {
+  if (project.health.status === "degraded") {
+    return (
+      <main className="centered error-panel">
+        <h1>Workspaceを読み込めません</h1>
+        <p>{project.health.degradation?.recovery ?? project.health.reasons?.join("、")}</p>
+      </main>
+    );
+  }
+
+  if (project.project_id === null) {
     return (
       <main className="page-shell">
         <header className="page-header">
           <h1>Projectはまだありません</h1>
-          {projectError && <p>{projectError}</p>}
         </header>
-        {!projectError && (
-          <section className="empty-state" aria-label="はじめかた">
-            <code>abar project init --name "製品名" --brief "目的" --material path/to/audio.wav</code>
-          </section>
-        )}
+        <section className="empty-state" aria-label="はじめかた">
+          <code>abar project init --name "製品名" --brief "目的" --material path/to/audio.wav</code>
+        </section>
       </main>
     );
   }
@@ -54,7 +58,9 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
   const pending = project.sessions
     .filter((item) => item.status === "active" || item.status === "paused" || item.status === "ready")
     .sort((left, right) => sessionRank(left.status) - sessionRank(right.status));
-  const completed = project.sessions.filter((item) => item.status === "done");
+  const completed = project.sessions.filter(
+    (item) => item.status === "done" || item.status === "blocked",
+  );
   const targets = project.indicators.filter((item) => item.role === "target");
   const guards = project.indicators.filter((item) => item.role === "guard");
 
@@ -75,11 +81,10 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
           <Icon name="unfold_more" />
         </div>
         <p className="brief">{project.brief}</p>
-        {status.health.status !== "ok" && <span className="health-badge">{status.health.status}</span>}
       </header>
 
       <section className="queue-section" aria-label="残りのセッション">
-        {status.pending_simplifications.map((prompt) => (
+        {project.pending_simplifications.map((prompt) => (
           <SimplificationPrompt key={prompt.id} prompt={prompt} pending={decide.isPending} onDecision={(decision) => decide.mutate({ id: prompt.id, decision })} />
         ))}
         {decide.isError && <p className="inline-error">{humanError(decide.error)}</p>}
@@ -90,9 +95,9 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
         {pending.length > 0 ? (
           <div className="queue-list">
             {pending.map((item, index) => (
-              <QueueRow key={item.project_session_id} session={item} primaryRecipe={project.primary_recipe}>
+              <QueueRow key={item.project_session_id} session={item} primaryRecipe={project.primary_recipe ?? ""}>
                 {item.status === "ready" && (
-                  <button type="button" className={index === 0 ? "primary-action" : "secondary-action"} disabled={start.isPending} onClick={() => start.mutate(item.core_session_id)}>
+                  <button type="button" className={index === 0 ? "primary-action" : "secondary-action"} disabled={start.isPending} onClick={() => start.mutate(item.project_session_id)}>
                     聴く
                   </button>
                 )}
@@ -100,7 +105,7 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
                   <button type="button" className="primary-action" onClick={onOpenDeck}>続きを聴く</button>
                 )}
                 {item.status === "paused" && (
-                  <button type="button" className={index === 0 ? "primary-action" : "secondary-action"} disabled={resume.isPending} onClick={() => resume.mutate(item.core_session_id)}>再開</button>
+                  <button type="button" className={index === 0 ? "primary-action" : "secondary-action"} disabled={resume.isPending} onClick={() => resume.mutate(item.project_session_id)}>再開</button>
                 )}
               </QueueRow>
             ))}
@@ -118,19 +123,28 @@ export function ProjectScreen({ status, project, projectError, workspaces, switc
         <details className="disclosure completed-sessions">
           <summary>完了したセッション {completed.length} 件を見る</summary>
           <div className="completed-list">
-            {completed.map((item) => (
-              <button
-                type="button"
-                className="completed-row"
-                key={item.project_session_id}
-                aria-label={`結果を見る: ${item.focus}`}
-                onClick={() => onOpenCompletion(item.core_session_id)}
-              >
-                <span className="completed-date">{formatDate(item.completed_at)}</span>
-                <p><span>{item.current_best_check ? "現在最良チェック" : "観察"}</span>{item.focus}</p>
-                <strong>{item.outcome ?? "完了"}</strong>
-              </button>
-            ))}
+            {completed.map((item) => {
+              const content = (
+                <>
+                  <span className="completed-date">{formatDate(item.completed_at)}</span>
+                  <p><span>{item.current_best_check ? "現在最良チェック" : "観察"}</span>{item.focus}</p>
+                  <strong>{item.status === "blocked" ? "準備できず" : item.outcome ?? "完了"}</strong>
+                </>
+              );
+              return item.status === "blocked" ? (
+                <div className="completed-row" key={item.project_session_id} title={item.outcome ?? undefined}>{content}</div>
+              ) : (
+                <button
+                  type="button"
+                  className="completed-row"
+                  key={item.project_session_id}
+                  aria-label={`結果を見る: ${item.focus}`}
+                  onClick={() => onOpenCompletion(item.project_session_id)}
+                >
+                  {content}
+                </button>
+              );
+            })}
           </div>
         </details>
       )}
@@ -172,7 +186,7 @@ function IndicatorRow({ item, role }: { item: IndicatorSummaryView; role: "targe
     <div className="indicator-row">
       <span className="indicator-label">{item.label}</span>
       <p className="indicator-description">{item.description}</p>
-      <span className="indicator-value"><strong>{formatIndicatorValue(item.latest_value)}</strong>{unit}</span>
+      <span className="indicator-value"><strong>{formatIndicatorValue(item.value)}</strong>{unit}</span>
       <span className="indicator-status">
         {role === "guard" && <span className={`guard-badge ${item.guard_result ?? "unknown"}`}>{formatGuardResult(item.guard_result)}</span>}
       </span>

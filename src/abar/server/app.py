@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -71,6 +72,14 @@ def create_app(
     @application.exception_handler(ValueError)
     async def value_error(_request: Request, error: ValueError) -> JSONResponse:
         return error_response(409, "request_rejected", str(error))
+
+    @application.exception_handler(KeyError)
+    async def key_error(_request: Request, _error: KeyError) -> JSONResponse:
+        return error_response(404, "entity_not_found", "requested entity does not exist")
+
+    @application.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, error: RequestValidationError) -> JSONResponse:
+        return error_response(422, "request_invalid", str(error))
 
     audio_tokens = AudioTokenStore()
     application.include_router(

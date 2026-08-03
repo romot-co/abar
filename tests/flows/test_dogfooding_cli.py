@@ -134,6 +134,26 @@ def test_status_describes_the_event_that_degraded_a_workspace(
     assert "create a new Workspace" in view.health.degradation.recovery
 
 
+def test_status_reports_the_persisted_tail_and_only_attached_materials(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    commands.add_material(repository, wav_file("unattached.wav", 220.0))
+    for index in range(120):
+        repository.events.append(
+            draft(
+                "variant.provenance.observed",
+                {"variant_id": "unregistered", "provenance": {"index": index}},
+                idempotency_key=f"observed-{index}",
+            )
+        )
+
+    view = status(repository)
+
+    assert view.health.last_event_seq == repository.events.read_all()[-1].event_seq
+    assert view.material_count == 0
+
+
 def test_session_create_streams_json_progress_to_stderr(
     tmp_path: Path,
     wav_file: Callable[[str, float], Path],

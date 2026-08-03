@@ -142,13 +142,13 @@ def add_material(
     existing = existing_operation(repository, key, "material.added", request_hash=fingerprint)
     if existing is not None:
         return cast(str, existing.payload["material_id"])
+    state = repository.state()
     imported = import_material_file(
         path,
         objects=repository.objects,
         source_group=source_group,
         name=name,
     )
-    state = repository.state()
     with repository.events.transaction(causation_id=key) as tx:
         tx.append(
             draft(
@@ -219,6 +219,7 @@ def import_audio(
     existing = existing_operation(repository, key, "audio.imported", request_hash=fingerprint)
     if existing is not None:
         return cast(str, existing.payload["audio_id"])
+    repository.state()
     imported = import_input_audio_file(path, objects=repository.objects)
     repository.events.append(
         draft(
@@ -398,6 +399,7 @@ def add_variant_archive(
 ) -> str:
     """Validate and import a Variant archive through one application boundary."""
 
+    repository.state()
     digest = hashlib.sha256(archive_bytes).hexdigest()
     archive_ref: dict[str, JSONValue] = {
         "object_id": f"obj_{digest}",

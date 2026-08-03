@@ -11,7 +11,6 @@ from abar.research.models import (
     IndicatorValue,
     NoteRevision,
     ProjectSession,
-    SessionMemo,
 )
 
 
@@ -23,9 +22,6 @@ class ResearchState:
         default_factory=dict[tuple[str, str, str], tuple[IndicatorValue, ...]]
     )
     notes: tuple[NoteRevision, ...] = ()
-    session_memos: dict[str, tuple[SessionMemo, ...]] = field(
-        default_factory=dict[str, tuple[SessionMemo, ...]]
-    )
 
 
 def reduce_research(state: ResearchState, event: EventEnvelope) -> ResearchState:
@@ -113,16 +109,6 @@ def reduce_research(state: ResearchState, event: EventEnvelope) -> ResearchState
             event_seq=event.event_seq,
         )
         return replace(state, notes=(*state.notes, note))
-    if event.event_type == "session.memo.recorded":
-        project_session_id = _str(p, "project_session_id")
-        memo = SessionMemo(project_session_id, _str(p, "text"), event.event_seq)
-        return replace(
-            state,
-            session_memos={
-                **state.session_memos,
-                project_session_id: (*state.session_memos.get(project_session_id, ()), memo),
-            },
-        )
     return state
 
 

@@ -53,50 +53,6 @@ def write_note(
     )
 
 
-def record_session_memo(
-    repository: WorkspaceRepository,
-    project_session_id: str,
-    text: str,
-    *,
-    idempotency_key: str | None = None,
-) -> bool:
-    key = operation_key(idempotency_key)
-    fingerprint = request_hash(
-        "session_memo.record",
-        {"project_session_id": project_session_id, "text": text},
-    )
-    if (
-        existing_operation(
-            repository,
-            key,
-            "session.memo.recorded",
-            request_hash=fingerprint,
-        )
-        is not None
-    ):
-        return True
-    if not text:
-        return False
-    if len(text) > 500:
-        raise CommandError("session memo exceeds 500 code points")
-    state = repository.state()
-    project_session = state.research.project_sessions[project_session_id]
-    if state.compare.session_runtime[project_session.core_session_id].status != "ended":
-        raise CommandError("session memo requires an ended Session")
-    repository.events.append(
-        draft(
-            "session.memo.recorded",
-            {
-                "project_session_id": project_session_id,
-                "text": text,
-                "request_hash": fingerprint,
-            },
-            idempotency_key=key,
-        )
-    )
-    return True
-
-
 def register_indicator(
     repository: WorkspaceRepository,
     *,
@@ -133,6 +89,7 @@ def register_indicator(
         is not None
     ):
         return
+    repository.state()
     indicator = Indicator(
         id=indicator_id,
         label=label,

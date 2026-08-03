@@ -142,7 +142,6 @@ def delivery_payload(delivery: Delivery) -> dict[str, JSONValue]:
         "session_item_id": delivery.session_item_id,
         "comparison_id": delivery.comparison_id,
         "slot_assignment": assignment,
-        "presentation": delivery.presentation,
         "sequence_index": delivery.sequence_index,
     }
 

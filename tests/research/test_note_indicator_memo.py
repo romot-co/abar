@@ -86,15 +86,33 @@ def test_note_and_indicator_are_observational_without_authority_change(
         value=0.62,
         actor=Actor("agent-1", "agent"),
     )
+    second_subject = commands.import_audio(repository, wav_file("indicator-second.wav", 440.0))
+    commands.record_indicator_value(
+        repository,
+        indicator_id="ind_density_v1",
+        subject_id=second_subject,
+        variant_id="source",
+        value=0.82,
+        actor=Actor("agent-1", "agent"),
+    )
+    commands.record_indicator_value(
+        repository,
+        indicator_id="ind_attack_v1",
+        subject_id=second_subject,
+        variant_id="source",
+        value=0.7,
+        guard_result="fail",
+        actor=Actor("agent-1", "agent"),
+    )
     after = repository.state().project.authority_snapshot()
     assert after == before
     indicators = {item.id: item for item in project_view(repository).indicators}
     target = indicators["ind_density_v1"]
-    assert target.latest_value == 0.62
+    assert target.value == 0.72
     assert target.description == "Increase perceived density without masking detail"
     guard = indicators["ind_attack_v1"]
-    assert guard.latest_value == 0.9
-    assert guard.guard_result == "pass"
+    assert guard.value == 0.8
+    assert guard.guard_result == "fail"
 
     commands.set_current_best_manual(
         repository,
@@ -103,6 +121,6 @@ def test_note_and_indicator_are_observational_without_authority_change(
         actor=Actor("human", "human"),
     )
     switched = {item.id: item for item in project_view(repository).indicators}
-    assert switched["ind_density_v1"].latest_value == 0.99
-    assert switched["ind_attack_v1"].latest_value is None
+    assert switched["ind_density_v1"].value == 0.99
+    assert switched["ind_attack_v1"].value is None
     assert switched["ind_attack_v1"].guard_result is None

@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from abar.app import commands
+from abar.app.events import draft
 from abar.app.repository import WorkspaceRepository
 from abar.compare.models import RecipeRef
 from abar.server import create_app
@@ -113,6 +114,80 @@ def test_browser_cookie_grants_interaction_after_bootstrap(tmp_path: Path) -> No
             headers={"Authorization": "Bearer automation", "X-ABAR-Actor": "agent-1"},
         )
         assert rejected.status_code == 403
+
+
+def test_idempotency_header_and_actor_role_come_from_the_http_boundary(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "server-workspace"
+    repository = WorkspaceRepository.open(root)
+    try:
+        commands.init_project(repository, name="Project", brief="Improve the sound")
+    finally:
+        repository.close()
+    application = create_app(
+        root,
+        automation_token="automation",
+        interaction_token="interaction",
+        allowed_origins=frozenset({"http://testserver"}),
+    )
+    headers = {
+        "Authorization": "Bearer automation",
+        "X-ABAR-Actor": "human",
+        "Idempotency-Key": "same-config-request",
+    }
+    with TestClient(application) as client:
+        first = client.post(
+            "/api/project/config",
+            headers=headers,
+            json={"ready_session_limit": 5},
+        )
+        repeated_with_other_body = client.post(
+            "/api/project/config",
+            headers=headers,
+            json={"ready_session_limit": 6},
+        )
+        export = client.post(
+            "/api/project/export",
+            headers={
+                "Authorization": "Bearer automation",
+                "X-ABAR-Actor": "human",
+            },
+            json={"variant_id": "source", "output": str(tmp_path / "export.json")},
+        )
+
+    assert first.status_code == 200
+    assert repeated_with_other_body.status_code == 409
+    assert repeated_with_other_body.json()["error"]["code"] == "idempotency_conflict"
+    assert export.status_code == 409
+    assert export.json()["error"]["code"] == "human_required"
+
+
+def test_degraded_workspace_still_opens_the_browser_dashboard(tmp_path: Path) -> None:
+    root = tmp_path / "degraded-workspace"
+    repository = WorkspaceRepository.open(root)
+    try:
+        repository.events.append(
+            draft("legacy.unsupported", {}, idempotency_key="unsupported-event")
+        )
+    finally:
+        repository.close()
+
+    application = create_app(
+        root,
+        automation_token="automation",
+        interaction_token="interaction",
+        allowed_origins=frozenset({"http://testserver"}),
+    )
+    with TestClient(application) as client:
+        response = client.get(
+            "/api/project",
+            headers={"Authorization": "Bearer interaction"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["health"]["status"] == "degraded"
+    assert response.json()["project_id"] is None
 
 
 def test_interaction_can_switch_workspace_without_moving_automation(

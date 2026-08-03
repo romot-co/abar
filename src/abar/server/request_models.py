@@ -86,10 +86,6 @@ class SkipRequest(RequestModel):
     confirmed: bool = False
 
 
-class MemoRequest(RequestModel):
-    text: Annotated[str, Field(max_length=500)]
-
-
 class BriefRequest(RequestModel):
     text: Annotated[str, Field(min_length=1, max_length=200)]
     human_quote: str

@@ -98,10 +98,3 @@ class NoteRevision:
     content_sha: str
     actor_id: str
     event_seq: int
-
-
-@dataclass(frozen=True, slots=True)
-class SessionMemo:
-    project_session_id: str
-    text: str
-    event_seq: int

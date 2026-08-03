@@ -20,7 +20,7 @@ def test_blind_delivery_hides_identity_until_reveal() -> None:
         "pp",
     )
     session = Session("ses", (SessionItem("item", "cmp", 0),), "blind", "on_end", None)
-    delivery = Delivery("d", "ses", "item", "cmp", {"A": "p2", "B": "p1"}, "blind", 0)
+    delivery = Delivery("d", "ses", "item", "cmp", {"A": "p2", "B": "p1"}, 0)
     sealed = public_delivery(
         session, delivery, comparison, session_revealed=False, delivery_answered=True
     )

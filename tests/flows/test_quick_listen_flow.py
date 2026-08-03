@@ -30,3 +30,30 @@ def test_quick_listen_uses_core_session_and_reveals_after_answer(
 
     with pytest.raises(commands.CommandError, match="immutable once recorded"):
         commands.record_judgment(repository, delivery_id, preference=1)
+
+
+def test_only_one_core_session_can_be_active(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    first = commands.create_quick_listen(
+        repository,
+        str(wav_file("first-a.wav", 220.0)),
+        str(wav_file("first-b.wav", 330.0)),
+        recipe=RecipeRef("native"),
+    )
+    second = commands.create_quick_listen(
+        repository,
+        str(wav_file("second-a.wav", 440.0)),
+        str(wav_file("second-b.wav", 550.0)),
+        recipe=RecipeRef("native"),
+    )
+
+    commands.start_session(repository, first, allocation_seed=1)
+    with pytest.raises(commands.CommandError) as raised:
+        commands.start_session(repository, second, allocation_seed=2)
+
+    assert raised.value.code == "session_already_active"
+    state = repository.state()
+    assert state.compare.session_runtime[first].status == "active"
+    assert state.compare.session_runtime[second].status == "ready"

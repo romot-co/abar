@@ -13,7 +13,6 @@ from abar.app.command_support import CommandError, operation_key
 from abar.app.materialization_commands import materialize_variant
 from abar.app.observation_commands import (
     record_indicator_value,
-    record_session_memo,
     register_indicator,
     update_indicator,
     write_note,
@@ -67,7 +66,6 @@ __all__ = [
     "pause_session",
     "record_indicator_value",
     "record_judgment",
-    "record_session_memo",
     "register_indicator",
     "reveal_session",
     "set_current_best_manual",

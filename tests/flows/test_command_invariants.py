@@ -1,11 +1,14 @@
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from abar.app import commands, queries, session_commands
-from abar.app.repository import WorkspaceRepository
+from abar.app import commands, project_session_commands, queries, session_commands
+from abar.app.events import draft
+from abar.app.repository import WorkspaceDegraded, WorkspaceRepository
 from abar.compare.models import RecipeRef
+from abar.compare.service import PreparedComparison
 from abar.research.planner import presentation_order
 from tests.conftest import persist_finite_variant
 
@@ -454,6 +457,54 @@ def test_no_effect_best_update_is_rejected_before_events(
     assert repository.events.read_all() == before
 
 
+def test_best_update_rejects_even_one_no_effect_evidence_item(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands.init_project(
+        repository,
+        name="Project",
+        brief="Improve the sound",
+        material_paths=(wav_file("mixed-one.wav", 220.0), wav_file("mixed-two.wav", 330.0)),
+    )
+    project = repository.state().project.project
+    assert project is not None
+    commands.add_clip(
+        repository,
+        project.material_ids[0],
+        start_seconds=1.0,
+        duration_seconds=2.0,
+    )
+    proposed = persist_finite_variant(repository, label="different", same_as_source=False)
+    original: Callable[..., PreparedComparison] = project_session_commands.build_comparison
+    call_count = 0
+
+    def mixed_comparison(*args: object, **kwargs: object) -> PreparedComparison:
+        nonlocal call_count
+        built = original(*args, **kwargs)
+        call_count += 1
+        if call_count == 1:
+            return replace(
+                built,
+                prepared_pair=replace(built.prepared_pair, no_effect=True),
+            )
+        return built
+
+    monkeypatch.setattr(project_session_commands, "build_comparison", mixed_comparison)
+    before = repository.events.read_all()
+
+    with pytest.raises(commands.CommandError) as raised:
+        commands.create_best_update_session(
+            repository,
+            proposed_variant=proposed,
+            actor_id="agent-1",
+        )
+
+    assert raised.value.code == "best_update_no_effect"
+    assert repository.events.read_all() == before
+
+
 def test_blocked_session_has_one_authoritative_status_and_does_not_consume_wip(
     repository: WorkspaceRepository,
     wav_file: Callable[[str, float], Path],
@@ -486,4 +537,70 @@ def test_blocked_session_has_one_authoritative_status_and_does_not_consume_wip(
     assert raised.value.code == "project_session_blocked"
     blocked = repository.state()
     assert blocked.compare.session_runtime[project_session.core_session_id].status == "blocked"
+    assert blocked.compare.session_runtime[project_session.core_session_id].deliveries == ()
     assert queries.status(repository).ready_count == 0
+    card = next(
+        item
+        for item in queries.project_dashboard(repository).sessions
+        if item.project_session_id == session_id
+    )
+    assert card.status == "blocked"
+    assert card.outcome == "Session audio validation failed"
+
+    recreated = commands.create_observation_session(
+        repository,
+        first_variant="source",
+        second_variant=proposed,
+        focus="Listen for the difference",
+        actor_id="agent-1",
+    )
+    assert recreated != session_id
+
+
+def test_observation_rejects_the_same_variant(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    commands.init_project(
+        repository,
+        name="Project",
+        brief="Improve the sound",
+        material_paths=(wav_file("same-observation.wav", 220.0),),
+    )
+
+    with pytest.raises(commands.CommandError) as raised:
+        commands.create_observation_session(
+            repository,
+            first_variant="source",
+            second_variant="source",
+            focus="Compare source with itself",
+            actor_id="agent-1",
+        )
+
+    assert raised.value.code == "observation_same_variant"
+
+
+def test_degraded_workspace_rejects_object_writes(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+) -> None:
+    repository.events.append(
+        draft(
+            "legacy.unsupported",
+            {},
+            idempotency_key="degrade-workspace",
+        )
+    )
+    before_objects = tuple(
+        path for path in (repository.root / "objects").rglob("*") if path.is_file()
+    )
+    before_events = repository.events.read_all()
+
+    with pytest.raises(WorkspaceDegraded, match="degraded replay"):
+        commands.import_audio(repository, wav_file("degraded.wav", 220.0))
+
+    after_objects = tuple(
+        path for path in (repository.root / "objects").rglob("*") if path.is_file()
+    )
+    assert after_objects == before_objects
+    assert repository.events.read_all() == before_events

@@ -103,7 +103,6 @@ def allocate_deliveries(
             session_item_id=item.id,
             comparison_id=item.comparison_id,
             slot_assignment=assignment,  # type: ignore[arg-type]
-            presentation=session.presentation,
             sequence_index=item.sequence_index,
         )
         for item, assignment in zip(session.items, assignments, strict=True)

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, type Action, type Project, type Status, type WorkspaceCatalog } from "./api";
+import { api, type Action, type Project, type WorkspaceCatalog } from "./api";
 import { humanError } from "./errors";
 import { DeckScreen } from "./deck/DeckScreen";
 import { SessionSummary } from "./deck/SessionSummary";
@@ -17,16 +17,10 @@ export function App() {
     queryFn: () => api<WorkspaceCatalog>("/api/workspaces"),
   });
   const selectedWorkspaceId = workspaces.data?.selected_id;
-  const status = useQuery({
-    queryKey: ["status", selectedWorkspaceId],
-    queryFn: () => api<Status>("/api/status"),
-    enabled: selectedWorkspaceId !== undefined,
-    refetchInterval: screen === "deck" ? false : 4_000,
-  });
   const project = useQuery({
     queryKey: ["project", selectedWorkspaceId],
     queryFn: () => api<Project>("/api/project"),
-    enabled: selectedWorkspaceId !== undefined && status.data?.project_name !== null,
+    enabled: selectedWorkspaceId !== undefined,
     refetchInterval: screen === "project" ? 4_000 : false,
   });
   const selectWorkspace = useMutation({
@@ -38,22 +32,20 @@ export function App() {
     },
   });
 
-  if (workspaces.isPending || status.isPending) return <main className="centered">状態を読み込んでいます…</main>;
-  if (workspaces.isError || status.isError || !workspaces.data || !status.data) {
-    const error = workspaces.error ?? status.error;
-    return <ErrorState title="ABARを開けません" message={error ? humanError(error) : undefined} retry={() => { void workspaces.refetch(); void status.refetch(); }} />;
+  if (workspaces.isPending || project.isPending) return <main className="centered">状態を読み込んでいます…</main>;
+  if (workspaces.isError || project.isError || !workspaces.data || !project.data) {
+    const error = workspaces.error ?? project.error;
+    return <ErrorState title="ABARを開けません" message={error ? humanError(error) : undefined} retry={() => { void workspaces.refetch(); void project.refetch(); }} />;
   }
 
   const refresh = async () => {
-    await Promise.all([status.refetch(), project.refetch()]);
+    await project.refetch();
   };
   return (
     <div className="app-shell">
       {screen === "project" && (
         <ProjectScreen
-          status={status.data}
-          project={project.data ?? null}
-          projectError={project.error?.message ?? null}
+          project={project.data}
           workspaces={workspaces.data}
           switchingWorkspace={selectWorkspace.isPending}
           onSelectWorkspace={(workspaceId) => selectWorkspace.mutate(workspaceId)}

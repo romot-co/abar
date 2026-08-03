@@ -1,9 +1,10 @@
 """Sealed, bounded application queries."""
 
 from collections.abc import Sequence
-from typing import Literal, cast
+from statistics import median
+from typing import Literal
 
-from abar.app.query_support import recipe_label, variant_label
+from abar.app.query_support import public_session_status, recipe_label, variant_label
 from abar.app.repository import WorkspaceRepository
 from abar.app.session_queries import session_result_from_state
 from abar.app.state import ABARState
@@ -17,55 +18,33 @@ from abar.app.views import (
     StatusView,
 )
 from abar.foundation.events import EventEnvelope
+from abar.foundation.replay import ReplayResult
 from abar.project.service import simplification_is_stale
 from abar.research.models import ProjectSession
 from abar.research.session_sizes import favored_count
 
 
-def status(repository: WorkspaceRepository, *, cursor: int = 0) -> StatusView:
+def status(repository: WorkspaceRepository) -> StatusView:
     replay = repository.replay()
+    events = repository.events.read_all()
+    health = _health_view(replay, events)
     if replay.degraded is not None:
-        degraded = replay.degraded
-        recovery = (
-            "Preserve this Workspace unchanged and create a new Workspace. "
-            "ABAR pre-release does not migrate unsupported events."
-        )
         return StatusView(
-            health=HealthView(
-                status="degraded",
-                reasons=(degraded.reason,),
-                last_event_seq=degraded.event_seq,
-                degradation=ReplayDegradationView(
-                    event_seq=degraded.event_seq,
-                    event_type=degraded.event_type,
-                    schema_version=degraded.schema_version,
-                    reason=degraded.reason,
-                    recovery=recovery,
-                ),
-            ),
+            health=health,
             project_name=None,
             brief=None,
             current_best=None,
             in_use=None,
-            indicators=(),
-            sessions=(),
             ready_count=0,
             active_count=0,
             ready_limit=None,
             material_count=0,
-            pending_simplifications=(),
         )
     state = replay.state
-    events = repository.events.read_all(since=cursor, limit=101)
     project = state.project.project
     sessions = session_cards(state, repository.events.read_all())
     return StatusView(
-        health=HealthView(
-            status="ok",
-            reasons=(),
-            last_event_seq=events[-1].event_seq if events else cursor,
-            degradation=None,
-        ),
+        health=health,
         project_name=None if project is None else project.name,
         brief=None if project is None else project.brief_text,
         current_best=None
@@ -74,42 +53,53 @@ def status(repository: WorkspaceRepository, *, cursor: int = 0) -> StatusView:
         in_use=None
         if project is None or project.in_use_variant_id is None
         else variant_label(state, project.in_use_variant_id),
-        indicators=indicator_summaries(
-            state, None if project is None else project.current_best_variant_id
-        ),
-        sessions=sessions,
         ready_count=sum(item.status == "ready" for item in sessions),
         active_count=sum(item.status in {"active", "paused"} for item in sessions),
         ready_limit=None if project is None else project.ready_session_limit,
-        material_count=len(state.compare.materials),
-        pending_simplifications=tuple(
-            SimplificationPromptView(
-                id=plan.id,
-                simple_variant_id=plan.simple_variant_id,
-                reason=plan.reason,
-                scope_clip_ids=plan.scope_clip_ids,
-            )
-            for plan in state.project.simplification_plans.values()
-            if plan.id not in state.project.simplification_decisions
-            and not simplification_is_stale(state.project, plan)
-        ),
-        next_cursor=events[99].event_seq if len(events) > 100 else None,
+        material_count=0 if project is None else len(project.material_ids),
     )
 
 
 def project_dashboard(repository: WorkspaceRepository) -> ProjectDashboardView:
-    state = repository.state()
+    events = repository.events.read_all()
+    replay = repository.replay()
+    health = _health_view(replay, events)
+    if replay.degraded is not None:
+        return ProjectDashboardView(
+            health=health,
+            project_id=None,
+            name=None,
+            brief=None,
+            current_best=None,
+            primary_recipe=None,
+            sessions=(),
+            indicators=(),
+            pending_simplifications=(),
+        )
+    state = replay.state
     project = state.project.project
     if project is None:
-        raise ValueError("Project does not exist")
+        return ProjectDashboardView(
+            health=health,
+            project_id=None,
+            name=None,
+            brief=None,
+            current_best=None,
+            primary_recipe=None,
+            sessions=(),
+            indicators=(),
+            pending_simplifications=(),
+        )
     return ProjectDashboardView(
+        health=health,
         project_id=project.id,
         name=project.name,
         brief=project.brief_text,
         current_best=variant_label(state, project.current_best_variant_id),
         primary_recipe=recipe_label(project.primary_recipe),
-        sessions=session_cards(state, repository.events.read_all()),
+        sessions=session_cards(state, events),
         indicators=indicator_summaries(state, project.current_best_variant_id),
+        pending_simplifications=_pending_simplifications(state),
     )
 
 
@@ -122,21 +112,12 @@ def session_cards(
     event_by_seq = {item.event_seq: item for item in events}
     for item in state.research.project_sessions.values():
         runtime = state.compare.session_runtime[item.core_session_id]
-        if runtime.status == "closed":
-            status_value = "closed"
-        elif runtime.status == "blocked":
-            status_value = "blocked"
-        elif runtime.status == "ended":
-            status_value = "done"
-        else:
-            status_value = runtime.status
         completed_event = (
             None if runtime.ended_event_seq is None else event_by_seq.get(runtime.ended_event_seq)
         )
         output.append(
             SessionCardView(
                 project_session_id=item.id,
-                core_session_id=item.core_session_id,
                 focus=item.focus,
                 recipe=recipe_label(item.recipe),
                 comparison_count=len(state.compare.sessions[item.core_session_id].items),
@@ -144,13 +125,16 @@ def session_cards(
                     state.compare.effective_judgment(delivery_id) is not None
                     for delivery_id in runtime.deliveries
                 ),
-                status=cast(
-                    Literal["ready", "active", "paused", "done", "closed", "blocked"],
-                    status_value,
-                ),
+                status=public_session_status(runtime.status),
                 current_best_check=item.core_session_id in plans,
                 completed_at=None if completed_event is None else completed_event.ts.isoformat(),
-                outcome=_session_outcome(state, item) if runtime.status == "ended" else None,
+                outcome=(
+                    _session_outcome(state, item)
+                    if runtime.status == "ended"
+                    else runtime.outcome
+                    if runtime.status == "blocked"
+                    else None
+                ),
             )
         )
     return tuple(output)
@@ -161,15 +145,25 @@ def indicator_summaries(
 ) -> tuple[IndicatorSummaryView, ...]:
     output: list[IndicatorSummaryView] = []
     for indicator in state.research.indicators.values():
-        values = [
-            value
+        latest_by_subject = [
+            records[-1]
             for (indicator_id, _, _variant_id), records in state.research.indicator_values.items()
-            if indicator_id == indicator.id and records
-            for value in records
-            if value.variant_id == current_best_variant_id
+            if indicator_id == indicator.id
+            and records
+            and records[-1].variant_id == current_best_variant_id
         ]
-        ordered = sorted(values, key=lambda item: item.event_seq, reverse=True)
-        latest = ordered[0] if ordered else None
+        value = (
+            None
+            if not latest_by_subject
+            else float(median(item.value for item in latest_by_subject))
+        )
+        guard_result: Literal["pass", "fail"] | None = None
+        if indicator.role == "guard" and latest_by_subject:
+            results = [item.guard_result for item in latest_by_subject]
+            if "fail" in results:
+                guard_result = "fail"
+            elif all(result == "pass" for result in results):
+                guard_result = "pass"
         output.append(
             IndicatorSummaryView(
                 id=indicator.id,
@@ -177,11 +171,48 @@ def indicator_summaries(
                 description=indicator.description,
                 role=indicator.role,
                 unit=indicator.unit,
-                latest_value=None if latest is None else latest.value,
-                guard_result=None if latest is None else latest.guard_result,
+                value=value,
+                guard_result=guard_result,
             )
         )
     return tuple(output)
+
+
+def _health_view(replay: ReplayResult[ABARState], events: Sequence[EventEnvelope]) -> HealthView:
+    last_event_seq = events[-1].event_seq if events else 0
+    degraded = replay.degraded
+    if degraded is None:
+        return HealthView(status="ok", reasons=(), last_event_seq=last_event_seq)
+    recovery = (
+        "Preserve this Workspace unchanged and create a new Workspace. "
+        "ABAR pre-release does not migrate unsupported events."
+    )
+    return HealthView(
+        status="degraded",
+        reasons=(degraded.reason,),
+        last_event_seq=last_event_seq,
+        degradation=ReplayDegradationView(
+            event_seq=degraded.event_seq,
+            event_type=degraded.event_type,
+            schema_version=degraded.schema_version,
+            reason=degraded.reason,
+            recovery=recovery,
+        ),
+    )
+
+
+def _pending_simplifications(state: ABARState) -> tuple[SimplificationPromptView, ...]:
+    return tuple(
+        SimplificationPromptView(
+            id=plan.id,
+            simple_variant_id=plan.simple_variant_id,
+            reason=plan.reason,
+            scope_clip_ids=plan.scope_clip_ids,
+        )
+        for plan in state.project.simplification_plans.values()
+        if plan.id not in state.project.simplification_decisions
+        and not simplification_is_stale(state.project, plan)
+    )
 
 
 def _session_outcome(state: ABARState, project_session: ProjectSession) -> str:

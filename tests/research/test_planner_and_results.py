@@ -105,7 +105,7 @@ def test_short_result_favors_non_tie_direction() -> None:
         RecipeRef(),
         "pp",
     )
-    delivery = Delivery("d", "ses", "item", "cmp", {"A": "p2", "B": "p1"}, "blind", 0)
+    delivery = Delivery("d", "ses", "item", "cmp", {"A": "p2", "B": "p1"}, 0)
     judgment = Judgment(
         "j",
         "d",
@@ -169,7 +169,6 @@ def test_ten_item_standard_result_requires_seven_directional_wins() -> None:
                 item_id,
                 comparison_id,
                 {"A": "p1", "B": "p2"},
-                "blind",
                 index,
             )
             judgments[delivery_id] = Judgment(

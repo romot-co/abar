@@ -5,7 +5,12 @@ from dataclasses import asdict
 from typing import Literal, cast
 
 from abar.app.dashboard_queries import indicator_summaries, session_cards
-from abar.app.query_support import recipe_label, timeline_entry, variant_label
+from abar.app.query_support import (
+    public_session_status,
+    recipe_label,
+    timeline_entry,
+    variant_label,
+)
 from abar.app.repository import WorkspaceRepository
 from abar.app.session_queries import current_best_evidence, session_result_from_state
 from abar.app.state import ABARState
@@ -190,19 +195,14 @@ def _project_session_documents(state: ABARState) -> tuple[ProjectSessionSnapshot
             if runtime.status == "ended"
             else None
         )
-        memos = state.research.session_memos.get(project_session.id, ())
         output.append(
             ProjectSessionSnapshotView(
                 project_session_id=project_session.id,
-                core_session_id=session.id,
                 focus=project_session.focus,
                 topic_key=project_session.topic_key,
                 size=project_session.size,
                 recipe=recipe_label(project_session.recipe),
-                status=cast(
-                    Literal["ready", "active", "paused", "ended", "closed", "blocked"],
-                    runtime.status,
-                ),
+                status=public_session_status(runtime.status),
                 criterion=None
                 if session.criterion is None
                 else CriterionSnapshotView(
@@ -212,7 +212,6 @@ def _project_session_documents(state: ABARState) -> tuple[ProjectSessionSnapshot
                 ),
                 judgments=tuple(judgments),
                 result=result,
-                memo=memos[-1].text if memos else None,
             )
         )
     return tuple(output)

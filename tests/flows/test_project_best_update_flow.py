@@ -81,7 +81,7 @@ def test_standard_plan_updates_current_best_only_after_three_evidence_answers(
     assert project_view.current_best_evidence == result.best_update_evidence
 
 
-def test_answering_a_skipped_item_before_session_end_clears_incomplete_state(
+def test_skipped_item_is_final_and_session_ends_incomplete(
     repository: WorkspaceRepository,
     wav_file: Callable[[str, float], Path],
 ) -> None:
@@ -116,18 +116,11 @@ def test_answering_a_skipped_item_before_session_end_clears_incomplete_state(
     )
 
     commands.skip_delivery(repository, deliveries[0].id, confirmed=True)
-    commands.record_judgment(repository, deliveries[0].id, preference=3)
-    state = repository.state()
-    assert (
-        deliveries[0].session_item_id
-        not in state.compare.session_runtime[session_id].skipped_item_ids
-    )
-
-    with pytest.raises(commands.CommandError, match="answered Delivery cannot be skipped"):
-        commands.skip_delivery(repository, deliveries[0].id, confirmed=True)
+    with pytest.raises(commands.CommandError, match="skipped Delivery cannot be answered"):
+        commands.record_judgment(repository, deliveries[0].id, preference=3)
 
     for delivery in deliveries[1:]:
         commands.record_judgment(repository, delivery.id, preference=3)
     runtime = repository.state().compare.session_runtime[session_id]
     assert runtime.status == "ended"
-    assert runtime.outcome == "completed"
+    assert runtime.outcome == "incomplete"

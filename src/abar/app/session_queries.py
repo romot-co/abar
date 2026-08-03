@@ -71,7 +71,6 @@ def session_result_from_state(state: ABARState, project_session_id: str) -> Sess
     updated = plan is not None and any(
         item.basis_ref == plan.id for item in state.project.best_history
     )
-    memos = state.research.session_memos.get(project_session_id, ())
     return SessionResultView(
         project_session_id=project_session_id,
         recipe=recipe_label(project_session.recipe),
@@ -94,7 +93,6 @@ def session_result_from_state(state: ABARState, project_session_id: str) -> Sess
         best_update_evidence=None
         if plan is None
         else best_update_evidence_view(plan.proposed_variant_id, plan.evidence_item_ids, result),
-        memo=memos[-1].text if memos else None,
         evidence=_evidence_result_views(state, project_session, deliveries),
     )
 
@@ -244,7 +242,6 @@ def active_deck(
     if session_id is None:
         return ActiveDeckView(
             session_id=None,
-            project_session_id=None,
             status=None,
             delivery_id=None,
             sequence_index=None,
@@ -258,7 +255,6 @@ def active_deck(
             audio=(),
             identity_by_slot=None,
             can_reveal=False,
-            ended=False,
         )
     session = state.compare.sessions[session_id]
     runtime = state.compare.session_runtime[session_id]
@@ -321,8 +317,7 @@ def active_deck(
         label = "今回の確認"
         question = "この焦点では、どちらを残しますか?"
     return ActiveDeckView(
-        session_id=session_id,
-        project_session_id=None if project_session is None else project_session.id,
+        session_id=session_id if project_session is None else project_session.id,
         status=cast(Literal["active", "paused"], runtime.status),
         delivery_id=delivery.id,
         sequence_index=delivery.sequence_index,
@@ -336,7 +331,6 @@ def active_deck(
         audio=audio,
         identity_by_slot=labeled_identity(state, public.identity_by_slot),
         can_reveal=project_session is None and session.presentation == "blind",
-        ended=False,
     )
 
 
@@ -347,16 +341,22 @@ def session_completion(
     audio_url: Callable[[str, str, str], str],
 ) -> SessionCompletionView:
     state = repository.state()
-    session = state.compare.sessions.get(session_id)
+    requested_project_session = state.research.project_sessions.get(session_id)
+    core_session_id = (
+        session_id
+        if requested_project_session is None
+        else requested_project_session.core_session_id
+    )
+    session = state.compare.sessions.get(core_session_id)
     if session is None:
         raise ValueError("Session does not exist")
-    runtime = state.compare.session_runtime[session_id]
+    runtime = state.compare.session_runtime[core_session_id]
     if runtime.status != "ended" or not (session.presentation == "open" or runtime.revealed):
         raise ValueError("Session is not available for completion view")
-    linked = _project_session_for_core(state, session_id)
+    linked = requested_project_session or _project_session_for_core(state, core_session_id)
     item_contexts = _completion_item_contexts(state, linked)
     deliveries = sorted(
-        (item for item in state.compare.deliveries.values() if item.session_id == session_id),
+        (item for item in state.compare.deliveries.values() if item.session_id == core_session_id),
         key=lambda item: item.sequence_index,
     )
     items: list[RelistenItemView] = []
@@ -416,12 +416,11 @@ def session_completion(
             )
         )
     current_best_check = any(
-        item.session_id == session_id for item in state.project.best_update_plans.values()
+        item.session_id == core_session_id for item in state.project.best_update_plans.values()
     )
     result = None if linked is None else session_result_from_state(state, linked.id)
     return SessionCompletionView(
-        session_id=session_id,
-        project_session_id=None if linked is None else linked.id,
+        session_id=core_session_id if linked is None else linked.id,
         focus=None if linked is None else linked.focus,
         current_best_check=current_best_check,
         recipe=None if linked is None else recipe_label(linked.recipe),

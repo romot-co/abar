@@ -339,15 +339,15 @@ def export_project(
         actor.require_human()
     except PermissionError as error:
         raise CommandError("human authority is required") from error
+    output = output.expanduser().resolve()
+    render_clips = None if render_clips is None else render_clips.expanduser().resolve()
     key = operation_key(idempotency_key)
     fingerprint = request_hash(
         "project.export",
         {
             "variant_id": variant_id,
-            "output": str(output.expanduser().resolve()),
-            "render_clips": None
-            if render_clips is None
-            else str(render_clips.expanduser().resolve()),
+            "output": str(output),
+            "render_clips": None if render_clips is None else str(render_clips),
         },
     )
     existing = existing_operation(repository, key, "in_use.recorded", request_hash=fingerprint)
@@ -375,8 +375,8 @@ def export_project(
             {
                 "project_id": project.id,
                 "variant_id": variant_id,
-                "output": str(output.resolve()),
-                "render_clips": None if render_clips is None else str(render_clips.resolve()),
+                "output": str(output),
+                "render_clips": None if render_clips is None else str(render_clips),
                 "request_hash": fingerprint,
             },
             idempotency_key=key,

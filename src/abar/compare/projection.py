@@ -29,7 +29,6 @@ class SessionRuntime:
     status: str = "ready"
     deliveries: tuple[str, ...] = ()
     skipped_item_ids: frozenset[str] = frozenset()
-    invalid_item_ids: frozenset[str] = frozenset()
     revealed: bool = False
     ended_event_seq: int | None = None
     outcome: str | None = None
@@ -223,6 +222,7 @@ def reduce_compare(state: CompareState, event: EventEnvelope) -> CompareState:
             state,
             _str(p, "session_id"),
             status="blocked",
+            ended_event_seq=event.event_seq,
             outcome=_str(p, "reason"),
         )
     if event_type == "session.paused":
@@ -250,7 +250,6 @@ def reduce_compare(state: CompareState, event: EventEnvelope) -> CompareState:
             slot_assignment=cast(
                 dict[Literal["A", "B"], Literal["p1", "p2"]], p["slot_assignment"]
             ),
-            presentation=cast(Literal["open", "blind"], p["presentation"]),
             sequence_index=_int(p, "sequence_index"),
         )
         runtime = state.session_runtime[delivery.session_id]
@@ -289,17 +288,9 @@ def reduce_compare(state: CompareState, event: EventEnvelope) -> CompareState:
             raise ValueError("Judgment is immutable once recorded")
         delivery = state.deliveries[judgment.delivery_id]
         runtime = state.session_runtime[delivery.session_id]
-        return replace(
-            state,
-            judgments={**state.judgments, judgment.delivery_id: judgment},
-            session_runtime={
-                **state.session_runtime,
-                delivery.session_id: replace(
-                    runtime,
-                    skipped_item_ids=runtime.skipped_item_ids - {delivery.session_item_id},
-                ),
-            },
-        )
+        if delivery.session_item_id in runtime.skipped_item_ids:
+            raise ValueError("skipped Delivery cannot be answered")
+        return replace(state, judgments={**state.judgments, judgment.delivery_id: judgment})
     if event_type == "comparison.skipped":
         session_id = _str(p, "session_id")
         runtime = state.session_runtime[session_id]
@@ -310,19 +301,6 @@ def reduce_compare(state: CompareState, event: EventEnvelope) -> CompareState:
                 session_id: replace(
                     runtime,
                     skipped_item_ids=runtime.skipped_item_ids | {_str(p, "session_item_id")},
-                ),
-            },
-        )
-    if event_type == "comparison.protocol_invalidated":
-        session_id = _str(p, "session_id")
-        runtime = state.session_runtime[session_id]
-        return replace(
-            state,
-            session_runtime={
-                **state.session_runtime,
-                session_id: replace(
-                    runtime,
-                    invalid_item_ids=runtime.invalid_item_ids | {_str(p, "session_item_id")},
                 ),
             },
         )

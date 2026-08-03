@@ -55,10 +55,6 @@ export type ActiveDeckView = {
      */
     delivery_id: string | null;
     /**
-     * Ended
-     */
-    ended: boolean;
-    /**
      * Identity By Slot
      */
     identity_by_slot: {
@@ -68,10 +64,6 @@ export type ActiveDeckView = {
      * Presentation
      */
     presentation: 'open' | 'blind' | null;
-    /**
-     * Project Session Id
-     */
-    project_session_id: string | null;
     /**
      * Question
      */
@@ -490,10 +482,6 @@ export type IndicatorSummaryView = {
      */
     label: string;
     /**
-     * Latest Value
-     */
-    latest_value: number | null;
-    /**
      * Role
      */
     role: 'target' | 'guard' | 'none';
@@ -501,6 +489,10 @@ export type IndicatorSummaryView = {
      * Unit
      */
     unit: string;
+    /**
+     * Value
+     */
+    value: number | null;
 };
 
 /**
@@ -687,16 +679,6 @@ export type MaterializedAudioView = {
 };
 
 /**
- * MemoRequest
- */
-export type MemoRequest = {
-    /**
-     * Text
-     */
-    text: string;
-};
-
-/**
  * NoteRequest
  */
 export type NoteRequest = {
@@ -759,11 +741,12 @@ export type ProjectDashboardView = {
     /**
      * Brief
      */
-    brief: string;
+    brief: string | null;
     /**
      * Current Best
      */
-    current_best: string;
+    current_best: string | null;
+    health: HealthView;
     /**
      * Indicators
      */
@@ -771,15 +754,19 @@ export type ProjectDashboardView = {
     /**
      * Name
      */
-    name: string;
+    name: string | null;
+    /**
+     * Pending Simplifications
+     */
+    pending_simplifications: Array<SimplificationPromptView>;
     /**
      * Primary Recipe
      */
-    primary_recipe: string;
+    primary_recipe: string | null;
     /**
      * Project Id
      */
-    project_id: string;
+    project_id: string | null;
     /**
      * Schema Version
      */
@@ -851,10 +838,6 @@ export type ProjectSessionJudgmentView = {
  * ProjectSessionSnapshotView
  */
 export type ProjectSessionSnapshotView = {
-    /**
-     * Core Session Id
-     */
-    core_session_id: string;
     criterion: CriterionSnapshotView | null;
     /**
      * Focus
@@ -864,10 +847,6 @@ export type ProjectSessionSnapshotView = {
      * Judgments
      */
     judgments: Array<ProjectSessionJudgmentView>;
-    /**
-     * Memo
-     */
-    memo: string | null;
     /**
      * Project Session Id
      */
@@ -884,7 +863,7 @@ export type ProjectSessionSnapshotView = {
     /**
      * Status
      */
-    status: 'ready' | 'active' | 'paused' | 'ended' | 'closed' | 'blocked';
+    status: 'ready' | 'active' | 'paused' | 'done' | 'closed' | 'blocked';
     /**
      * Topic Key
      */
@@ -1154,10 +1133,6 @@ export type SessionCardView = {
      */
     completed_at: string | null;
     /**
-     * Core Session Id
-     */
-    core_session_id: string;
-    /**
      * Current Best Check
      */
     current_best_check: boolean;
@@ -1203,10 +1178,6 @@ export type SessionCompletionView = {
      * Items
      */
     items: Array<RelistenItemView>;
-    /**
-     * Project Session Id
-     */
-    project_session_id: string | null;
     /**
      * Recipe
      */
@@ -1267,10 +1238,6 @@ export type SessionResultView = {
      * Favored Variant Label
      */
     favored_variant_label: string | null;
-    /**
-     * Memo
-     */
-    memo: string | null;
     /**
      * Project Session Id
      */
@@ -1393,21 +1360,9 @@ export type StatusView = {
      */
     in_use: string | null;
     /**
-     * Indicators
-     */
-    indicators: Array<IndicatorSummaryView>;
-    /**
      * Material Count
      */
     material_count: number;
-    /**
-     * Next Cursor
-     */
-    next_cursor?: number | null;
-    /**
-     * Pending Simplifications
-     */
-    pending_simplifications: Array<SimplificationPromptView>;
     /**
      * Project Name
      */
@@ -1424,10 +1379,6 @@ export type StatusView = {
      * Schema Version
      */
     schema_version?: 2;
-    /**
-     * Sessions
-     */
-    sessions: Array<SessionCardView>;
 };
 
 /**
@@ -1630,9 +1581,9 @@ export type ImportAudioApiAudioImportPostData = {
     body: BodyImportAudioApiAudioImportPost;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -1759,9 +1710,9 @@ export type JudgmentApiDeliveriesDeliveryIdJudgmentsPostData = {
     body: JudgmentRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -1799,9 +1750,9 @@ export type SkipApiDeliveriesDeliveryIdSkipPostData = {
     body: SkipRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -1911,9 +1862,9 @@ export type IndicatorValueApiIndicatorValuesPostData = {
     body: IndicatorValueRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -1950,9 +1901,9 @@ export type IndicatorApiIndicatorsPostData = {
     body: IndicatorRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -1989,9 +1940,9 @@ export type IndicatorUpdateApiIndicatorsIndicatorIdPatchData = {
     body: IndicatorUpdateRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2033,9 +1984,9 @@ export type AddMaterialApiMaterialsPostData = {
     body: BodyAddMaterialApiMaterialsPost;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2077,9 +2028,9 @@ export type AddClipApiMaterialsMaterialIdClipsPostData = {
     body: ClipRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2121,9 +2072,9 @@ export type NoteApiNotePutData = {
     body: NoteRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2191,9 +2142,9 @@ export type BestUpdateSessionsApiProjectSessionsBestUpdatesPostData = {
     body: BestUpdateSessionRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2230,9 +2181,9 @@ export type ObservationSessionsApiProjectSessionsObservationsPostData = {
     body: ObservationSessionRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2269,9 +2220,9 @@ export type CloseProjectSessionApiProjectSessionsProjectSessionIdClosePostData =
     body?: never;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2308,46 +2259,6 @@ export type CloseProjectSessionApiProjectSessionsProjectSessionIdClosePostRespon
 };
 
 export type CloseProjectSessionApiProjectSessionsProjectSessionIdClosePostResponse = CloseProjectSessionApiProjectSessionsProjectSessionIdClosePostResponses[keyof CloseProjectSessionApiProjectSessionsProjectSessionIdClosePostResponses];
-
-export type MemoApiProjectSessionsProjectSessionIdMemoPostData = {
-    body: MemoRequest;
-    headers?: {
-        /**
-         * Value
-         */
-        value?: string | null;
-        /**
-         * Authorization
-         */
-        authorization?: string | null;
-    };
-    path: {
-        /**
-         * Project Session Id
-         */
-        project_session_id: string;
-    };
-    query?: never;
-    url: '/api/project-sessions/{project_session_id}/memo';
-};
-
-export type MemoApiProjectSessionsProjectSessionIdMemoPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type MemoApiProjectSessionsProjectSessionIdMemoPostError = MemoApiProjectSessionsProjectSessionIdMemoPostErrors[keyof MemoApiProjectSessionsProjectSessionIdMemoPostErrors];
-
-export type MemoApiProjectSessionsProjectSessionIdMemoPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ActionView;
-};
-
-export type MemoApiProjectSessionsProjectSessionIdMemoPostResponse = MemoApiProjectSessionsProjectSessionIdMemoPostResponses[keyof MemoApiProjectSessionsProjectSessionIdMemoPostResponses];
 
 export type ResultApiProjectSessionsProjectSessionIdResultGetData = {
     body?: never;
@@ -2389,9 +2300,9 @@ export type BriefApiProjectBriefPostData = {
     body: BriefRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2428,9 +2339,9 @@ export type ConfigApiProjectConfigPostData = {
     body: ConfigRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2467,9 +2378,9 @@ export type ManualBestApiProjectCurrentBestManualPostData = {
     body: ManualBestRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2502,9 +2413,9 @@ export type ProjectExportApiProjectExportPostData = {
     body: ProjectExportRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2577,9 +2488,9 @@ export type QuickApiQuickListensPostData = {
     body: QuickListenRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2647,9 +2558,9 @@ export type AbandonApiSessionsSessionIdAbandonPostData = {
     body?: never;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2723,9 +2634,9 @@ export type PauseApiSessionsSessionIdPausePostData = {
     body?: never;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2763,9 +2674,9 @@ export type ResumeApiSessionsSessionIdResumePostData = {
     body?: never;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2803,9 +2714,9 @@ export type RevealApiSessionsSessionIdRevealPostData = {
     body?: never;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2843,9 +2754,9 @@ export type StartApiSessionsSessionIdStartPostData = {
     body: SessionStartRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2883,9 +2794,9 @@ export type SimplificationApiSimplificationsPostData = {
     body: SimplificationRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -2922,9 +2833,9 @@ export type SimplificationDecisionApiSimplificationsPlanIdDecisionPostData = {
     body: SimplificationDecisionRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * Authorization
          */
@@ -2967,12 +2878,7 @@ export type GetStatusApiStatusGetData = {
         authorization?: string | null;
     };
     path?: never;
-    query?: {
-        /**
-         * Cursor
-         */
-        cursor?: number;
-    };
+    query?: never;
     url: '/api/status';
 };
 
@@ -2998,9 +2904,9 @@ export type VariantsApiVariantsPostData = {
     body: VariantRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */
@@ -3037,9 +2943,9 @@ export type MaterializeVariantApiVariantsVariantIdMaterializationsPostData = {
     body: VariantMaterializationRequest;
     headers?: {
         /**
-         * Value
+         * Idempotency-Key
          */
-        value?: string | null;
+        'Idempotency-Key'?: string | null;
         /**
          * X-Abar-Actor
          */

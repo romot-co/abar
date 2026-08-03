@@ -50,7 +50,8 @@ def discover_project_workspaces(primary_root: Path) -> tuple[Path, ...]:
             continue
         repository = WorkspaceRepository.open(child)
         try:
-            if repository.state().project.project is not None:
+            replay = repository.replay()
+            if replay.degraded is not None or replay.state.project.project is not None:
                 siblings.append(child.resolve())
         finally:
             repository.close()
@@ -60,7 +61,7 @@ def discover_project_workspaces(primary_root: Path) -> tuple[Path, ...]:
 def _entry(root: Path) -> WorkspaceEntry:
     repository = WorkspaceRepository.open(root)
     try:
-        project = repository.state().project.project
+        project = repository.replay().state.project.project
         name = root.name if project is None else project.name
     finally:
         repository.close()

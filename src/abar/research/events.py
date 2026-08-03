@@ -8,7 +8,6 @@ OBSERVATIONAL = (
     "indicator.updated",
     "indicator.value.recorded",
     "note.updated",
-    "session.memo.recorded",
 )
 
 EVENT_SCHEMAS = {

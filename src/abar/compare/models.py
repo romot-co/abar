@@ -120,7 +120,6 @@ class Delivery:
     session_item_id: str
     comparison_id: str
     slot_assignment: dict[Literal["A", "B"], Literal["p1", "p2"]]
-    presentation: Presentation
     sequence_index: int
 
 
