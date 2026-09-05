@@ -15,7 +15,7 @@ from scripts.dev_seed import seed
 
 
 @contextmanager
-def _live_server(root: Path, other_root: Path, port: int) -> Generator[str]:
+def live_server(root: Path, other_root: Path, port: int) -> Generator[str]:
     origin = f"http://127.0.0.1:{port}"
     application = create_app(
         root,
@@ -57,7 +57,7 @@ def test_project_inbox_deck_and_completion_match_v7(
         brief="Tighter low end, keep the vocal forward",
     )
     with (
-        _live_server(workspace, other_workspace, free_tcp_port) as url,
+        live_server(workspace, other_workspace, free_tcp_port) as url,
         sync_playwright() as playwright,
     ):
         browser = playwright.chromium.launch()

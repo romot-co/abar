@@ -21,6 +21,7 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
   const offsetRef = useRef(0);
   const startedAtContextRef = useRef<number | null>(null);
   const playingRef = useRef(false);
+  const playGenerationRef = useRef(0);
   const durationRef = useRef(0);
   const animationRef = useRef<number | null>(null);
   const answerStartedRef = useRef<number | null>(null);
@@ -97,15 +98,29 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
 
   const play = useCallback(async () => {
     const context = contextRef.current;
-    if (!context || playingRef.current) return;
-    await context.resume();
-    if (!startSources(offsetRef.current)) return;
+    if (!context) return false;
+    if (playingRef.current) return true;
+    const generation = playGenerationRef.current;
+    try {
+      await context.resume();
+    } catch {
+      if (context === contextRef.current && generation === playGenerationRef.current) {
+        setError("音声の再生を開始できませんでした。比較を開き直してください");
+      }
+      return false;
+    }
+    // Autoplay and a user click may await the same permission. Only one may start,
+    // and a request from a paused or replaced deck must never start its successor.
+    if (context !== contextRef.current || generation !== playGenerationRef.current) return false;
+    if (playingRef.current) return true;
+    if (!startSources(offsetRef.current)) return false;
     const now = performance.now();
     answerStartedRef.current ??= now;
     activeSinceRef.current = now;
     playingRef.current = true;
     setPlaying(true);
     setHeard((value) => value[activeSlotRef.current] ? value : { ...value, [activeSlotRef.current]: true });
+    return true;
   }, [startSources]);
   const playRef = useRef(play);
   useEffect(() => {
@@ -113,6 +128,7 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
   }, [play]);
 
   const pause = useCallback(() => {
+    playGenerationRef.current += 1;
     if (!playingRef.current) return;
     account(activeSlotRef.current);
     activeSinceRef.current = null;
@@ -126,7 +142,8 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
 
   const switchSlot = useCallback(async () => {
     modeRef.current = "manual";
-    if (!playingRef.current) await play();
+    if (!playingRef.current && !(await play())) return;
+    if (!playingRef.current) return;
     switchesRef.current += 1;
     crossfadeTo(activeSlotRef.current === "a" ? "b" : "a");
   }, [crossfadeTo, play]);
@@ -138,7 +155,8 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
       return;
     }
     modeRef.current = "manual";
-    if (!playingRef.current) await play();
+    if (!playingRef.current && !(await play())) return;
+    if (!playingRef.current) return;
     if (activeSlotRef.current !== slot) {
       switchesRef.current += 1;
       crossfadeTo(slot);
@@ -216,6 +234,7 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     animationRef.current = requestAnimationFrame(update);
     return () => {
       cancelled = true;
+      playGenerationRef.current += 1;
       if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
       stopSources();
       gainA.disconnect();
