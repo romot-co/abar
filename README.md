@@ -107,3 +107,14 @@ UI開発用のダミーデータは `uv run python scripts/dev_seed.py --reset` 
 
 Apache-2.0。
 現在はプレリリースであり、旧形式への互換層はありません。
+
+
+### Recipe compatibility
+
+`matched` keeps the original `matched-v1` audio behavior. Use `--recipe matched-v2`
+for corrected K-weighting and bounded loudness rematching with automatic time alignment.
+Use `--recipe level-matched` for the same corrected loudness matching without time alignment
+when the source timeline is already known. Both record the measured post-match loudness
+residual; a residual above 0.1 LU is reported as a warning. They do not change existing
+PreparedPairs or the Project default. Set the primary Recipe explicitly before preparing
+Best Update sessions. Recipe changes invalidate pending Best Update assumptions.

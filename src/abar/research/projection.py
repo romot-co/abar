@@ -114,8 +114,8 @@ def reduce_research(state: ResearchState, event: EventEnvelope) -> ResearchState
 
 def _recipe(payload: dict[str, JSONValue]) -> RecipeRef:
     return RecipeRef(
-        id=cast(Literal["native", "aligned", "matched"], payload["id"]),
-        version=cast(Literal[1], payload["version"]),
+        id=cast(Literal["native", "aligned", "matched", "level-matched"], payload["id"]),
+        version=cast(Literal[1, 2], payload["version"]),
         config=cast(dict[str, JSONValue], payload.get("config", {})),
     )
 

@@ -41,10 +41,11 @@ def prepare(
 ) -> PreparedResult:
     first = decode_wav_bytes(objects.read(p1.object_id))
     second = decode_wav_bytes(objects.read(p2.object_id))
-    warnings = _input_warnings(first, second)
+    corrected = recipe.version == 2 or recipe.id == "level-matched"
+    warnings = _input_warnings(first, second, corrected=corrected)
     native_first, native_second, rate, native_features = _native(first, second)
     features: dict[str, JSONValue] = dict(native_features)
-    if recipe.id == "native":
+    if recipe.id in {"native", "level-matched"}:
         output_first, output_second = native_first, native_second
     else:
         output_first, output_second, aligned_features, aligned_warnings = _aligned(
@@ -52,11 +53,13 @@ def prepare(
         )
         features.update(aligned_features)
         warnings.extend(aligned_warnings)
-        if recipe.id == "matched":
-            output_first, output_second, matched_features = _matched(
-                output_first, output_second, rate
-            )
-            features.update(matched_features)
+    if recipe.id in {"matched", "level-matched"}:
+        output_first, output_second, matched_features = _matched(
+            output_first, output_second, rate, corrected=corrected
+        )
+        features.update(matched_features)
+        if corrected and abs(float(str(features["post_match_loudness_delta_lu"]))) > 0.1:
+            warnings.append("residual_loudness_difference")
     original_peak = max(float(np.max(np.abs(first.pcm))), float(np.max(np.abs(second.pcm))))
     output_peak = max(float(np.max(np.abs(output_first))), float(np.max(np.abs(output_second))))
     if output_peak > 1.0 and original_peak <= 1.0:
@@ -196,10 +199,10 @@ def _aligned(
 
 
 def _matched(
-    first: np.ndarray, second: np.ndarray, sample_rate: int
+    first: np.ndarray, second: np.ndarray, sample_rate: int, *, corrected: bool = False
 ) -> tuple[np.ndarray, np.ndarray, dict[str, JSONValue]]:
-    first_loudness = _integrated_loudness(first, sample_rate)
-    second_loudness = _integrated_loudness(second, sample_rate)
+    first_loudness = _integrated_loudness(first, sample_rate, corrected=corrected)
+    second_loudness = _integrated_loudness(second, sample_rate, corrected=corrected)
     if not math.isfinite(first_loudness) or not math.isfinite(second_loudness):
         raise RecipeViolation("invalid_audio", "matched Recipe cannot prepare silent audio")
     target = (first_loudness + second_loudness) / 2.0
@@ -207,6 +210,19 @@ def _matched(
     second_gain = target - second_loudness
     a = first * np.float32(10.0 ** (first_gain / 20.0))
     b = second * np.float32(10.0 ** (second_gain / 20.0))
+    if corrected:
+        for _ in range(8):
+            delta = _integrated_loudness(a, sample_rate, corrected=True) - _integrated_loudness(
+                b, sample_rate, corrected=True
+            )
+            if not math.isfinite(delta):
+                raise RecipeViolation("invalid_audio", "audio fell below the loudness gate")
+            if abs(delta) < 0.0001:
+                break
+            first_gain -= delta / 2
+            second_gain += delta / 2
+            a = first * np.float32(10.0 ** (first_gain / 20.0))
+            b = second * np.float32(10.0 ** (second_gain / 20.0))
     peak = max(float(np.max(np.abs(a))), float(np.max(np.abs(b))))
     attenuation = 0.0
     if peak > 0.99:
@@ -223,11 +239,23 @@ def _matched(
             "match_gain_db_p1": first_gain,
             "match_gain_db_p2": second_gain,
             "common_attenuation_db": attenuation,
+            **(
+                {
+                    "post_match_loudness_delta_lu": _integrated_loudness(
+                        a, sample_rate, corrected=True
+                    )
+                    - _integrated_loudness(b, sample_rate, corrected=True)
+                }
+                if corrected
+                else {}
+            ),
         },
     )
 
 
-def _input_warnings(first: DecodedAudio, second: DecodedAudio) -> list[str]:
+def _input_warnings(
+    first: DecodedAudio, second: DecodedAudio, *, corrected: bool = False
+) -> list[str]:
     warnings: list[str] = []
     peaks = (float(np.max(np.abs(first.pcm))), float(np.max(np.abs(second.pcm))))
     if max(peaks) > 1.0:
@@ -237,8 +265,8 @@ def _input_warnings(first: DecodedAudio, second: DecodedAudio) -> list[str]:
     difference = abs(duration_a - duration_b)
     if difference > 1.0 and difference / max(duration_a, duration_b) > 0.10:
         warnings.append("large_duration_difference")
-    loudness_a = _integrated_loudness(first.pcm, first.sample_rate)
-    loudness_b = _integrated_loudness(second.pcm, second.sample_rate)
+    loudness_a = _integrated_loudness(first.pcm, first.sample_rate, corrected=corrected)
+    loudness_b = _integrated_loudness(second.pcm, second.sample_rate, corrected=corrected)
     if (
         math.isfinite(loudness_a)
         and math.isfinite(loudness_b)
@@ -269,8 +297,8 @@ def _store_audio(pcm: np.ndarray, sample_rate: int, objects: ObjectStore) -> Aud
     )
 
 
-def _integrated_loudness(pcm: np.ndarray, sample_rate: int) -> float:
-    weighted = _k_weight(pcm.astype(np.float64), sample_rate)
+def _integrated_loudness(pcm: np.ndarray, sample_rate: int, *, corrected: bool = False) -> float:
+    weighted = _k_weight(pcm.astype(np.float64), sample_rate, corrected=corrected)
     block = max(1, round(0.4 * sample_rate))
     hop = max(1, round(0.1 * sample_rate))
     if len(weighted) < block:
@@ -294,17 +322,19 @@ def _integrated_loudness(pcm: np.ndarray, sample_rate: int) -> float:
     return -0.691 + 10.0 * math.log10(float(np.mean(powers[gated])))
 
 
-def _k_weight(pcm: np.ndarray, sample_rate: int) -> np.ndarray:
-    shelf_b, shelf_a = _high_shelf(sample_rate)
-    high_b, high_a = _high_pass(sample_rate)
+def _k_weight(pcm: np.ndarray, sample_rate: int, *, corrected: bool = False) -> np.ndarray:
+    shelf_b, shelf_a = _high_shelf(sample_rate, corrected=corrected)
+    high_b, high_a = _high_pass(sample_rate, corrected=corrected)
     weighted = cast(np.ndarray, signal.lfilter(shelf_b, shelf_a, pcm, axis=0))  # pyright: ignore[reportUnknownMemberType]
     return cast(np.ndarray, signal.lfilter(high_b, high_a, weighted, axis=0))  # pyright: ignore[reportUnknownMemberType]
 
 
-def _high_shelf(sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+def _high_shelf(sample_rate: int, *, corrected: bool = False) -> tuple[np.ndarray, np.ndarray]:
     frequency, gain_db, quality = 1681.974450955533, 3.999843853973347, 0.7071752369554196
     k = math.tan(math.pi * frequency / sample_rate)
     vh, vb = 10.0 ** (gain_db / 20.0), 10.0 ** (gain_db / 20.0) ** 0.4996667741545416
+    if corrected:
+        vb = vh**0.4996667741545416
     denominator = 1.0 + k / quality + k * k
     return (
         np.array(
@@ -320,12 +350,14 @@ def _high_shelf(sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
-def _high_pass(sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+def _high_pass(sample_rate: int, *, corrected: bool = False) -> tuple[np.ndarray, np.ndarray]:
     frequency, quality = 38.13547087602444, 0.5003270373238773
     k = math.tan(math.pi * frequency / sample_rate)
     denominator = 1.0 + k / quality + k * k
     return (
-        np.array([1.0 / denominator, -2.0 / denominator, 1.0 / denominator]),
+        np.array([1.0, -2.0, 1.0])
+        if corrected
+        else np.array([1.0 / denominator, -2.0 / denominator, 1.0 / denominator]),
         np.array(
             [1.0, 2.0 * (k * k - 1.0) / denominator, (1.0 - k / quality + k * k) / denominator]
         ),

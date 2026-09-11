@@ -7,13 +7,22 @@ from abar.foundation.json_types import JSONValue
 
 type Presentation = Literal["open", "blind"]
 type VariantRef = str
+type RecipeName = Literal["native", "aligned", "matched", "matched-v2", "level-matched"]
 
 
 @dataclass(frozen=True, slots=True)
 class RecipeRef:
-    id: Literal["native", "aligned", "matched"] = "aligned"
-    version: Literal[1] = 1
+    id: Literal["native", "aligned", "matched", "level-matched"] = "aligned"
+    version: Literal[1, 2] = 1
     config: dict[str, JSONValue] = field(default_factory=dict[str, JSONValue])
+
+    def __post_init__(self) -> None:
+        if self.version not in (1, 2) or (self.version == 2 and self.id != "matched"):
+            raise ValueError("unsupported Recipe version")
+
+    @classmethod
+    def from_name(cls, name: RecipeName) -> "RecipeRef":
+        return cls("matched", version=2) if name == "matched-v2" else cls(name)
 
 
 @dataclass(frozen=True, slots=True)

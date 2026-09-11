@@ -259,7 +259,7 @@ export type ConfigRequest = {
     /**
      * Recipe
      */
-    recipe?: 'native' | 'aligned' | 'matched' | null;
+    recipe?: 'native' | 'aligned' | 'matched' | 'matched-v2' | 'level-matched' | null;
 };
 
 /**
@@ -733,7 +733,7 @@ export type ObservationSessionRequest = {
     /**
      * Recipe
      */
-    recipe?: 'native' | 'aligned' | 'matched' | null;
+    recipe?: 'native' | 'aligned' | 'matched' | 'matched-v2' | 'level-matched' | null;
     /**
      * Repeat Check
      */
@@ -982,7 +982,7 @@ export type QuickListenRequest = {
     /**
      * Recipe
      */
-    recipe?: 'native' | 'aligned' | 'matched';
+    recipe?: 'native' | 'aligned' | 'matched' | 'matched-v2' | 'level-matched';
     /**
      * Second
      */

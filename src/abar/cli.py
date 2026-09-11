@@ -164,7 +164,10 @@ def brief_set(
 @project_recipe_app.command("set")
 def recipe_set(
     context: typer.Context,
-    recipe: Annotated[Literal["native", "aligned", "matched"], typer.Option("--recipe")],
+    recipe: Annotated[
+        Literal["native", "aligned", "matched", "matched-v2", "level-matched"],
+        typer.Option("--recipe"),
+    ],
 ) -> None:
     cli = _ctx(context)
     _agent_required(cli)
@@ -172,7 +175,7 @@ def recipe_set(
         cli,
         lambda repository: commands.configure_project(
             repository,
-            recipe=RecipeRef(recipe),
+            recipe=RecipeRef.from_name(recipe),
             idempotency_key=cli.idempotency_key,
         ),
         "primary Recipeを更新しました",
@@ -449,7 +452,8 @@ def session_create(
         ),
     ] = None,
     recipe: Annotated[
-        Literal["native", "aligned", "matched"] | None, typer.Option("--recipe")
+        Literal["native", "aligned", "matched", "matched-v2", "level-matched"] | None,
+        typer.Option("--recipe"),
     ] = None,
     topic: Annotated[str | None, typer.Option("--topic")] = None,
     clip: Annotated[
@@ -473,7 +477,7 @@ def session_create(
             focus=focus,
             size=size,
             evidence_count=evidence_count,
-            recipe=None if recipe is None else RecipeRef(recipe),
+            recipe=None if recipe is None else RecipeRef.from_name(recipe),
             topic_key=topic,
             clip_ids=tuple(clip or ()),
             same_check=same_check,
@@ -739,7 +743,8 @@ def listen(
     first: Annotated[str, typer.Argument(help=_AUDIO_OPERAND_HELP)],
     second: Annotated[str, typer.Argument(help=_AUDIO_OPERAND_HELP)],
     recipe: Annotated[
-        Literal["native", "aligned", "matched"], typer.Option("--recipe")
+        Literal["native", "aligned", "matched", "matched-v2", "level-matched"],
+        typer.Option("--recipe"),
     ] = "aligned",
     blind: Annotated[bool, typer.Option("--blind/--open")] = False,
     range_value: Annotated[str | None, typer.Option("--range")] = None,
@@ -785,7 +790,7 @@ def _create_and_serve_quick(
             repository,
             first,
             second,
-            recipe=RecipeRef(recipe),  # type: ignore[arg-type]
+            recipe=RecipeRef.from_name(recipe),  # type: ignore[arg-type]
             presentation="blind" if blind else "open",
             idempotency_key=cli.idempotency_key,
         )

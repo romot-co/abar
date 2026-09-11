@@ -15,7 +15,7 @@ class RequestModel(BaseModel):
 class QuickListenRequest(RequestModel):
     first: str
     second: str
-    recipe: Literal["native", "aligned", "matched"] = "aligned"
+    recipe: Literal["native", "aligned", "matched", "matched-v2", "level-matched"] = "aligned"
     presentation: Literal["open", "blind"] = "open"
 
 
@@ -36,7 +36,7 @@ class ObservationSessionRequest(RequestModel):
         ]
         | None
     ) = None
-    recipe: Literal["native", "aligned", "matched"] | None = None
+    recipe: Literal["native", "aligned", "matched", "matched-v2", "level-matched"] | None = None
     topic_key: str | None = None
     clip_ids: tuple[str, ...] = ()
     same_check: bool = False
@@ -92,7 +92,7 @@ class BriefRequest(RequestModel):
 
 
 class ConfigRequest(RequestModel):
-    recipe: Literal["native", "aligned", "matched"] | None = None
+    recipe: Literal["native", "aligned", "matched", "matched-v2", "level-matched"] | None = None
     ready_session_limit: Annotated[int | None, Field(gt=0)] = None
 
 

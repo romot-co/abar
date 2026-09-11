@@ -47,7 +47,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
             repository,
             body.first,
             body.second,
-            recipe=RecipeRef(body.recipe),
+            recipe=RecipeRef.from_name(body.recipe),
             presentation=body.presentation,
             idempotency_key=key,
         )
@@ -173,7 +173,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
     ) -> ActionView:
         changed = commands.configure_project(
             repository,
-            recipe=None if body.recipe is None else RecipeRef(body.recipe),
+            recipe=None if body.recipe is None else RecipeRef.from_name(body.recipe),
             ready_session_limit=body.ready_session_limit,
             idempotency_key=key,
         )
@@ -210,7 +210,7 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
             focus=body.focus,
             size=body.size,
             evidence_count=body.evidence_count,
-            recipe=None if body.recipe is None else RecipeRef(body.recipe),
+            recipe=None if body.recipe is None else RecipeRef.from_name(body.recipe),
             topic_key=body.topic_key,
             clip_ids=body.clip_ids,
             same_check=body.same_check,
