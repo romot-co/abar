@@ -323,6 +323,10 @@ export type EntityView = {
  */
 export type EvidenceResultView = {
     /**
+     * Answer Ms
+     */
+    answer_ms?: number | null;
+    /**
      * Blockers By Variant
      */
     blockers_by_variant: {
@@ -333,6 +337,10 @@ export type EvidenceResultView = {
      */
     clip_id: string;
     /**
+     * Comment
+     */
+    comment?: string | null;
+    /**
      * Favored Variant Id
      */
     favored_variant_id: string | null;
@@ -341,9 +349,19 @@ export type EvidenceResultView = {
      */
     favored_variant_label: string | null;
     /**
+     * Identity Visible At Answer
+     */
+    identity_visible_at_answer?: boolean | null;
+    /**
      * Item Id
      */
     item_id: string;
+    /**
+     * Listen Ms
+     */
+    listen_ms?: {
+        [key: string]: number;
+    } | null;
     /**
      * Material Id
      */
@@ -366,6 +384,10 @@ export type EvidenceResultView = {
      * Sequence Index
      */
     sequence_index: number | null;
+    /**
+     * Switches
+     */
+    switches?: number | null;
     /**
      * Variant By Slot
      */

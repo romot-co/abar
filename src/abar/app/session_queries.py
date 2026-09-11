@@ -161,6 +161,13 @@ def _evidence_result_views(
                 material_name=material.name,
                 sequence_index=delivery.sequence_index,
                 preference=None if judgment is None else judgment.preference,
+                comment=None if judgment is None else judgment.comment,
+                identity_visible_at_answer=None
+                if judgment is None
+                else judgment.identity_visible_at_answer,
+                listen_ms=None if judgment is None else dict(judgment.telemetry.listen_ms),
+                switches=None if judgment is None else judgment.telemetry.switches,
+                answer_ms=None if judgment is None else judgment.telemetry.answer_ms,
                 variant_by_slot=variant_by_slot,
                 variant_label_by_slot={
                     slot: variant_label(state, variant) for slot, variant in variant_by_slot.items()

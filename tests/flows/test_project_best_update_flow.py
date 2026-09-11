@@ -49,7 +49,10 @@ def test_standard_plan_updates_current_best_only_after_three_evidence_answers(
             slot for slot, key in delivery.slot_assignment.items() if key == proposed_key
         )
         commands.record_judgment(
-            repository, delivery.id, preference=1 if proposed_slot == "A" else 5
+            repository,
+            delivery.id,
+            preference=1 if proposed_slot == "A" else 5,
+            comment="Preserve this observation",
         )
     assert repository.state().project.project.current_best_variant_id == proposed  # type: ignore[union-attr]
     result = queries.session_result(repository, project_session_id)
@@ -62,6 +65,9 @@ def test_standard_plan_updates_current_best_only_after_three_evidence_answers(
     assert result.favored_required_count == 2
     assert result.variant_labels == {"source": "原音", proposed: "proposal"}
     assert len(result.evidence) == 3
+    assert all(item.comment == "Preserve this observation" for item in result.evidence)
+    assert all(item.identity_visible_at_answer is False for item in result.evidence)
+    assert all(item.listen_ms == {"a": 0, "b": 0} for item in result.evidence)
     assert {item.material_name for item in result.evidence} == {"vocal.wav", "drums.wav"}
     assert all(item.favored_variant_id == proposed for item in result.evidence)
     completion = queries.session_completion(

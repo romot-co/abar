@@ -262,6 +262,11 @@ class ActiveDeckView(PublicView):
 
 
 class EvidenceResultView(PublicView):
+    comment: str | None = None
+    identity_visible_at_answer: bool | None = None
+    listen_ms: dict[str, int] | None = None
+    switches: int | None = None
+    answer_ms: int | None = None
     item_id: str
     clip_id: str
     material_id: str
