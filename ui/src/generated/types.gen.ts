@@ -1178,6 +1178,10 @@ export type SessionCardView = {
      * Status
      */
     status: 'ready' | 'active' | 'paused' | 'done' | 'closed' | 'blocked';
+    /**
+     * Topic Key
+     */
+    topic_key?: string | null;
 };
 
 /**

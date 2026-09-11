@@ -149,6 +149,8 @@ Prepare a new confirmation Session when:
 - the Project brief changes;
 - the human explicitly asks for confirmation.
 
+Session topics appear in the listening queue. Use neutral task labels that do not reveal candidate identities or A/B assignments.
+
 ## Purpose and language
 
 The Project brief is the only formal purpose. Notes hold the agent's current understanding and hypotheses; they never override the brief. Preserve useful perceptual language in comparison comments and Project notes rather than translating it prematurely into a metric.

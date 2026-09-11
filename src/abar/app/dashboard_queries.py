@@ -118,6 +118,7 @@ def session_cards(
         output.append(
             SessionCardView(
                 project_session_id=item.id,
+                topic_key=item.topic_key,
                 focus=item.focus,
                 recipe=recipe_label(item.recipe),
                 comparison_count=len(state.compare.sessions[item.core_session_id].items),

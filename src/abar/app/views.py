@@ -48,6 +48,7 @@ class IndicatorSummaryView(PublicView):
 
 
 class SessionCardView(PublicView):
+    topic_key: str | None = None
     project_session_id: str
     focus: str
     recipe: str

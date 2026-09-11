@@ -195,7 +195,7 @@ function IndicatorRow({ item, role }: { item: IndicatorSummaryView; role: "targe
 }
 
 function QueueRow({ session, primaryRecipe, children }: { session: SessionCardView; primaryRecipe: string; children?: ReactNode }) {
-  const answered = session.answered_count > 0 ? ` · ${session.answered_count}/${session.comparison_count} 回答済み` : "";
+  const answered = session.answered_count > 0 ? ` · ${session.answered_count}/${session.comparison_count} 回答済み` : ` · ${session.comparison_count} 比較`;
   const recipe = session.recipe === primaryRecipe
     ? `Recipe ${session.recipe}`
     : `Recipe ${session.recipe}（Project既定: ${primaryRecipe}）`;
@@ -205,7 +205,7 @@ function QueueRow({ session, primaryRecipe, children }: { session: SessionCardVi
         <span className={session.current_best_check ? "queue-kind featured" : "queue-kind"}>
           {session.current_best_check ? "現在最良チェック" : "観察"}{answered}
         </span>
-        <p className="queue-focus">{session.focus}</p>
+        <p className="queue-focus">{session.topic_key && <span>{session.topic_key} · </span>}{session.focus}</p>
         <span className="queue-recipe">{recipe}</span>
       </div>
       {children ?? <span className="queue-outcome">{session.status === "done" ? "完了" : session.status}</span>}
