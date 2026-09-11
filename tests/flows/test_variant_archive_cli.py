@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 import hashlib
 import json
 import zipfile
@@ -131,6 +132,7 @@ def test_bundle_retains_companion_execute_bit_and_resolves_node(
 ) -> None:
     import io
     import zipfile
+
     from abar.compare.rendering import _extract_archive
 
     bundle = tmp_path / "bundle"
@@ -139,7 +141,11 @@ def test_bundle_retains_companion_execute_bit_and_resolves_node(
     helper = bundle / "helper"
     helper.write_text("#!/bin/sh\nexit 0\n")
     helper.chmod(0o755)
-    monkeypatch.setattr("abar.compare.bundles.shutil.which", lambda name: "/test/bin/node")
+
+    def node_path(name: str) -> str:
+        return "/test/bin/node"
+
+    monkeypatch.setattr("abar.compare.bundles.shutil.which", node_path)
     built = build_command_bundle(bundle, "entry")
     with zipfile.ZipFile(io.BytesIO(built.archive)) as archive:
         assert (archive.getinfo("helper").external_attr >> 16) & 0o111

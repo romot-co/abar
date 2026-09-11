@@ -176,11 +176,13 @@ def _exercise_project_deck(page: Page, url: str) -> None:
 
 @pytest.mark.browser
 def test_unconnected_browser_explains_connection(tmp_path: Path, free_tcp_port: int) -> None:
-    with live_server(tmp_path / "one", tmp_path / "two", free_tcp_port) as url:
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch()
-            page = browser.new_page()
-            page.goto(url.split("#")[0])
-            page.get_by_text("ABARを開けません", exact=True).wait_for()
-            assert "このブラウザはまだ接続されていません" in page.locator("body").inner_text()
-            browser.close()
+    with (
+        live_server(tmp_path / "one", tmp_path / "two", free_tcp_port) as url,
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.goto(url.split("#")[0])
+        page.get_by_text("ABARを開けません", exact=True).wait_for()
+        assert "このブラウザはまだ接続されていません" in page.locator("body").inner_text()
+        browser.close()
