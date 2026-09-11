@@ -15,6 +15,7 @@ export function App() {
   const workspaces = useQuery({
     queryKey: ["workspaces"],
     queryFn: () => api<WorkspaceCatalog>("/api/workspaces"),
+    retry: false,
   });
   const selectedWorkspaceId = workspaces.data?.selected_id;
   const project = useQuery({
@@ -32,11 +33,12 @@ export function App() {
     },
   });
 
-  if (workspaces.isPending || project.isPending) return <main className="centered">状態を読み込んでいます…</main>;
-  if (workspaces.isError || project.isError || !workspaces.data || !project.data) {
+  if (workspaces.isError || project.isError) {
     const error = workspaces.error ?? project.error;
     return <ErrorState title="ABARを開けません" message={error ? humanError(error) : undefined} retry={() => { void workspaces.refetch(); void project.refetch(); }} />;
   }
+
+  if (!workspaces.data || !project.data) return <main className="centered">状態を読み込んでいます…</main>;
 
   const refresh = async () => {
     await project.refetch();
