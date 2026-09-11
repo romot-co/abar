@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckAudioView } from "./generated";
+import { prepareLoopBuffers } from "./loopBuffers";
 
 type Slot = "a" | "b";
 type Mode = "auto" | "manual";
@@ -207,8 +208,8 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
       })
       .then(([a, b]) => {
         if (cancelled) return;
-        buffersRef.current = { a, b };
-        durationRef.current = Math.min(a.duration, b.duration);
+        buffersRef.current = prepareLoopBuffers(context, a, b);
+        durationRef.current = buffersRef.current.a.duration;
         setDuration(durationRef.current);
         setLoading(false);
         // Browsers may reject this before the first user gesture; the Play button remains available.

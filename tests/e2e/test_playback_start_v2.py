@@ -26,7 +26,9 @@ class DeferredAudioContext {
       connect() {}, disconnect() {},
     };
   }
-  decodeAudioData() { return Promise.resolve({ duration: 6 }); }
+  decodeAudioData() {
+    return Promise.resolve({ duration: 6, length: 264600, sampleRate: 44100 });
+  }
   createBufferSource() {
     const source = {
       started: false, stopped: false, connected: false,
