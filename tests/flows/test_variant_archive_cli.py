@@ -3,6 +3,7 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from abar.app.repository import WorkspaceRepository
@@ -123,3 +124,47 @@ def test_variant_add_builds_standard_command_bundle_without_a_manifest(tmp_path:
         "{output_wav}",
     ]
     assert manifest.renderer.context_policy == "full_material"
+
+
+def test_bundle_retains_companion_execute_bit_and_resolves_node(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io
+    import zipfile
+    from abar.compare.rendering import _extract_archive
+
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "entry").write_text("#!/usr/bin/env node\n")
+    helper = bundle / "helper"
+    helper.write_text("#!/bin/sh\nexit 0\n")
+    helper.chmod(0o755)
+    monkeypatch.setattr("abar.compare.bundles.shutil.which", lambda name: "/test/bin/node")
+    built = build_command_bundle(bundle, "entry")
+    with zipfile.ZipFile(io.BytesIO(built.archive)) as archive:
+        assert (archive.getinfo("helper").external_attr >> 16) & 0o111
+    destination = tmp_path / "extracted"
+    destination.mkdir()
+    _extract_archive(built.archive, destination)
+    assert (destination / "helper").stat().st_mode & 0o111
+    assert '"/test/bin:/usr/bin:/bin"' in json.dumps(built.manifest)
+
+
+def test_renderer_failure_includes_stderr(tmp_path: Path) -> None:
+    from abar.compare.rendering import RenderViolation, _execute_command
+
+    script = b"#!/bin/sh\necho 'companion failed' >&2\nexit 7\n"
+    (tmp_path / "entry").write_bytes(script)
+    built = build_command_bundle(tmp_path, "entry")
+    with pytest.raises(RenderViolation, match="companion failed"):
+        _execute_command(
+            built.archive,
+            ["entry"],
+            cwd=".",
+            env={},
+            executable_sha="sha256:" + hashlib.sha256(script).hexdigest(),
+            timeout_seconds=5,
+            input_bytes=b"",
+            params=b"{}",
+            seed=None,
+        )

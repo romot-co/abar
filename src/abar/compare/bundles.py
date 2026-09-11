@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import shutil
 import stat
 import zipfile
 from dataclasses import dataclass
@@ -54,9 +55,19 @@ def build_command_bundle(
         for relative, path in relative_files.items():
             info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = (0o755 if relative == entry_path.as_posix() else 0o644) << 16
+            info.external_attr = (
+                0o755 if relative == entry_path.as_posix() or path.stat().st_mode & 0o111 else 0o644
+            ) << 16
             archive.writestr(info, path.read_bytes())
 
+    runtime_env: dict[str, str] = {}
+    if (executable.read_bytes().splitlines() or [b""])[0].strip() == b"#!/usr/bin/env node":
+        node = shutil.which("node")
+        if node is None:
+            raise ValueError(
+                "renderer requires Node.js; install node before registering this bundle"
+            )
+        runtime_env["PATH"] = f"{Path(node).parent}:/usr/bin:/bin"
     argv = [entry_path.as_posix(), "{input_wav}", "{params_json}", "{output_wav}"]
     if seed_mode == "required":
         argv.append("{seed}")
@@ -71,6 +82,7 @@ def build_command_bundle(
                 "timeline_policy": "source_aligned_exact_v1",
                 "command": {
                     "argv": argv,
+                    "env": runtime_env,
                     "timeout_seconds": timeout_seconds,
                     "seed_mode": seed_mode,
                     "executable_sha": executable_sha,

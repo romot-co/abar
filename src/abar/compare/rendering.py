@@ -189,6 +189,11 @@ def _execute_command(
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
             )
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or b"")[-4096:].decode("utf-8", errors="replace")
+            raise RenderViolation(
+                "render_failed", f"renderer exited {error.returncode}: {detail}"
+            ) from error
         except (OSError, subprocess.SubprocessError) as error:
             raise RenderViolation("render_failed", str(error)) from error
         if not output_path.is_file():
@@ -215,5 +220,6 @@ def _extract_archive(data: bytes, destination: Path) -> None:
                 else:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(archive.read(info))
+                    target.chmod(0o755 if mode & 0o111 else 0o644)
     except zipfile.BadZipFile as error:
         raise RenderViolation("render_failed", "source archive must be ZIP") from error
