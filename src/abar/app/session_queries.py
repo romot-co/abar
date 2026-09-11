@@ -302,7 +302,7 @@ def active_deck(
             url=audio_url(
                 delivery.id,
                 slot,
-                prepared.output_audio_by_input_key[input_key],
+                state.compare.audio[prepared.output_audio_by_input_key[input_key]].object_id,
             ),
         )
         for slot, input_key in delivery.slot_assignment.items()
@@ -393,7 +393,9 @@ def session_completion(
                         url=audio_url(
                             delivery.id,
                             slot,
-                            prepared.output_audio_by_input_key[input_key],
+                            state.compare.audio[
+                                prepared.output_audio_by_input_key[input_key]
+                            ].object_id,
                         ),
                     )
                     for slot, input_key in delivery.slot_assignment.items()

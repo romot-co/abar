@@ -124,7 +124,7 @@ def build_read_router(
         _actor: Annotated[str, Depends(dependencies.actor_id)],
         repository: Annotated[WorkspaceRepository, Depends(dependencies.repository)],
     ) -> ActionView:
-        result = repository.replay()
+        result = repository.replay(force=True)
         return ActionView(result="ok" if result.degraded is None else "degraded")
 
     return router

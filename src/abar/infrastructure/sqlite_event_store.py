@@ -144,6 +144,10 @@ class EventStore:
         rows = self._connection.execute(sql, params).fetchall()
         return tuple(self._row_to_envelope(row) for row in rows)
 
+    def latest_sequence(self) -> int:
+        row = self._connection.execute("SELECT MAX(event_seq) FROM events").fetchone()
+        return int(row[0] or 0)
+
     def read_operation(self, idempotency_key: str) -> tuple[EventEnvelope, ...]:
         rows = self._connection.execute(
             """SELECT * FROM events

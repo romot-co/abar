@@ -11,6 +11,7 @@ from abar.app.queries import active_deck, session_completion
 from abar.app.repository import WorkspaceRepository
 from abar.app.views import ActionView, ActiveDeckView, SessionCompletionView
 from abar.compare.models import BlockerInput, Telemetry
+from abar.infrastructure.object_store import ImmutableObjectStore
 from abar.server.audio_tokens import AudioTokenStore
 from abar.server.dependencies import ServerDependencies
 from abar.server.errors import error_response
@@ -143,8 +144,8 @@ def build_interaction_router(
     ) -> ActiveDeckView:
         return active_deck(
             repository,
-            audio_url=lambda _delivery_id, _slot, audio_id: audio_tokens.issue(
-                repository.root, audio_id
+            audio_url=lambda _delivery_id, _slot, object_id: audio_tokens.issue(
+                repository.root, object_id
             ),
         )
 
@@ -157,8 +158,8 @@ def build_interaction_router(
         return session_completion(
             repository,
             session_id,
-            audio_url=lambda _delivery_id, _slot, audio_id: audio_tokens.issue(
-                repository.root, audio_id
+            audio_url=lambda _delivery_id, _slot, object_id: audio_tokens.issue(
+                repository.root, object_id
             ),
         )
 
@@ -205,17 +206,12 @@ def build_interaction_router(
         record = audio_tokens.consume(token)
         if record is None:
             return error_response(404, "audio_token_invalid", "audio token is missing or expired")
-        root, audio_id = record
-        repository = WorkspaceRepository.open(root)
-        try:
-            audio_object = repository.state().compare.audio[audio_id]
-            return Response(
-                content=repository.objects.read(audio_object.object_id),
-                media_type="audio/wav",
-                headers={"Cache-Control": "no-store"},
-            )
-        finally:
-            repository.close()
+        root, object_id = record
+        return Response(
+            content=ImmutableObjectStore(root / "objects").read(object_id),
+            media_type="audio/wav",
+            headers={"Cache-Control": "no-store"},
+        )
 
     return router
 

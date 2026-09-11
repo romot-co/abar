@@ -5,6 +5,7 @@ from pathlib import Path
 
 from platformdirs import user_data_path
 
+from abar.app.replay_cache import ReplayCache
 from abar.app.state import EVENT_SCHEMAS, ABARState, reduce_state
 from abar.foundation.replay import ReplayResult, full_replay
 from abar.infrastructure.object_store import ImmutableObjectStore
@@ -28,18 +29,31 @@ class WorkspaceRepository:
     root: Path
     events: EventStore
     objects: ImmutableObjectStore
+    cache: ReplayCache | None = None
+    database_identity: tuple[int, int] = (0, 0)
 
     @classmethod
-    def open(cls, root: Path | None = None) -> "WorkspaceRepository":
+    def open(
+        cls, root: Path | None = None, *, cache: ReplayCache | None = None
+    ) -> "WorkspaceRepository":
         selected = (root or default_workspace_path()).expanduser().resolve()
         selected.mkdir(parents=True, exist_ok=True)
         events = EventStore(selected / "events.sqlite3")
-        return cls(selected, events, ImmutableObjectStore(selected / "objects"))
+        info = (selected / "events.sqlite3").stat()
+        return cls(
+            selected,
+            events,
+            ImmutableObjectStore(selected / "objects"),
+            cache,
+            (info.st_dev, info.st_ino),
+        )
 
     def close(self) -> None:
         self.events.close()
 
-    def replay(self) -> ReplayResult[ABARState]:
+    def replay(self, *, force: bool = False) -> ReplayResult[ABARState]:
+        if self.cache is not None:
+            return self.cache.replay(self.root, self.database_identity, self.events, force=force)
         result = full_replay(
             ABARState(),
             self.events.read_all(),

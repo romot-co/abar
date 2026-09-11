@@ -1,4 +1,7 @@
-"""Short-lived opaque tokens for browser audio delivery."""
+"""Short-lived opaque grants to already-resolved immutable audio objects.
+
+Object identities stay server-side; delivery does not need to replay the workspace.
+"""
 
 import secrets
 import time
@@ -15,12 +18,12 @@ class AudioTokenStore:
     )
     _lock: Lock = field(default_factory=Lock)
 
-    def issue(self, root: Path, audio_id: str) -> str:
+    def issue(self, root: Path, object_id: str) -> str:
         token = secrets.token_urlsafe(32)
         with self._lock:
             self._records[token] = (
                 root,
-                audio_id,
+                object_id,
                 time.monotonic() + self.lifetime_seconds,
             )
         return f"/api/audio/{token}"
@@ -32,5 +35,5 @@ class AudioTokenStore:
             if record is None or record[2] < now:
                 self._records.pop(token, None)
                 return None
-            root, audio_id, _expires_at = record
-            return root, audio_id
+            root, object_id, _expires_at = record
+            return root, object_id

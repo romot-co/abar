@@ -9,6 +9,7 @@ from fastapi import Cookie, Depends, Header
 
 from abar.app.actors import Actor
 from abar.app.command_support import operation_key
+from abar.app.replay_cache import ReplayCache
 from abar.app.repository import WorkspaceRepository
 from abar.server.workspaces import WorkspaceCatalog
 
@@ -38,6 +39,7 @@ def build_dependencies(
     interaction_token: str,
 ) -> ServerDependencies:
     primary_root = catalog.resolve(None)
+    replay_cache = ReplayCache()
 
     def capability(
         authorization: Annotated[str | None, Header()] = None,
@@ -86,7 +88,7 @@ def build_dependencies(
     def repository(
         root: Annotated[Path, Depends(selected_workspace)],
     ) -> Iterator[WorkspaceRepository]:
-        value = WorkspaceRepository.open(root)
+        value = WorkspaceRepository.open(root, cache=replay_cache)
         try:
             yield value
         finally:
