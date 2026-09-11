@@ -186,3 +186,20 @@ def test_unconnected_browser_explains_connection(tmp_path: Path, free_tcp_port: 
         page.get_by_text("ABARを開けません", exact=True).wait_for()
         assert "このブラウザはまだ接続されていません" in page.locator("body").inner_text()
         browser.close()
+
+
+@pytest.mark.browser
+def test_old_api_shape_shows_recovery_instead_of_blank_screen(
+    tmp_path: Path, free_tcp_port: int
+) -> None:
+    with (
+        live_server(tmp_path / "one", tmp_path / "two", free_tcp_port) as url,
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.route("**/api/project", lambda route: route.fulfill(json={"project_id": "old"}))
+        page.goto(url)
+        page.get_by_text("画面を表示できません", exact=True).wait_for()
+        assert page.get_by_role("button", name="再読み込み", exact=True).is_visible()
+        browser.close()

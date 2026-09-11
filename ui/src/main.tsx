@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { ScreenErrorBoundary } from "./ScreenErrorBoundary";
 import { initializeToken } from "./api";
 import "./styles.css";
 
@@ -17,7 +18,7 @@ const queryClient = new QueryClient({
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <ScreenErrorBoundary><App /></ScreenErrorBoundary>
     </QueryClientProvider>
   </StrictMode>,
 );
