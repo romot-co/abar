@@ -34,3 +34,50 @@ def test_long_labels_and_notes_wrap_without_clipping(width: int) -> None:
             assert item.evaluate("el => el.scrollHeight <= el.clientHeight + 1")
             assert item.evaluate("el => el.clientHeight > 40")
         browser.close()
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("width", [375, 1024])
+def test_saved_criterion_stays_small_and_answer_controls_remain_reachable(
+    tmp_path: Path, free_tcp_port: int, width: int
+) -> None:
+    from playwright.sync_api import Route
+
+    from scripts.dev_seed import seed
+    from tests.e2e.test_project_ui_v2 import live_server
+
+    root = tmp_path / "workspace"
+    seed(root, project_name="Purpose test")
+    criterion = "アタックと余韻を保ち、不要なノイズだけを減らしているか確認します。" * 12
+    with (
+        live_server(root, tmp_path / "other", free_tcp_port) as url,
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": width, "height": 640})
+
+        def long_saved_criterion(route: Route) -> None:
+            response = route.fetch()
+            body = response.json()
+            body["criterion_text"] = criterion
+            body["criterion_label"] = "目的"
+            route.fulfill(response=response, json=body)
+
+        page.route("**/api/deck/active", long_saved_criterion)
+        page.goto(url)
+        page.get_by_role("button", name="続きを聴く", exact=True).click()
+        purpose = page.locator(".deck-criterion")
+        purpose.wait_for()
+        assert purpose.inner_text() == f"目的 {criterion}"
+        assert purpose.evaluate("el => getComputedStyle(el).fontSize") == "12px"
+        assert purpose.evaluate("el => el.scrollWidth <= el.clientWidth + 1")
+        assert purpose.evaluate("el => el.scrollHeight <= el.clientHeight + 1")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.screenshot(path=str(tmp_path / f"purpose-{width}.png"), full_page=True)
+        page.locator(".slot-switcher button").nth(1).click()
+        page.locator(".preference-scale button").nth(2).click()
+        submit = page.get_by_role("button", name="記録して次へ", exact=True)
+        submit.scroll_into_view_if_needed()
+        box = submit.bounding_box()
+        assert box is not None and box["y"] >= 0 and box["y"] + box["height"] <= 640
+        browser.close()

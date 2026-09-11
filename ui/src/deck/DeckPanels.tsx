@@ -22,6 +22,11 @@ export function DeckHeader({ deck, onLeave }: { deck: Deck; onLeave: () => void 
       <button type="button" className="weak-action" onClick={onLeave}><Icon name="arrow_back" />受信箱</button>
       <strong className="deck-progress">{index + 1} / {total}</strong>
       <span className="deck-recipe">{deck.recipe ? `Recipe ${deck.recipe}` : ""}</span>
+      {deck.criterion_text && (
+        <p className="deck-criterion">
+          <span>{deck.criterion_label ?? "今回の確認"}</span> {deck.criterion_text}
+        </p>
+      )}
     </header>
   );
 }

@@ -135,8 +135,10 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); }
 .completed-row strong { font-weight: 500; white-space: nowrap; }
 
 /* Deck */
-.deck-shell { position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr); width: min(calc(100% - 48px), 35rem); height: 100dvh; margin: 0 auto; padding: 16px 0; overflow: hidden; }
+.deck-shell { position: relative; display: grid; grid-template-rows: auto auto 1fr; width: min(calc(100% - 48px), 35rem); min-height: 100dvh; margin: 0 auto; padding: 16px 0; }
 .deck-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin-bottom: 16px; }
+.deck-criterion { grid-column: 1 / -1; min-width: 0; margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.deck-criterion > span { font-weight: 500; }
 .deck-header .weak-action { justify-self: start; }
 .deck-header .ui-icon { width: 16px; height: 16px; }
 .deck-progress { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -167,7 +169,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); }
 .transport input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid var(--ink); border-radius: 50%; background: var(--surface); }
 .transport .time { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.deck-answer { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.deck-answer { min-width: 0; }
 .answer-panel { margin-top: 8px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
 .answer-panel h2 { margin: 0 0 16px; }
 .preference-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
