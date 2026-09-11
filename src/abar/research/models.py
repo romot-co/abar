@@ -11,6 +11,11 @@ from abar.research.session_sizes import SessionSize, resolve_evidence_count
 _INDICATOR_ID = re.compile(r"^ind_[a-z0-9][a-z0-9_-]*_v[1-9][0-9]*$")
 
 
+def validate_focus(focus: str) -> None:
+    if not focus.strip() or len(focus) > 200 or "\n" in focus:
+        raise ValueError("focus must be a non-empty single line of at most 200 code points")
+
+
 @dataclass(frozen=True, slots=True)
 class ProjectSession:
     id: str
@@ -34,8 +39,7 @@ class ProjectSession:
     fingerprint: str
 
     def __post_init__(self) -> None:
-        if not self.focus.strip() or len(self.focus) > 200 or "\n" in self.focus:
-            raise ValueError("focus must be a non-empty single line of at most 200 code points")
+        validate_focus(self.focus)
         resolve_evidence_count(self.size, len(self.evidence_item_ids))
         if len(self.evidence_clip_ids) != len(self.evidence_item_ids):
             raise ValueError("Project Session requires one Clip for each evidence item")

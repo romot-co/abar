@@ -47,7 +47,7 @@ from abar.research.clip_selection import (
     explicit_selection,
     random_selection,
 )
-from abar.research.models import ProjectSession
+from abar.research.models import ProjectSession, validate_focus
 from abar.research.planner import (
     best_update_session_fingerprint,
     item_roles,
@@ -201,6 +201,10 @@ def _create_project_session(
         selected_recipe = recipe or project.primary_recipe
         selected_focus = focus
     assert first_variant is not None and second_variant is not None
+    validate_focus(selected_focus)
+    for variant in (first_variant, second_variant):
+        if variant != "source" and variant not in state.compare.variants:
+            raise CommandError("expected source or an existing bare Variant ID (without variant:)")
     count = resolve_evidence_count(size, evidence_count)
     selection = _select_evidence_clips(state, clip_ids, count)
     selected_clips = selection.clip_ids

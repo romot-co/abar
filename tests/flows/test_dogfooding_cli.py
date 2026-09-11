@@ -201,3 +201,32 @@ def test_session_create_streams_json_progress_to_stderr(
     progress = [json.loads(line) for line in result.stderr.splitlines()]
     assert [item["stage"] for item in progress] == ["started", "completed"]
     assert all(item["type"] == "session_preparation_progress" for item in progress)
+
+
+@pytest.mark.parametrize("focus,variant", [("x" * 201, "valid"), ("ok", "variant:bad")])
+def test_invalid_observation_fails_before_preparation(
+    repository: WorkspaceRepository,
+    wav_file: Callable[[str, float], Path],
+    monkeypatch: pytest.MonkeyPatch,
+    focus: str,
+    variant: str,
+) -> None:
+    commands.init_project(
+        repository, name="Test", brief="Listen", material_paths=(wav_file("a.wav", 220),)
+    )
+    proposed = persist_finite_variant(repository, label="proposal", same_as_source=False)
+    before = repository.events.latest_sequence()
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("invalid input reached audio preparation")
+
+    monkeypatch.setattr("abar.app.project_session_commands.build_comparison", forbidden)
+    with pytest.raises((ValueError, commands.CommandError)):
+        commands.create_observation_session(
+            repository,
+            first_variant="source",
+            second_variant=proposed if variant == "valid" else variant,
+            focus=focus,
+            actor_id="agent",
+        )
+    assert repository.events.latest_sequence() == before

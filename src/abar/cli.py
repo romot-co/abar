@@ -437,7 +437,9 @@ def session_create(
     context: typer.Context,
     first: Annotated[str, typer.Option("--a")],
     second: Annotated[str, typer.Option("--b")],
-    focus: Annotated[str, typer.Option("--focus")],
+    focus: Annotated[
+        str, typer.Option("--focus", help="One criterion, single line, at most 200 characters")
+    ],
     size: Annotated[Literal["short", "standard"], typer.Option("--size")] = "short",
     evidence_count: Annotated[
         int | None,
