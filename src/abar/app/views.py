@@ -282,6 +282,18 @@ class EvidenceResultView(PublicView):
     blockers_by_variant: dict[str, tuple[str, ...]]
 
 
+class SessionOverviewView(PublicView):
+    project_session_id: str
+    status: str
+    focus: str
+    topic_key: str | None
+    recipe: str
+    evidence_count: int
+    comparison_count: int
+    answered_count: int
+    clip_ids: tuple[str, ...]
+
+
 class SessionResultView(PublicView):
     project_session_id: str
     recipe: str

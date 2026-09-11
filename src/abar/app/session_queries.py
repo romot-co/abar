@@ -15,6 +15,7 @@ from abar.app.views import (
     ResultBlockerView,
     ResultJudgmentView,
     SessionCompletionView,
+    SessionOverviewView,
     SessionResultView,
 )
 from abar.compare.models import Delivery
@@ -22,6 +23,30 @@ from abar.compare.sealing import public_delivery
 from abar.research.models import ProjectSession
 from abar.research.results import ProjectSessionResult, calculate_result
 from abar.research.session_sizes import favored_count
+
+
+def session_overview(
+    repository: WorkspaceRepository, project_session_id: str
+) -> SessionOverviewView:
+    state = repository.state()
+    project_session = state.research.project_sessions.get(project_session_id)
+    if project_session is None:
+        raise ValueError("Project Session does not exist")
+    session = state.compare.sessions[project_session.core_session_id]
+    runtime = state.compare.session_runtime[session.id]
+    return SessionOverviewView(
+        project_session_id=project_session_id,
+        status=runtime.status,
+        focus=project_session.focus,
+        topic_key=project_session.topic_key,
+        recipe=recipe_label(project_session.recipe),
+        evidence_count=len(project_session.evidence_item_ids),
+        comparison_count=len(session.items),
+        answered_count=sum(
+            state.compare.effective_judgment(item) is not None for item in runtime.deliveries
+        ),
+        clip_ids=project_session.evidence_clip_ids,
+    )
 
 
 def session_result(repository: WorkspaceRepository, project_session_id: str) -> SessionResultView:

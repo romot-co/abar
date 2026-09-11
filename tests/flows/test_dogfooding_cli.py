@@ -241,3 +241,28 @@ def test_reading_missing_workspace_does_not_create_it(tmp_path: Path, command: l
     assert result.exit_code == 3
     assert "Workspace does not exist" in result.stdout
     assert not root.exists()
+
+
+def test_session_show_is_bounded(
+    repository: WorkspaceRepository, wav_file: Callable[[str, float], Path]
+) -> None:
+    commands.init_project(
+        repository, name="Test", brief="Listen", material_paths=(wav_file("a.wav", 220),)
+    )
+    proposed = persist_finite_variant(repository, label="proposal", same_as_source=False)
+    session = commands.create_observation_session(
+        repository,
+        first_variant="source",
+        second_variant=proposed,
+        focus="Listen",
+        actor_id="agent",
+    )
+    result = CliRunner().invoke(
+        app, ["--workspace", str(repository.root), "--json", "project", "session", "show", session]
+    )
+    assert result.exit_code == 0
+    body = json.loads(result.stdout)
+    assert body["status"] == "ready"
+    assert body["evidence_count"] == 1
+    assert "note_markdown" not in body
+    assert "session_details" not in body

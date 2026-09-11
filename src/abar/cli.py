@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from abar.app import commands
 from abar.app.actors import Actor
-from abar.app.queries import entity, history, project_view, session_result, status
+from abar.app.queries import entity, history, project_view, session_overview, session_result, status
 from abar.app.repository import WorkspaceError, WorkspaceRepository, default_workspace_path
 from abar.compare.bundles import build_command_bundle
 from abar.compare.models import RecipeRef
@@ -432,6 +432,16 @@ def variant_materialize(
             idempotency_key=cli.idempotency_key,
         ),
         "Variant音声をmaterializeしました",
+    )
+
+
+@project_session_app.command("show")
+def session_show(context: typer.Context, session_id: Annotated[str, typer.Argument()]) -> None:
+    cli = _ctx(context)
+    _read(
+        cli,
+        lambda repository: session_overview(repository, session_id),
+        "Session概要を表示しました",
     )
 
 

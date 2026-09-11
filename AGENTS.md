@@ -80,7 +80,7 @@ Clip IDs. Canonical agent write commands are `project init`, `project brief set`
 external measurements. Changing the brief through the JSON path also requires a verbatim
 human `--quote`.
 
-Read with `abar --json status`, `project show`, and `history`. After a Session ends, use
+Read with `abar --json status`, `project show`, and `history`. Use `project session show <id>` for a bounded preparation/status summary without the Project snapshot. After a Session ends, use
 `project session result <id>` for its bounded Material-by-Material result. Do not invent
 finer-grained listing commands.
 
