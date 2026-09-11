@@ -897,6 +897,10 @@ def _read[ValueT: BaseModel](
     message: str,
 ) -> None:
     try:
+        if not (cli.workspace / "events.sqlite3").is_file():
+            raise WorkspaceError(
+                f"Workspace does not exist: {cli.workspace}. Use project init to create it."
+            )
         repository = WorkspaceRepository.open(cli.workspace)
         try:
             value = operation(repository)

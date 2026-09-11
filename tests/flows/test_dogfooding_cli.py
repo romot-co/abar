@@ -230,3 +230,14 @@ def test_invalid_observation_fails_before_preparation(
             actor_id="agent",
         )
     assert repository.events.latest_sequence() == before
+
+
+@pytest.mark.parametrize(
+    "command", [["status"], ["project", "show"], ["history"], ["show", "missing"]]
+)
+def test_reading_missing_workspace_does_not_create_it(tmp_path: Path, command: list[str]) -> None:
+    root = tmp_path / "missing"
+    result = CliRunner().invoke(app, ["--workspace", str(root), "--json", *command])
+    assert result.exit_code == 3
+    assert "Workspace does not exist" in result.stdout
+    assert not root.exists()

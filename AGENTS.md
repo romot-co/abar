@@ -27,6 +27,7 @@ Begin with:
 abar --workspace /absolute/path/to/project-workspace --json status
 ```
 
+If status reports `Workspace does not exist`, initialize at that intended path with `project init`; read commands do not create Workspaces.
 If `project_name` is null, initialize the Project from the human's stated purpose and the
 available listening material. Do not call `project show` before initialization because no
 Project view exists yet.
