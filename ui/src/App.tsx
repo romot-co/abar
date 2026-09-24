@@ -108,7 +108,7 @@ function ErrorState({ title, message, retry }: { title: string; message?: string
     <main className="centered error-panel">
       <h1>{title}</h1>
       <p>{message ?? "不明なエラー"}</p>
-      <button type="button" className="secondary-action" onClick={() => void retry()}>再試行</button>
+      <button type="button" className="nibi-button secondary-action" onClick={() => void retry()}>再試行</button>
     </main>
   );
 }

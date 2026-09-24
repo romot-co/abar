@@ -36,7 +36,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   useEffect(() => { if (loaded) headingRef.current?.focus({ preventScroll: true }); }, [loaded]);
 
   if (completion.isPending) return <main className="centered">結果をまとめています…</main>;
-  if (completion.isError || !completion.data) return <main className="centered error-panel"><h1>結果を表示できません</h1><p>{completion.error ? humanError(completion.error) : null}</p><button type="button" className="secondary-action" onClick={onBack}>受信箱へ</button></main>;
+  if (completion.isError || !completion.data) return <main className="centered error-panel"><h1>結果を表示できません</h1><p>{completion.error ? humanError(completion.error) : null}</p><button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button></main>;
 
   const data = completion.data;
   const result = data.result;
@@ -67,9 +67,9 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
       </section>
 
       <div className="summary-actions">
-        <button type="button" className="secondary-action" onClick={onBack}>受信箱へ</button>
+        <button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button>
         {readyNext && (
-          <button type="button" className="primary-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.project_session_id)}>
+          <button type="button" className="nibi-button nibi-button--primary primary-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.project_session_id)}>
             次を聴く（残り {readyCount}）
           </button>
         )}

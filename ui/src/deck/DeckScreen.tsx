@@ -171,8 +171,8 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
       <main className="centered error-panel">
         <h1>{isNetworkError(loadError) ? "サーバーに接続できません" : "比較を読み込めません"}</h1>
         <p>{humanError(loadError)}</p>
-        <button type="button" className="secondary-action" onClick={() => void loadDeck()}>再試行</button>
-        <button type="button" className="weak-action" onClick={onBack}>受信箱へ</button>
+        <button type="button" className="nibi-button secondary-action" onClick={() => void loadDeck()}>再試行</button>
+        <button type="button" className="nibi-button nibi-button--quiet weak-action" onClick={onBack}>受信箱へ</button>
       </main>
     );
   }
@@ -181,7 +181,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
       <main className="centered error-panel">
         <h1>進行中のセッションはありません</h1>
         <p>受信箱から次のセッションを始めてください。</p>
-        <button type="button" className="secondary-action" onClick={onBack}>受信箱へ</button>
+        <button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button>
       </main>
     );
   }

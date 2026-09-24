@@ -88,9 +88,9 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
             <p className="queue-focus">Projectに属さない比較（abar listen）を続けられます。</p>
           </div>
           {otherSession.status === "paused" ? (
-            <button type="button" className="primary-action" disabled={resume.isPending} onClick={() => { start.reset(); resume.mutate(otherSession.sessionId); }}>再開</button>
+            <button type="button" className="nibi-button nibi-button--primary primary-action" disabled={resume.isPending} onClick={() => { start.reset(); resume.mutate(otherSession.sessionId); }}>再開</button>
           ) : (
-            <button type="button" className="primary-action" onClick={onOpenDeck}>続きを聴く</button>
+            <button type="button" className="nibi-button nibi-button--primary primary-action" onClick={onOpenDeck}>続きを聴く</button>
           )}
         </div>
       </div>
@@ -146,15 +146,15 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
             {pending.map((item, index) => (
               <QueueRow key={item.project_session_id} session={item} primaryRecipe={project.primary_recipe ?? ""}>
                 {item.status === "ready" && (
-                  <button type="button" className={index === 0 && !otherSession ? "primary-action" : "secondary-action"} disabled={blocked || start.isPending} onClick={() => { resume.reset(); start.mutate(item.project_session_id); }}>
+                  <button type="button" className={index === 0 && !otherSession ? "nibi-button nibi-button--primary primary-action" : "nibi-button secondary-action"} disabled={blocked || start.isPending} onClick={() => { resume.reset(); start.mutate(item.project_session_id); }}>
                     聴く
                   </button>
                 )}
                 {item.status === "active" && (
-                  <button type="button" className="primary-action" onClick={onOpenDeck}>続きを聴く</button>
+                  <button type="button" className="nibi-button nibi-button--primary primary-action" onClick={onOpenDeck}>続きを聴く</button>
                 )}
                 {item.status === "paused" && (
-                  <button type="button" className={index === 0 ? "primary-action" : "secondary-action"} disabled={resume.isPending} onClick={() => { start.reset(); resume.mutate(item.project_session_id); }}>再開</button>
+                  <button type="button" className={index === 0 ? "nibi-button nibi-button--primary primary-action" : "nibi-button secondary-action"} disabled={resume.isPending} onClick={() => { start.reset(); resume.mutate(item.project_session_id); }}>再開</button>
                 )}
               </QueueRow>
             ))}
@@ -271,8 +271,8 @@ function SimplificationPrompt({ prompt, pending, onDecision }: { prompt: Simplif
       <h2>指定範囲で同一の音でした</h2>
       <p className="brief">{prompt.reason}</p>
       <div>
-        <button type="button" className="primary-action" disabled={pending} onClick={() => onDecision("accept")}>採用する</button>
-        <button type="button" className="secondary-action" disabled={pending} onClick={() => onDecision("keep")}>維持する</button>
+        <button type="button" className="nibi-button secondary-action" disabled={pending} onClick={() => onDecision("accept")}>採用する</button>
+        <button type="button" className="nibi-button secondary-action" disabled={pending} onClick={() => onDecision("keep")}>維持する</button>
       </div>
     </section>
   );

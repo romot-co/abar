@@ -101,6 +101,12 @@ npm ci
 npm run build
 ```
 
+UIはromotのデザインシステムnibi(MPL-2.0)のCSSとIBM Plex Sans JPを利用します。
+nibiのリポジトリは非公開なので、使う生成済みファイルだけを `ui/vendor/nibi` に改変せず同梱しています
+(取り込んだ版は `ui/vendor/nibi/VERSION.json`)。更新は nibi のチェックアウトから
+`uv run python scripts/sync_nibi.py ../nibi` を実行し、UIをbuildし直します。
+操作状態と再生位置はReactが管理し、nibiのDOM初期化は重ねて行いません。
+
 ### ローカルでの表示・動作確認
 
 ダミーデータ入りの開発環境を一つのコマンドで起動できます。

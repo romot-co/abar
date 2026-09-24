@@ -1,0 +1,63 @@
+/* nibi owns control faces and typography; ABAR owns layout and research state.
+   Legacy layout sits in a lower cascade layer during the screen migration. */
+:root {
+  --ink: var(--nibi-color-text); --ink-hover: var(--nibi-color-text-strong);
+  --ink-2: var(--nibi-color-text-muted); --ink-3: var(--nibi-color-text-muted);
+  --muted: var(--nibi-color-text-subtle); --line: var(--nibi-color-line);
+  --line-soft: var(--nibi-color-row-alt); --control-line: var(--nibi-color-line-control);
+  --wash: var(--nibi-color-control); --bg: var(--nibi-color-bg);
+  --surface: var(--nibi-color-surface); --inverse: var(--nibi-color-on-selected);
+  --radius-card: var(--nibi-radius-panel); --radius-control: var(--nibi-radius-field);
+  --radius-badge: var(--nibi-radius-badge); --radius-pill: var(--nibi-radius-pill);
+  --speed: var(--nibi-motion-base);
+  color: var(--nibi-color-text); background: var(--nibi-color-bg);
+  font-family: var(--nibi-font-family); font-size: var(--nibi-type-body-size);
+  line-height: var(--nibi-type-body-line); font-synthesis: none;
+}
+button:disabled { opacity:1; }
+h1 { font-size:var(--nibi-type-title-size); line-height:var(--nibi-type-title-line); }
+h2 { font-size:var(--nibi-type-heading-size); line-height:var(--nibi-type-heading-line); }
+:focus-visible { outline:var(--nibi-stroke-focus) solid var(--nibi-color-focus); outline-offset:var(--nibi-stroke-focus-offset); }
+.nibi-button.weak-action { text-decoration:none; }
+.nibi-button.submit-answer { width:100%; margin-top:var(--nibi-size-inset); }
+.nibi-button.play-button { min-width:var(--nibi-size-control); width:var(--nibi-size-control); height:var(--nibi-size-control); padding:0; }
+.ui-icon { width:var(--nibi-size-icon); height:var(--nibi-size-icon); }
+:is(.queue-list,.empty-state,.empty-queue,.state-card,.completed-list,.simplification-prompt,.verdict-card,.answer-record,.listen-panel,.answer-panel,.shortcut-help) { border:0; border-radius:var(--nibi-radius-panel); }
+:is(.queue-row + .queue-row,.indicator-row,.completed-row + .completed-row,.answer-table-row + .answer-table-row,.answer-table-head,.state-stats) { border:0; }
+.queue-row + .queue-row,.completed-row + .completed-row { margin-top:var(--nibi-grid-y); }
+input[type="text"], input:not([type]), textarea, select {
+  min-height:var(--nibi-size-control); border:0; border-radius:var(--nibi-radius-field);
+  padding-inline:var(--nibi-size-gap-x); background:var(--nibi-color-control); color:var(--nibi-color-text);
+}
+input:disabled, textarea:disabled, select:disabled { background:transparent; box-shadow:inset 0 0 0 var(--nibi-stroke-hairline) var(--nibi-color-line); color:var(--nibi-color-text-subtle); }
+.project-picker select { border-radius:var(--nibi-radius-pill); }
+.deck-shell { gap:var(--nibi-grid-y); font-size:var(--nibi-type-body-size); line-height:var(--nibi-type-body-line); }
+.deck-header { margin-bottom:var(--nibi-grid-y); }
+.listen-panel,.answer-panel { padding:var(--nibi-size-inset); }
+.answer-panel { margin-top:0; }
+.slot-switcher,.preference-scale { display:grid; grid-auto-flow:row; gap:var(--nibi-size-gap-x); }
+.slot-switcher .nibi-segmented__option { display:flex; flex-direction:column; min-width:0; min-height:calc(var(--nibi-size-row) * 2); gap:var(--nibi-grid-y); }
+.slot-name { font-size:var(--nibi-type-display-size); line-height:var(--nibi-type-display-line); }
+.slot-state,.slot-identity { color:inherit; font-size:var(--nibi-type-value-size); line-height:var(--nibi-type-value-line); }
+.preference-scale .nibi-segmented__option { min-width:0; padding-inline:var(--nibi-grid-x); }
+.preference-scale .nibi-segmented__option span { color:inherit; }
+.blocker-chip { width:100%; white-space:normal; }
+:is(.deck-criterion,.deck-progress,.transport .time,.key-hint,.submit-hint,.skip-action .weak-action,.blocker-question > p) { font-size:var(--nibi-type-value-size); line-height:var(--nibi-type-value-line); }
+.deck-recipe { font-size:var(--nibi-type-label-size); }
+.confirm-bar { position:relative; top:auto; margin-block:var(--nibi-grid-y); border:0; background:var(--nibi-color-control); border-radius:var(--nibi-radius-panel); }
+/* Keep the controlled native range and its keyboard semantics. Its geometry uses
+   the same rail/thumb tokens as nibi; React remains the only owner of playback. */
+.transport input[type="range"] { height:var(--nibi-size-hit); }
+.transport input[type="range"]::-webkit-slider-runnable-track { height:var(--nibi-slider-rail); background:var(--nibi-color-rail); }
+.transport input[type="range"]::-webkit-slider-thumb { width:var(--nibi-slider-thumb); height:var(--nibi-slider-thumb); margin-top:calc((var(--nibi-slider-rail) - var(--nibi-slider-thumb)) / 2); border:0; background:var(--nibi-color-thumb); }
+.transport input[type="range"]::-moz-range-track { height:var(--nibi-slider-rail); background:var(--nibi-color-rail); }
+.transport input[type="range"]::-moz-range-thumb { width:var(--nibi-slider-thumb); height:var(--nibi-slider-thumb); border:0; background:var(--nibi-color-thumb); }
+.transport input[type="range"]:disabled { cursor:not-allowed; opacity:.5; }
+.inline-error { border:0; color:var(--nibi-color-error-text); background:var(--nibi-color-error-subtle); }
+.inline-error::before { content:"!"; display:inline-grid; place-items:center; width:1em; height:1em; border:var(--nibi-stroke-hairline) solid currentColor; border-radius:50%; margin-inline-end:var(--nibi-grid-x); font-weight:600; }
+.guard-badge.fail { color:var(--nibi-color-error-text); background:var(--nibi-color-error-subtle); }
+@media(max-width:480px) {
+ .listen-panel,.answer-panel { padding:var(--nibi-size-gap-x); }
+ .preference-scale { gap:var(--nibi-grid-x); }
+ .preference-scale .nibi-segmented__option { padding-inline:0; font-size:var(--nibi-type-value-size); line-height:var(--nibi-type-value-line); }
+}
