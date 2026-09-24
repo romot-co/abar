@@ -101,7 +101,31 @@ npm ci
 npm run build
 ```
 
-UI開発用のダミーデータは `uv run python scripts/dev_seed.py --reset` で投入できます。
+### ローカルでの表示・動作確認
+
+ダミーデータ入りの開発環境を一つのコマンドで起動できます。
+
+```bash
+uv run python scripts/dev.py                 # ビルド済みUIで起動し、ブラウザを開く
+uv run python scripts/dev.py --hot --agent   # ui/src をホットリロードし、模擬エージェントも動かす
+```
+
+- **シナリオ**: `.dev-workspaces/` に状態ごとのWorkspaceを作ります。UIのProject切替で行き来できます。
+  - 標準
+  - 初回
+  - 完了済み
+  - Quick Listen
+  - 簡素化確認
+  - 開始不可
+  - 停止(degraded)
+
+  Projectのない画面は `--primary no-project` で開きます。作り直すときは `--reset` を付けます。
+- **模擬エージェント**(`--agent`): 準備済みSessionが減るたびに、新しいVariantと現在最良チェック・観察Sessionを補充します。
+  完了した結果はノートへ、現在最良の指標値は指標欄へ記録します。
+  回答は生成しないため、UIで答え続けると改善ループ全体を確認できます。
+  単体でも `scripts/dev_agent.py --workspace <dir>` で動かせます。
+- **URL**: 開発用Workspaceは固定token `abar-dev` を使うため、URLは再起動しても変わりません。
+  使用中のportは自動で避けます。
 
 ## License
 

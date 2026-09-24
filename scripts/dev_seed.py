@@ -1,28 +1,32 @@
 """開発用ダミーデータ投入スクリプト。
 
-UIの確認・手元テスト用に、各状態を網羅したWorkspaceを作る:
-素材3件(+Clip)、Variant2件、完了Session、進行中Session、準備済みSession、
-Indicator、ノート。
+UIの表示・動作確認用に、状態ごとのWorkspaceを同じ親ディレクトリへ作る。
+UIのProject切替(同じ親ディレクトリのWorkspaceを列挙)で各状態を行き来できる。
 
-使い方:
-    uv run python scripts/dev_seed.py                # ./.dev-workspace に投入
-    uv run python scripts/dev_seed.py --reset        # 作り直し
-    uv run python scripts/dev_seed.py --workspace /tmp/abar-dev
+    standard        進行中・準備済み・完了Session、Indicator、ノート(従来のseed)
+    fresh           Project作成直後。現在最良は原音、準備済みSessionだけ
+    all-done        全Session完了。受信箱が空の状態
+    quick-listen    ProjectとblindのQuick Listen(進行中)
+    simplification  簡素化(byte-identical)の確認待ち
+    blocked         音声欠落で開始できなかったSession
+    degraded        replayが停止したWorkspace(復旧案内の表示)
+    no-project      Projectのない空のWorkspace(主Workspaceに指定したときだけ表示)
 
-投入後:
-    uv run abar --workspace .dev-workspace ui
-UI開発(Viteホットリロード)なら:
-    uv run abar --workspace .dev-workspace ui --no-open   # tokenをメモ
-    cd ui && npm run dev
-    → http://localhost:5173/#token=<上のtoken> を開く
+通常は `scripts/dev.py` から使う。単体で使う場合:
+    uv run python scripts/dev_seed.py                      # .dev-workspaces/ に全シナリオ
+    uv run python scripts/dev_seed.py --reset              # 作り直し
+    uv run python scripts/dev_seed.py --scenario fresh     # 指定シナリオだけ
+    uv run python scripts/dev_seed.py --root /tmp/abar-dev
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import shutil
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +39,7 @@ from abar.compare.audio.content import decode_wav_bytes, encode_float32_wav
 from abar.compare.audio.importing import import_canonical_wav_bytes
 from abar.compare.models import AudioObject, BlockerInput, Telemetry
 from abar.foundation.json_types import JSONValue
+from abar.infrastructure.object_store import ImmutableObjectStore
 
 SAMPLE_RATE = 44_100
 SECONDS = 14
@@ -428,35 +433,279 @@ def seed(
             repository.close()
 
 
+def _materials(directory: Path) -> tuple[Path, ...]:
+    return (
+        _write_wav(directory, "pad_intro.wav", _tone(220.0, harmonics=0.35)),
+        _write_wav(directory, "pad_sustain.wav", _tone(330.0, vibrato=0.4)),
+        _write_wav(directory, "pad_release.wav", _tone(147.0, harmonics=0.15)),
+    )
+
+
+def _start_project(
+    repository: WorkspaceRepository, directory: Path, *, name: str, brief: str
+) -> tuple[str, ...]:
+    """Projectを作り、素材ごとにClipを1件足す。素材IDを返す。"""
+    commands.init_project(repository, name=name, brief=brief, material_paths=_materials(directory))
+    project = repository.state().project.project
+    assert project is not None
+    for material_id in project.material_ids:
+        commands.add_clip(
+            repository, material_id, start_seconds=0.5, duration_seconds=6.0, role="body"
+        )
+    return project.material_ids
+
+
+def _core_session(repository: WorkspaceRepository, project_session_id: str) -> str:
+    return repository.state().research.project_sessions[project_session_id].core_session_id
+
+
+def _promote(repository: WorkspaceRepository, variant_id: str) -> None:
+    """現在最良チェックを作り、提案版を全問支持して現在最良を更新する。"""
+    session_id = commands.create_best_update_session(
+        repository, proposed_variant=variant_id, actor_id="agent:dev-seed"
+    )
+    core = _core_session(repository, session_id)
+    commands.start_session(repository, core, allocation_seed=7)
+    _answer_for_variant(repository, core, variant_id)
+
+
+def seed_fresh(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            _start_project(
+                repository,
+                Path(tmp),
+                name="初回: Fresh",
+                brief="Make the pad warmer without masking the vocal",
+            )
+            warm = _finite_map_variant(repository, label="warm-v1", color_hz=660.0, depth=0.012)
+            commands.create_best_update_session(
+                repository, proposed_variant=warm, actor_id="agent:dev-seed"
+            )
+            commands.create_observation_session(
+                repository,
+                first_variant="source",
+                second_variant=warm,
+                focus="高域の丸さを聴き分けられるか",
+                size="short",
+                actor_id="agent:dev-seed",
+            )
+        finally:
+            repository.close()
+
+
+def seed_all_done(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            _start_project(
+                repository,
+                Path(tmp),
+                name="完了済み: Quiet",
+                brief="Reduce harshness while keeping presence",
+            )
+            soft = _finite_map_variant(repository, label="soft-v1", color_hz=520.0, depth=0.015)
+            _promote(repository, soft)
+            observed = commands.create_observation_session(
+                repository,
+                first_variant="source",
+                second_variant=soft,
+                focus="歯擦音の刺さり",
+                size="short",
+                actor_id="agent:dev-seed",
+            )
+            core = _core_session(repository, observed)
+            commands.start_session(repository, core, allocation_seed=3)
+            _answer_all(repository, core, preferences=[4])
+        finally:
+            repository.close()
+
+
+def seed_quick_listen(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        directory = Path(tmp)
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            _start_project(
+                repository,
+                directory,
+                name="Quick Listen: Echo",
+                brief="Check a one-off bounce against the reference",
+            )
+            reference = _write_wav(directory, "reference.wav", _tone(261.6, harmonics=0.3))
+            bounce = _write_wav(directory, "bounce.wav", _tone(261.6, vibrato=0.25, harmonics=0.4))
+            session_id = commands.create_quick_listen(
+                repository, str(reference), str(bounce), presentation="blind"
+            )
+            commands.start_session(repository, session_id)
+        finally:
+            repository.close()
+
+
+def seed_simplification(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            _start_project(
+                repository,
+                Path(tmp),
+                name="簡素化確認: Lite",
+                brief="Keep the sound while simplifying the chain",
+            )
+            full = _finite_map_variant(repository, label="full-chain", color_hz=660.0, depth=0.02)
+            _promote(repository, full)
+            # 同じ音を出す別Variant(処理を減らした版という想定)。
+            lite = _finite_map_variant(repository, label="lite-chain", color_hz=660.0, depth=0.02)
+            state = repository.state()
+            project = state.project.project
+            assert project is not None
+            scope = tuple(
+                clip_id
+                for material_id in project.material_ids
+                for clip_id in state.compare.materials[material_id].clip_ids
+            )
+            commands.create_simplification(
+                repository,
+                simple_variant_id=lite,
+                reason="EQ段を1つ外しても出力が変わらない",
+                scope_clip_ids=scope,
+            )
+        finally:
+            repository.close()
+
+
+def seed_blocked(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            _start_project(
+                repository,
+                Path(tmp),
+                name="開始不可: Broken",
+                brief="Show why a Session could not start",
+            )
+            broken = _finite_map_variant(repository, label="broken-v1", color_hz=700.0, depth=0.02)
+            session_id = commands.create_observation_session(
+                repository,
+                first_variant="source",
+                second_variant=broken,
+                focus="音声が欠けたSession",
+                size="short",
+                actor_id="agent:dev-seed",
+            )
+            core = _core_session(repository, session_id)
+            state = repository.state()
+            comparison = state.compare.comparisons[
+                state.compare.sessions[core].items[0].comparison_id
+            ]
+            pair = state.compare.prepared_pairs[comparison.prepared_pair_id]
+            missing = state.compare.audio[pair.output_audio_by_input_key["p2"]]
+            _delete_object(repository, missing.object_id)
+            # 開始はsession.blockedを記録して拒否される。それが表示したい状態。
+            with contextlib.suppress(commands.CommandError):
+                commands.start_session(repository, core)
+        finally:
+            repository.close()
+
+
+def seed_degraded(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            _start_project(
+                repository,
+                Path(tmp),
+                name="停止: Degraded",
+                brief="Show the recovery guidance",
+            )
+            project = repository.state().project.project
+            assert project is not None
+            # reducerが拒否する権威eventを直接追記し、replayを止める(開発用の再現)。
+            repository.events.append(
+                draft(
+                    "project.brief.changed",
+                    {
+                        "project_id": project.id,
+                        "revision": project.brief_revision + 5,
+                        "text": "skipped revisions",
+                        "human_quote": "skipped revisions",
+                        "actor_id": "human",
+                    },
+                    idempotency_key=commands.operation_key(),
+                )
+            )
+        finally:
+            repository.close()
+
+
+def seed_no_project(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            commands.import_audio(repository, _write_wav(Path(tmp), "loose.wav", _tone(200.0)))
+        finally:
+            repository.close()
+
+
+def _delete_object(repository: WorkspaceRepository, object_id: str) -> None:
+    digest = ImmutableObjectStore._parse_object_id(object_id)  # pyright: ignore[reportPrivateUsage]
+    path = repository.objects._path_for_digest(digest)  # pyright: ignore[reportPrivateUsage]
+    path.chmod(0o600)
+    path.unlink()
+
+
+SCENARIOS: dict[str, Callable[[Path], None]] = {
+    "standard": lambda workspace: seed(workspace, project_name="標準: Xifa"),
+    "fresh": seed_fresh,
+    "all-done": seed_all_done,
+    "quick-listen": seed_quick_listen,
+    "simplification": seed_simplification,
+    "blocked": seed_blocked,
+    "degraded": seed_degraded,
+    "no-project": seed_no_project,
+}
+DEFAULT_ROOT = Path(".dev-workspaces")
+
+
+def seed_scenarios(
+    root: Path, names: tuple[str, ...] = tuple(SCENARIOS), *, reset: bool = False
+) -> tuple[Path, ...]:
+    """指定シナリオを `root/<name>` へ投入する。既存のものは reset しない限り残す。"""
+    created: list[Path] = []
+    for name in names:
+        workspace = root / name
+        if reset and workspace.exists():
+            shutil.rmtree(workspace)
+        if workspace.exists() and any(workspace.iterdir()):
+            continue
+        SCENARIOS[name](workspace)
+        created.append(workspace)
+    return tuple(created)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--workspace", type=Path, default=Path(".dev-workspace"))
-    parser.add_argument("--reset", action="store_true", help="既存のworkspaceを削除して作り直す")
+    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument(
+        "--scenario",
+        action="append",
+        choices=tuple(SCENARIOS),
+        help="投入するシナリオ(複数指定可)。省略時は全シナリオ",
+    )
+    parser.add_argument("--reset", action="store_true", help="対象シナリオを削除して作り直す")
     args = parser.parse_args()
-    workspace: Path = args.workspace.expanduser()
-    secondary = workspace.with_name(f"{workspace.name}-noct")
-    targets = (workspace, secondary)
-    if args.reset:
-        for target in targets:
-            if target.exists():
-                shutil.rmtree(target)
-    occupied = next(
-        (target for target in targets if target.exists() and any(target.iterdir())), None
-    )
-    if occupied is not None:
-        print(f"{occupied} は空ではありません。--reset を付けるか別のパスを指定してください。")
-        return 1
-    seed(workspace)
-    seed(
-        secondary,
-        project_name="Noct",
-        brief="Tighter low end, keep the vocal forward",
-    )
-    print(f"ダミーデータを投入しました: {workspace}, {secondary}")
-    print(f"  uv run abar --workspace {workspace} ui")
-    print("UI開発(ホットリロード)なら `abar ui --no-open` + `cd ui && npm run dev`")
+    root: Path = args.root.expanduser()
+    names = tuple(args.scenario or SCENARIOS)
+    created = seed_scenarios(root, names, reset=args.reset)
+    for workspace in created:
+        print(f"投入しました: {workspace}")
+    skipped = [name for name in names if root / name not in created]
+    if skipped:
+        print(f"既存のため省略: {', '.join(skipped)}(作り直すなら --reset)")
+    print("起動: uv run python scripts/dev.py")
     return 0
 
 

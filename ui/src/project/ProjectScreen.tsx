@@ -45,11 +45,32 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
     onSuccess: onChanged,
   });
 
+  // 読み込めないWorkspaceやProjectのないWorkspaceからも、他のProjectへ戻れるようにする。
+  const picker = (
+    <div className="project-picker">
+      <select
+        aria-label="プロジェクト"
+        value={workspaces.selected_id}
+        disabled={switchingWorkspace}
+        onChange={(event) => onSelectWorkspace(event.currentTarget.value)}
+      >
+        {workspaces.workspaces.map((workspace) => (
+          <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+        ))}
+      </select>
+      <Icon name="unfold_more" />
+    </div>
+  );
+  const otherWorkspaces = workspaces.workspaces.length > 1;
+
   if (project.health.status === "degraded") {
     return (
-      <main className="centered error-panel">
-        <h1>Workspaceを読み込めません</h1>
-        <p>{project.health.degradation?.recovery ?? project.health.reasons?.join("、")}</p>
+      <main className="page-shell">
+        {otherWorkspaces && <header className="inbox-header">{picker}</header>}
+        <section className="centered error-panel">
+          <h1>Workspaceを読み込めません</h1>
+          <p>{project.health.degradation?.recovery ?? project.health.reasons?.join("、")}</p>
+        </section>
       </main>
     );
   }
@@ -79,6 +100,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
   if (project.project_id === null) {
     return (
       <main className="page-shell">
+        {otherWorkspaces && <header className="inbox-header">{picker}</header>}
         <header className="page-header">
           <h1>Projectはまだありません</h1>
         </header>
@@ -105,19 +127,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
   return (
     <main className="page-shell inbox">
       <header className="inbox-header">
-        <div className="project-picker">
-          <select
-            aria-label="プロジェクト"
-            value={workspaces.selected_id}
-            disabled={switchingWorkspace}
-            onChange={(event) => onSelectWorkspace(event.currentTarget.value)}
-          >
-            {workspaces.workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
-            ))}
-          </select>
-          <Icon name="unfold_more" />
-        </div>
+        {picker}
         <p className="brief">{project.brief}</p>
       </header>
 

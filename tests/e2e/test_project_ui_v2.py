@@ -11,7 +11,7 @@ import uvicorn
 from playwright.sync_api import Page, sync_playwright
 
 from abar.server import create_app
-from scripts.dev_seed import seed
+from scripts.dev_seed import seed, seed_degraded
 
 
 @contextmanager
@@ -202,4 +202,31 @@ def test_old_api_shape_shows_recovery_instead_of_blank_screen(
         page.goto(url)
         page.get_by_text("画面を表示できません", exact=True).wait_for()
         assert page.get_by_role("button", name="再読み込み", exact=True).is_visible()
+        browser.close()
+
+
+@pytest.mark.browser
+def test_degraded_workspace_keeps_the_project_picker(
+    tmp_path: Path,
+    free_tcp_port: int,
+) -> None:
+    workspace = tmp_path / "healthy"
+    degraded = tmp_path / "degraded"
+    seed(workspace, project_name="Xifa")
+    seed_degraded(degraded)
+    with (
+        live_server(workspace, degraded, free_tcp_port) as url,
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.goto(url)
+        project = page.get_by_role("combobox", name="プロジェクト")
+        project.select_option(label="停止: Degraded")
+        page.get_by_role("heading", name="Workspaceを読み込めません").wait_for()
+        # The selection is remembered, so without the picker there would be no way back.
+        page.reload()
+        page.get_by_role("heading", name="Workspaceを読み込めません").wait_for()
+        project.select_option(label="Xifa")
+        page.get_by_role("heading", name="残りのセッション", exact=True).wait_for()
         browser.close()
