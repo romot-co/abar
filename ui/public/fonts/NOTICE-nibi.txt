@@ -1,0 +1,8 @@
+The ABAR UI stylesheet includes nibi, the romot design system, unmodified.
+
+nibi is licensed under the Mozilla Public License, v. 2.0 (https://mozilla.org/MPL/2.0/).
+The nibi files used by this build are included, unmodified and in readable form, in ABAR's
+repository under ui/vendor/nibi (https://github.com/romot-co/abar), with the licence text
+and the nibi version and commit (VERSION.json).
+
+IBM Plex Sans JP is licensed under the SIL Open Font License 1.1 (OFL-IBMPlexSansJP.txt).

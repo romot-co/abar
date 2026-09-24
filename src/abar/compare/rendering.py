@@ -1,7 +1,10 @@
 """Trusted Variant rendering with deterministic first-run observation."""
 
+import contextlib
 import hashlib
+import os
 import platform
+import signal
 import stat
 import subprocess
 import tempfile
@@ -9,8 +12,8 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from abar.compare.audio.content import decode_wav_bytes
-from abar.compare.audio.importing import import_canonical_wav_bytes
+from abar.compare.audio.content import InvalidAudioObjectError, decode_wav_bytes
+from abar.compare.audio.importing import import_decoded_audio
 from abar.compare.manifests import VariantManifest
 from abar.compare.models import AudioObject, Material, Variant
 from abar.foundation.canonical_json import canonical_json_bytes, canonical_sha256
@@ -96,8 +99,10 @@ def render_variant(
     first_hash = f"sha256:{hashlib.sha256(outputs[0]).hexdigest()}"
     second_hash = f"sha256:{hashlib.sha256(outputs[1]).hexdigest()}"
     nondeterministic = None if first_hash == second_hash else (first_hash, second_hash)
-    audio = import_canonical_wav_bytes(outputs[0], objects=objects)
-    decoded = decode_wav_bytes(outputs[0])
+    try:
+        decoded = decode_wav_bytes(outputs[0])
+    except InvalidAudioObjectError as error:
+        raise RenderViolation("render_failed", f"renderer output is invalid: {error}") from error
     if decoded.channel_layout not in manifest.output_contract.channel_layouts:
         raise RenderViolation("unsupported_channel_layout")
     if decoded.sample_rate != source_audio.sample_rate or decoded.frames != source_audio.frames:
@@ -105,6 +110,8 @@ def render_variant(
             "render_timeline_mismatch",
             "renderer output must preserve source sample rate and frame extent",
         )
+    # Store only a validated output so a rejected render leaves no orphan object.
+    audio = import_decoded_audio(decoded, objects=objects)
     raw_identity: dict[str, JSONValue] = {
         "variant_id": variant.id,
         "material_id": material.id,
@@ -179,26 +186,53 @@ def _execute_command(
         workdir = (bundle / cwd).resolve()
         if not workdir.is_relative_to(bundle.resolve()) or not workdir.is_dir():
             raise RenderViolation("render_failed", "renderer cwd is invalid")
-        try:
-            subprocess.run(
-                argv,
-                cwd=workdir,
-                env=process_env,
-                check=True,
-                timeout=timeout_seconds,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-            )
-        except subprocess.CalledProcessError as error:
-            detail = (error.stderr or b"")[-4096:].decode("utf-8", errors="replace")
-            raise RenderViolation(
-                "render_failed", f"renderer exited {error.returncode}: {detail}"
-            ) from error
-        except (OSError, subprocess.SubprocessError) as error:
-            raise RenderViolation("render_failed", str(error)) from error
+        _run_renderer(argv, cwd=workdir, env=process_env, timeout_seconds=timeout_seconds)
         if not output_path.is_file():
             raise RenderViolation("render_failed", "renderer produced no output")
         return output_path.read_bytes()
+
+
+def _run_renderer(argv: list[str], *, cwd: Path, env: dict[str, str], timeout_seconds: int) -> None:
+    """Run the renderer in its own session and never leave its process group behind.
+
+    ``subprocess.run(timeout=...)`` kills only the direct child, so helpers the
+    renderer spawned would keep running (and holding the output pipes) forever.
+    """
+
+    try:
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RenderViolation("render_failed", str(error)) from error
+    try:
+        _stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except BaseException as error:
+        # Signal the group only while its leader is unreaped, so the group ID
+        # cannot have been recycled, then reap the leader.
+        if process.returncode is None:
+            _kill_process_group(process.pid)
+            process.communicate()
+        if isinstance(error, subprocess.TimeoutExpired):
+            raise RenderViolation(
+                "render_failed", f"renderer timed out after {timeout_seconds} s"
+            ) from error
+        raise
+    if process.returncode != 0:
+        detail = (stderr or b"")[-4096:].decode("utf-8", errors="replace")
+        raise RenderViolation("render_failed", f"renderer exited {process.returncode}: {detail}")
+
+
+def _kill_process_group(process_group_id: int) -> None:
+    # Already gone raises ESRCH; macOS reports EPERM for a group of only zombies.
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(process_group_id, signal.SIGKILL)
 
 
 def _extract_archive(data: bytes, destination: Path) -> None:

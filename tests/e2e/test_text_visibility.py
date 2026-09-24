@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 
 @pytest.mark.browser
@@ -69,13 +69,39 @@ def test_saved_criterion_stays_small_and_answer_controls_remain_reachable(
         purpose = page.locator(".deck-criterion")
         purpose.wait_for()
         assert purpose.inner_text() == f"目的 {criterion}"
-        assert purpose.evaluate("el => getComputedStyle(el).fontSize") == "12px"
+        # nibi の value の役割(本文より1段小さい、密度で変わる)で表示する
+        sizes = purpose.evaluate(
+            """el => [
+              parseFloat(getComputedStyle(el).fontSize),
+              parseFloat(getComputedStyle(document.documentElement)
+                .getPropertyValue('--nibi-type-value-size')),
+              parseFloat(getComputedStyle(document.body).fontSize),
+            ]"""
+        )
+        assert sizes[0] == sizes[1] and sizes[0] < sizes[2]
         assert purpose.evaluate("el => el.scrollWidth <= el.clientWidth + 1")
         assert purpose.evaluate("el => el.scrollHeight <= el.clientHeight + 1")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.screenshot(path=str(tmp_path / f"purpose-{width}.png"), full_page=True)
         page.locator(".slot-switcher button").nth(1).click()
         page.locator(".preference-scale button").nth(2).click()
+        # 主題の選択(聴いている A/B と選んだ回答)は両方ともインク反転する(nibi 0005)
+        inverted = page.evaluate(
+            """() => {
+              const probe = document.createElement('i');
+              probe.style.color = 'var(--nibi-color-selected)';
+              document.body.append(probe);
+              const color = getComputedStyle(probe).color;
+              probe.remove();
+              return color;
+            }"""
+        )
+        expect(page.locator('.preference-scale button[aria-checked="true"]')).to_have_css(
+            "background-color", inverted
+        )
+        expect(page.locator('.slot-switcher button[aria-pressed="true"]')).to_have_css(
+            "background-color", inverted
+        )
         submit = page.get_by_role("button", name="記録して次へ", exact=True)
         submit.scroll_into_view_if_needed()
         box = submit.bounding_box()

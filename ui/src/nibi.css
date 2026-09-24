@@ -1,0 +1,16 @@
+/* ABARの色の名前をnibiの役割へ写す。scripts/check_ui_contrast.py がこの別名の組をWCAG AAで検証する。
+   画面の組み方は styles.css。 */
+:root {
+  --ink: var(--nibi-color-text); --ink-hover: var(--nibi-color-text-strong);
+  --ink-2: var(--nibi-color-text-muted); --ink-3: var(--nibi-color-text-muted);
+  --muted: var(--nibi-color-text-subtle); --line: var(--nibi-color-line);
+  --line-soft: var(--nibi-color-row-alt); --control-line: var(--nibi-color-line-control);
+  --wash: var(--nibi-color-control); --bg: var(--nibi-color-bg);
+  --surface: var(--nibi-color-surface); --inverse: var(--nibi-color-on-selected);
+  --radius-card: var(--nibi-radius-panel); --radius-control: var(--nibi-radius-field);
+  --radius-badge: var(--nibi-radius-badge); --radius-pill: var(--nibi-radius-pill);
+  --speed: var(--nibi-motion-base);
+  color: var(--nibi-color-text); background: var(--nibi-color-bg);
+  font-family: var(--nibi-font-family); font-size: var(--nibi-type-body-size);
+  line-height: var(--nibi-type-body-line); font-synthesis: none;
+}

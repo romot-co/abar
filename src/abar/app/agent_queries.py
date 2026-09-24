@@ -29,6 +29,7 @@ from abar.app.views import (
     ResultBlockerView,
     TelemetryView,
 )
+from abar.compare.sealing import public_delivery
 
 
 def project_view(repository: WorkspaceRepository, *, since: int = 0) -> ProjectView:
@@ -137,8 +138,69 @@ def entity(repository: WorkspaceRepository, entity_id: str) -> EntityView:
         value = registry.get(entity_id)
         if value is not None:
             document = cast(dict[str, object], asdict(value))  # type: ignore[arg-type]
+            _seal_entity_document(state, kind, entity_id, document)
             return EntityView(entity_id=entity_id, kind=kind, document=document)
     raise ValueError("entity does not exist")
+
+
+def _seal_entity_document(
+    state: ABARState, kind: str, entity_id: str, document: dict[str, object]
+) -> None:
+    """Withhold §7.9 secrets from a raw entity document until they may be public.
+
+    A/B assignment follows the Deck's rule (`public_delivery`). Item roles, and the
+    links that reveal them (which comparison an item or Delivery plays, where a
+    repeat shares its original's comparison), stay sealed until the Project Session
+    is revealed at its end.
+    """
+    sealed: list[str] = []
+    if kind == "delivery":
+        delivery = state.compare.deliveries[entity_id]
+        session = state.compare.sessions[delivery.session_id]
+        public = public_delivery(
+            session,
+            delivery,
+            state.compare.comparisons[delivery.comparison_id],
+            session_revealed=state.compare.session_runtime[session.id].revealed,
+            delivery_answered=state.compare.effective_judgment(delivery.id) is not None,
+        )
+        if not public.revealed:
+            sealed.append("slot_assignment")
+        if _roles_sealed(state, session.id):
+            sealed.extend(("comparison_id", "session_item_id"))
+    elif kind == "session" and _roles_sealed(state, entity_id):
+        document["items"] = [
+            {**asdict(item), "comparison_id": None}
+            for item in state.compare.sessions[entity_id].items
+        ]
+        sealed.append("items.comparison_id")
+    elif kind == "project_session":
+        project_session = state.research.project_sessions[entity_id]
+        if _roles_sealed(state, project_session.core_session_id):
+            sealed.extend(
+                (
+                    "evidence_item_ids",
+                    "same_check_item_id",
+                    "repeat_check_item_id",
+                    "repeat_of_item_id",
+                )
+            )
+    elif kind == "best_update_plan":
+        plan = state.project.best_update_plans[entity_id]
+        if _roles_sealed(state, plan.session_id):
+            sealed.append("evidence_item_ids")
+    for name in sealed:
+        if name in document:
+            document[name] = None
+    if sealed:
+        document["sealed_fields"] = sealed
+
+
+def _roles_sealed(state: ABARState, core_session_id: str) -> bool:
+    linked = any(
+        item.core_session_id == core_session_id for item in state.research.project_sessions.values()
+    )
+    return linked and not state.compare.session_runtime[core_session_id].revealed
 
 
 def _project_session_documents(state: ABARState) -> tuple[ProjectSessionSnapshotView, ...]:

@@ -7,6 +7,7 @@ from abar.compare.operands import OperandResolution, resolve_operand
 from abar.compare.planning import comparison_plan
 from abar.compare.projection import CompareState
 from abar.compare.recipes import prepare
+from abar.compare.rendering import RenderOutcome
 from abar.foundation.object_store import ObjectStore
 
 
@@ -30,7 +31,7 @@ def build_comparison(
     *,
     state: CompareState,
     objects: ObjectStore,
-    render_cache: dict[str, AudioObject] | None = None,
+    render_cache: dict[str, RenderOutcome] | None = None,
 ) -> PreparedComparison:
     """Resolve, prepare, and identify one comparison without writing events."""
 

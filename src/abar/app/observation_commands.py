@@ -2,6 +2,7 @@
 
 import hashlib
 import math
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
@@ -67,7 +68,13 @@ def register_indicator(
     idempotency_key: str | None = None,
 ) -> None:
     key = operation_key(idempotency_key)
-    data = definition_path.read_bytes()
+    try:
+        data = definition_path.read_bytes()
+    except OSError as error:
+        raise CommandError(
+            "indicator_definition_unreadable",
+            f"Indicator definition file cannot be read: {definition_path}: {error.strerror}",
+        ) from error
     digest = hashlib.sha256(data).hexdigest()
     definition_sha = f"sha256:{digest}"
     definition_ref = f"obj_{digest}"
@@ -89,17 +96,31 @@ def register_indicator(
         is not None
     ):
         return
-    repository.state()
-    indicator = Indicator(
-        id=indicator_id,
-        label=label,
-        description=description,
-        definition_ref=definition_ref,
-        definition_sha=definition_sha,
-        subject_kind=subject_kind,
-        unit=unit,
-        role=role,
-    )
+    state = repository.state()
+    try:
+        indicator = Indicator(
+            id=indicator_id,
+            label=label,
+            description=description,
+            definition_ref=definition_ref,
+            definition_sha=definition_sha,
+            subject_kind=subject_kind,
+            unit=unit,
+            role=role,
+        )
+    except ValueError as error:
+        raise CommandError("invalid_indicator", str(error)) from error
+    existing = state.research.indicators.get(indicator_id)
+    if existing is not None:
+        # The reducer keeps the first definition and isolates a conflicting
+        # registration, so appending one would report success for a silent no-op.
+        if replace(existing, evidence_session_ids=()) == indicator:
+            return
+        raise CommandError(
+            "indicator_exists",
+            f"Indicator {indicator_id} is already registered with a different definition; "
+            "use a new Indicator ID, or update its role with indicator set",
+        )
     stored_definition = repository.objects.put(data)
     if stored_definition.object_id != definition_ref:
         raise CommandError("indicator_definition_store_failed")

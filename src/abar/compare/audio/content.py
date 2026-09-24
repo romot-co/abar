@@ -43,6 +43,8 @@ SUPPORTED_INPUT_FORMATS = frozenset(
     {"WAV", "WAVEX", "RF64", "W64", "AIFF", "FLAC", "OGG", "CAF", "MP3"}
 )
 
+_CORE_WAV_FORMATS = frozenset({"WAV", "WAVEX"})
+
 
 def decode_input_audio_bytes(data: bytes) -> DecodedInputAudio:
     """Decode a supported external audio container into float32 frame-major PCM."""
@@ -64,11 +66,16 @@ def decode_input_audio_bytes(data: bytes) -> DecodedInputAudio:
 
 
 def decode_wav_bytes(data: bytes) -> DecodedAudio:
-    """Decode an internal Core WAV into float32 frame-major PCM."""
+    """Decode an internal Core WAV into float32 frame-major PCM.
+
+    WAVE_FORMAT_EXTENSIBLE (libsndfile's ``WAVEX``) is the same RIFF/WAVE container
+    that many renderers emit for float or multichannel output; it is held to the same
+    mono/stereo layout and finite-sample contract as a plain WAV.
+    """
 
     try:
         with sf.SoundFile(io.BytesIO(data)) as audio_file:
-            if audio_file.format != "WAV":
+            if audio_file.format not in _CORE_WAV_FORMATS:
                 raise InvalidAudioObjectError("audio object must use the WAV container")
             return _decoded_audio(
                 audio_file.read(dtype="float32", always_2d=True),

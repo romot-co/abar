@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -14,13 +15,18 @@ from abar.cli import app
 from abar.server.request_models import ObservationSessionRequest
 from tests.conftest import persist_finite_variant
 
+# Typer colours --help when GITHUB_ACTIONS / FORCE_COLOR is set (decided at import),
+# so compare plain text.
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
 
 def test_project_init_names_existing_material_option_explicitly() -> None:
     result = CliRunner().invoke(app, ["project", "init", "--help"])
+    help_text = _ANSI.sub("", result.stdout)
 
     assert result.exit_code == 0
-    assert "--existing-material" in result.stdout
-    assert "--material-id" not in result.stdout
+    assert "--existing-material" in help_text
+    assert "--material-id" not in help_text
 
 
 def test_project_init_unknown_existing_material_explains_file_import(tmp_path: Path) -> None:

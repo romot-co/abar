@@ -12,9 +12,10 @@ from fastapi.staticfiles import StaticFiles
 
 from abar.app import commands
 from abar.app.repository import WorkspaceError
+from abar.infrastructure.object_store import ObjectIntegrityError, ObjectMissingError
 from abar.server.audio_tokens import AudioTokenStore
 from abar.server.automation_routes import build_automation_router
-from abar.server.dependencies import AccessError, build_dependencies
+from abar.server.dependencies import AccessError, PortScopedCookies, build_dependencies
 from abar.server.errors import error_response
 from abar.server.interaction_routes import build_interaction_router
 from abar.server.read_routes import build_read_router
@@ -73,6 +74,22 @@ def create_app(
     async def value_error(_request: Request, error: ValueError) -> JSONResponse:
         return error_response(409, "request_rejected", str(error))
 
+    @application.exception_handler(ObjectMissingError)
+    async def object_missing(_request: Request, error: ObjectMissingError) -> JSONResponse:
+        return error_response(409, "object_missing", str(error))
+
+    @application.exception_handler(ObjectIntegrityError)
+    async def object_corrupt(_request: Request, error: ObjectIntegrityError) -> JSONResponse:
+        return error_response(409, "object_corrupt", str(error))
+
+    @application.exception_handler(FileNotFoundError)
+    async def file_not_found(_request: Request, error: FileNotFoundError) -> JSONResponse:
+        return error_response(409, "file_not_found", _os_error_message(error))
+
+    @application.exception_handler(OSError)
+    async def filesystem_error(_request: Request, error: OSError) -> JSONResponse:
+        return error_response(500, "filesystem_error", _os_error_message(error))
+
     @application.exception_handler(KeyError)
     async def key_error(_request: Request, _error: KeyError) -> JSONResponse:
         return error_response(404, "entity_not_found", "requested entity does not exist")
@@ -99,4 +116,11 @@ def create_app(
         def index() -> FileResponse:
             return FileResponse(static_root / "index.html")
 
+    application.add_middleware(PortScopedCookies)
     return application
+
+
+def _os_error_message(error: OSError) -> str:
+    if error.filename is None:
+        return str(error)
+    return f"{error.strerror or error}: {error.filename}"

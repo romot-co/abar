@@ -121,6 +121,12 @@ def test_skipped_item_is_final_and_session_ends_incomplete(
         if item.session_id == session_id
     )
 
+    count = len(repository.events.read_all())
+    with pytest.raises(commands.CommandError) as unconfirmed:
+        commands.skip_delivery(repository, deliveries[0].id)
+    assert unconfirmed.value.code == "skip_confirmation_required"
+    assert len(repository.events.read_all()) == count
+
     commands.skip_delivery(repository, deliveries[0].id, confirmed=True)
     with pytest.raises(commands.CommandError, match="skipped Delivery cannot be answered"):
         commands.record_judgment(repository, deliveries[0].id, preference=3)

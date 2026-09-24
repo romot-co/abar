@@ -27,3 +27,6 @@ test-results/
 # Local development canon and agent instructions are intentionally unpublished.
 .dev-docs/
 CLAUDE.md
+
+# nibi の生成済みファイル(scripts/sync_nibi.py で取り込む)
+!ui/vendor/nibi/dist/

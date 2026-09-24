@@ -362,7 +362,9 @@ def active_deck(
         recipe=None if project_session is None else recipe_label(project_session.recipe),
         audio=audio,
         identity_by_slot=labeled_identity(state, public.identity_by_slot),
-        can_reveal=project_session is None and session.presentation == "blind",
+        can_reveal=project_session is None
+        and session.presentation == "blind"
+        and not runtime.revealed,
     )
 
 

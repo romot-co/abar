@@ -6,15 +6,24 @@ type Slot = "a" | "b";
 type Mode = "auto" | "manual";
 export type ComparisonAudio = { delivery_id: string; audio: DeckAudioView[] };
 export type PlayerTelemetry = { switches: number; listenMs: { a: number; b: number }; answerMs: number };
+type DeliveryStatus = { id: string | null; loading: boolean; error: string | null; heard: Record<Slot, boolean> };
+
+function initialStatus(id: string | null): DeliveryStatus {
+  return { id, loading: id !== null, error: null, heard: { a: false, b: false } };
+}
 
 export function useComparisonPlayer(comparison: ComparisonAudio | null) {
   const [activeSlot, setActiveSlot] = useState<Slot>("a");
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [loading, setLoading] = useState(comparison !== null);
-  const [error, setError] = useState<string | null>(null);
-  const [heard, setHeard] = useState<Record<Slot, boolean>>({ a: false, b: false });
+  // loading/error/heard are keyed by delivery so the first render of a new comparison
+  // never inherits the previous comparison's "both heard" state before the reset effect runs.
+  const deliveryId = comparison?.delivery_id ?? null;
+  const [status, setStatus] = useState<DeliveryStatus>(() => initialStatus(deliveryId));
+  const current = status.id === deliveryId ? status : initialStatus(deliveryId);
+  const { loading, error, heard } = current;
+  const deliveryRef = useRef(deliveryId);
   const contextRef = useRef<AudioContext | null>(null);
   const buffersRef = useRef<Record<Slot, AudioBuffer> | null>(null);
   const gainsRef = useRef<Record<Slot, GainNode> | null>(null);
@@ -32,6 +41,16 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
   const activeSlotRef = useRef<Slot>("a");
   const modeRef = useRef<Mode>("auto");
   const previousPositionRef = useRef(0);
+
+  const update = useCallback((id: string | null, change: (value: DeliveryStatus) => DeliveryStatus) => {
+    setStatus((value) => {
+      const base = value.id === id ? value : initialStatus(id);
+      return change(base);
+    });
+  }, []);
+  const markHeard = useCallback((slot: Slot) => {
+    update(deliveryRef.current, (value) => value.heard[slot] ? value : { ...value, heard: { ...value.heard, [slot]: true } });
+  }, [update]);
 
   const stopSources = useCallback(() => {
     if (!sourcesRef.current) return;
@@ -94,8 +113,8 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     gains[next].gain.linearRampToValueAtTime(1, now + 0.01);
     activeSlotRef.current = next;
     setActiveSlot(next);
-    setHeard((value) => value[next] ? value : { ...value, [next]: true });
-  }, [account]);
+    markHeard(next);
+  }, [account, markHeard]);
 
   const play = useCallback(async () => {
     const context = contextRef.current;
@@ -106,7 +125,7 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
       await context.resume();
     } catch {
       if (context === contextRef.current && generation === playGenerationRef.current) {
-        setError("音声の再生を開始できませんでした。比較を開き直してください");
+        update(deliveryRef.current, (value) => ({ ...value, error: "音声の再生を開始できませんでした。比較を開き直してください" }));
       }
       return false;
     }
@@ -120,9 +139,9 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     activeSinceRef.current = now;
     playingRef.current = true;
     setPlaying(true);
-    setHeard((value) => value[activeSlotRef.current] ? value : { ...value, [activeSlotRef.current]: true });
+    markHeard(activeSlotRef.current);
     return true;
-  }, [startSources]);
+  }, [markHeard, startSources]);
   const playRef = useRef(play);
   useEffect(() => {
     playRef.current = play;
@@ -166,15 +185,13 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
 
   const urlA = comparison?.audio.find((item) => item.slot === "A")?.url;
   const urlB = comparison?.audio.find((item) => item.slot === "B")?.url;
-  const deliveryId = comparison?.delivery_id ?? null;
   useEffect(() => {
+    deliveryRef.current = deliveryId;
     setActiveSlot("a");
     setPlaying(false);
     setPosition(0);
     setDuration(0);
-    setLoading(deliveryId !== null);
-    setError(null);
-    setHeard({ a: false, b: false });
+    setStatus(initialStatus(deliveryId));
     offsetRef.current = 0;
     startedAtContextRef.current = null;
     playingRef.current = false;
@@ -211,17 +228,19 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
         buffersRef.current = prepareLoopBuffers(context, a, b);
         durationRef.current = buffersRef.current.a.duration;
         setDuration(durationRef.current);
-        setLoading(false);
+        update(deliveryId, (value) => ({ ...value, loading: false }));
         // Browsers may reject this before the first user gesture; the Play button remains available.
         void playRef.current().catch(() => undefined);
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
-          setError(caught instanceof Error ? caught.message : "比較音声を読み込めませんでした");
-          setLoading(false);
+          const message = caught instanceof Error && caught.message === "比較音声を読み込めませんでした"
+            ? caught.message
+            : "比較音声を読み込めませんでした。画面を更新してください";
+          update(deliveryId, (value) => ({ ...value, loading: false, error: message }));
         }
       });
-    const update = () => {
+    const tick = () => {
       if (playingRef.current) {
         const now = currentPosition();
         if (modeRef.current === "auto" && now + 0.05 < previousPositionRef.current) {
@@ -230,9 +249,9 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
         previousPositionRef.current = now;
         setPosition(now);
       }
-      animationRef.current = requestAnimationFrame(update);
+      animationRef.current = requestAnimationFrame(tick);
     };
-    animationRef.current = requestAnimationFrame(update);
+    animationRef.current = requestAnimationFrame(tick);
     return () => {
       cancelled = true;
       playGenerationRef.current += 1;
@@ -245,7 +264,7 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
       buffersRef.current = null;
       gainsRef.current = null;
     };
-  }, [crossfadeTo, currentPosition, deliveryId, stopSources, urlA, urlB]);
+  }, [crossfadeTo, currentPosition, deliveryId, stopSources, update, urlA, urlB]);
 
   const seek = useCallback((seconds: number) => {
     const target = Math.max(0, Math.min(seconds, durationRef.current));

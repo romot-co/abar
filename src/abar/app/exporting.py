@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from abar.compare.models import AudioObject
-from abar.compare.operands import resolve_operand
+from abar.compare.operands import OperandResolution, resolve_operand
 from abar.compare.projection import CompareState
+from abar.compare.rendering import RenderOutcome
 from abar.foundation.canonical_json import canonical_json_bytes
 from abar.foundation.json_types import JSONValue
 from abar.foundation.object_store import ObjectStore
@@ -18,6 +18,10 @@ class ExportResult:
     variant_id: str
     output: Path
     rendered_files: tuple[Path, ...]
+    # Operand resolutions behind rendered_files. Their render/slice effects must be
+    # persisted with the export event (append_resolution_effects) so a later export
+    # or Session reuses the render instead of producing orphan objects.
+    resolutions: tuple[OperandResolution, ...] = ()
 
 
 def write_project_export(
@@ -28,6 +32,7 @@ def write_project_export(
     *,
     objects: ObjectStore,
     render_clips: Path | None = None,
+    render_cache: dict[str, RenderOutcome] | None = None,
 ) -> ExportResult:
     project = authority.project
     if project is None:
@@ -64,9 +69,10 @@ def write_project_export(
     temporary.replace(output)
 
     rendered: list[Path] = []
+    resolutions: list[OperandResolution] = []
     if render_clips is not None:
         render_clips.mkdir(parents=True, exist_ok=True)
-        render_cache: dict[str, AudioObject] = {}
+        cache: dict[str, RenderOutcome] = {} if render_cache is None else render_cache
         for material_id in project.material_ids:
             material = compare.materials[material_id]
             for clip_id in material.clip_ids:
@@ -80,11 +86,17 @@ def write_project_export(
                     input_key="p1",
                     state=compare,
                     objects=objects,
-                    render_cache=render_cache,
+                    render_cache=cache,
                 )
+                resolutions.append(resolved)
                 destination = render_clips / f"{clip_id}-{variant_id}.wav"
                 pending = destination.with_name(f".{destination.name}.tmp")
                 pending.write_bytes(objects.read(resolved.audio.object_id))
                 pending.replace(destination)
                 rendered.append(destination)
-    return ExportResult(variant_id=variant_id, output=output, rendered_files=tuple(rendered))
+    return ExportResult(
+        variant_id=variant_id,
+        output=output,
+        rendered_files=tuple(rendered),
+        resolutions=tuple(resolutions),
+    )

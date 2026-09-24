@@ -1,17 +1,18 @@
 """Project Authority use cases: policy, Current Best, simplification, and export."""
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal, cast
 
 from abar.app.actors import Actor
 from abar.app.command_support import CommandError, existing_operation, operation_key, request_hash
-from abar.app.comparison_events import append_prepared_comparisons
+from abar.app.comparison_events import append_prepared_comparisons, append_resolution_effects
 from abar.app.event_payloads import recipe_payload
 from abar.app.events import child_key, draft
 from abar.app.exporting import ExportResult, write_project_export
 from abar.app.repository import WorkspaceRepository
 from abar.app.state import ABARState
-from abar.compare.models import AudioObject, RecipeRef
+from abar.compare.models import RecipeRef
 from abar.compare.service import PreparedComparison, build_comparison
 from abar.foundation.json_types import JSONValue
 from abar.foundation.time_ids import new_id
@@ -50,6 +51,12 @@ def change_brief(
         return False
     if not human_quote.strip():
         raise CommandError("human quote is required")
+    try:
+        # The reducer rebuilds Project with this text; a value it rejects would make
+        # the appended authoritative event unreplayable and degrade the Workspace.
+        replace(project, brief_text=normalized)
+    except ValueError as error:
+        raise CommandError("invalid_brief", str(error)) from error
     repository.events.append(
         draft(
             "project.brief.changed",
@@ -214,7 +221,7 @@ def create_simplification(
 
     plan_id = new_id("simple_")
     comparisons: list[PreparedComparison] = []
-    render_cache: dict[str, AudioObject] = {}
+    render_cache = repository.render_memo
     try:
         for clip_id in scope_clip_ids:
             built = build_comparison(
@@ -364,24 +371,29 @@ def export_project(
             output,
             objects=repository.objects,
             render_clips=render_clips,
+            render_cache=repository.render_memo,
         )
     except (OSError, ValueError) as error:
         raise CommandError(str(error)) from error
     project = state.project.project
     assert project is not None
-    repository.events.append(
-        draft(
-            "in_use.recorded",
-            {
-                "project_id": project.id,
-                "variant_id": variant_id,
-                "output": str(output),
-                "render_clips": None if render_clips is None else str(render_clips),
-                "request_hash": fingerprint,
-            },
-            idempotency_key=key,
+    with repository.events.transaction(causation_id=key) as tx:
+        # Record the renders behind the exported clips so later exports and Sessions
+        # reuse them instead of re-rendering and leaving orphan objects.
+        append_resolution_effects(tx, key, result.resolutions)
+        tx.append(
+            draft(
+                "in_use.recorded",
+                {
+                    "project_id": project.id,
+                    "variant_id": variant_id,
+                    "output": str(output),
+                    "render_clips": None if render_clips is None else str(render_clips),
+                    "request_hash": fingerprint,
+                },
+                idempotency_key=key,
+            )
         )
-    )
     return result
 
 
