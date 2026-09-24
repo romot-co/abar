@@ -9,6 +9,7 @@ import soundfile as sf  # pyright: ignore[reportMissingTypeStubs]
 
 from abar.compare.audio.clip_selection import clip_id, select_default_clips
 from abar.compare.audio.content import (
+    DecodedAudio,
     audio_content_id,
     decode_input_audio_bytes,
     decode_wav_bytes,
@@ -47,6 +48,12 @@ def import_canonical_wav_bytes(data: bytes, *, objects: ObjectStore) -> AudioObj
     """Store bytes produced inside ABAR after enforcing the Core WAV contract."""
 
     decoded = decode_wav_bytes(data)
+    return _store_decoded_audio(decoded.pcm, decoded.sample_rate, objects=objects)
+
+
+def import_decoded_audio(decoded: DecodedAudio, *, objects: ObjectStore) -> AudioObject:
+    """Store already-validated decoded PCM in the canonical Core WAV form."""
+
     return _store_decoded_audio(decoded.pcm, decoded.sample_rate, objects=objects)
 
 

@@ -2,12 +2,13 @@
 
 import json
 import secrets
+import shutil
 import tempfile
 import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal, NoReturn, cast
 
 import typer
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -362,11 +363,15 @@ def variant_add(
             raise typer.BadParameter("--bundle cannot be combined with --manifest or --archive")
         if entry is None:
             raise typer.BadParameter("--bundle requires --entry")
-        built = build_command_bundle(
-            bundle,
-            entry,
-            timeout_seconds=timeout,
-            seed_mode="required" if seeded else "none",
+        bundle_entry = entry
+        built = _prepare(
+            cli,
+            lambda: build_command_bundle(
+                bundle,
+                bundle_entry,
+                timeout_seconds=timeout,
+                seed_mode="required" if seeded else "none",
+            ),
         )
         manifest_document = built.manifest
         archive_bytes = built.archive
@@ -375,10 +380,13 @@ def variant_add(
             raise typer.BadParameter("provide --bundle with --entry, or provide --manifest")
         if entry is not None or seeded or timeout != 120:
             raise typer.BadParameter("--entry, --seeded, and --timeout belong to --bundle")
-        manifest_document = _json_file(manifest)
-        archive_bytes = None if archive is None else archive.read_bytes()
-    params_document = {} if params is None else _json_file(params)
-    provenance_document = None if provenance is None else _json_file(provenance)
+        manifest_path = manifest
+        manifest_document = _prepare(cli, lambda: _json_file(manifest_path))
+        archive_bytes = None if archive is None else _prepare(cli, archive.read_bytes)
+    params_document = {} if params is None else _prepare(cli, lambda: _json_file(params))
+    provenance_document = (
+        None if provenance is None else _prepare(cli, lambda: _json_file(provenance))
+    )
 
     def register(repository: WorkspaceRepository) -> str:
         if archive_bytes is None:
@@ -537,7 +545,7 @@ def session_close(
         lambda repository: commands.close_project_session(
             repository,
             project_session_id,
-            actor_id=cli.actor or "",
+            actor_id=cli.actor or "human",
             idempotency_key=cli.idempotency_key,
         ),
         "Sessionを閉じました",
@@ -667,7 +675,9 @@ def indicator_value_record(
     cli = _ctx(context)
     _agent_required(cli)
     if batch is not None:
-        raw = _INDICATOR_BATCH.validate_json(batch.read_text(encoding="utf-8"))
+        raw = _prepare(
+            cli, lambda: _INDICATOR_BATCH.validate_json(batch.read_text(encoding="utf-8"))
+        )
 
         def record_batch(repository: WorkspaceRepository) -> int:
             for index, item in enumerate(raw):
@@ -732,19 +742,24 @@ def show_command(context: typer.Context, entity_id: Annotated[str, typer.Argumen
 @app.command("rebuild")
 def rebuild_command(context: typer.Context) -> None:
     cli = _ctx(context)
-    repository = WorkspaceRepository.open(cli.workspace)
     try:
-        result = repository.replay()
-        _emit(
-            cli,
-            {
-                "result": "ok" if result.degraded is None else "degraded",
-                "event_seq": result.processed_through_event_seq,
-            },
-            "projectionを再構築しました",
-        )
-    finally:
-        repository.close()
+        _require_workspace(cli)
+        repository = WorkspaceRepository.open(cli.workspace)
+        try:
+            result = repository.replay()
+        finally:
+            repository.close()
+    except (WorkspaceError, ValueError, OSError) as error:
+        _fail(cli, getattr(error, "code", "operation_failed"), str(error))
+    _emit(
+        cli,
+        {
+            "schema_version": 2,
+            "result": "ok" if result.degraded is None else "degraded",
+            "event_seq": result.processed_through_event_seq,
+        },
+        "projectionを再構築しました",
+    )
 
 
 @app.command("listen")
@@ -794,8 +809,7 @@ def ui(
 def _create_and_serve_quick(
     cli: Context, first: str, second: str, recipe: str, blind: bool, port: int
 ) -> None:
-    repository = WorkspaceRepository.open(cli.workspace)
-    try:
+    def create(repository: WorkspaceRepository) -> str:
         session_id = commands.create_quick_listen(
             repository,
             first,
@@ -805,8 +819,9 @@ def _create_and_serve_quick(
             idempotency_key=cli.idempotency_key,
         )
         commands.start_session(repository, session_id)
-    finally:
-        repository.close()
+        return session_id
+
+    _perform(cli, create)
     _serve(cli, port=port, open_browser=True)
 
 
@@ -863,15 +878,62 @@ def _run[ValueT](
     operation: Callable[[WorkspaceRepository], ValueT],
     message: str,
 ) -> None:
+    value = _perform(cli, operation)
+    _emit(cli, {"schema_version": 2, "result": value}, message)
+
+
+def _perform[ValueT](
+    cli: Context,
+    operation: Callable[[WorkspaceRepository], ValueT],
+) -> ValueT:
+    """Run one write against the Workspace and report failures without tracebacks.
+
+    A write may start a new Workspace (the root path is the boundary, spec 2.1), but
+    one that fails before recording anything leaves no empty Workspace behind.
+    """
+
+    created = _first_missing_ancestor(cli.workspace.absolute())
+    discard = False
     try:
         repository = WorkspaceRepository.open(cli.workspace)
         try:
-            value = operation(repository)
+            return operation(repository)
+        except BaseException:
+            discard = created is not None and repository.events.latest_sequence() == 0
+            raise
         finally:
             repository.close()
-        _emit(cli, {"schema_version": 2, "result": value}, message)
+            if discard and created is not None:
+                shutil.rmtree(created, ignore_errors=True)
+    except KeyError as error:
+        _fail(cli, "entity_not_found", f"unknown ID: {error.args[0] if error.args else error}")
     except (commands.CommandError, WorkspaceError, ValueError, OSError) as error:
         _fail(cli, getattr(error, "code", "operation_failed"), str(error))
+
+
+def _first_missing_ancestor(path: Path) -> Path | None:
+    missing: Path | None = None
+    for candidate in (path, *path.parents):
+        if candidate.exists():
+            break
+        missing = candidate
+    return missing
+
+
+def _prepare[ValueT](cli: Context, load: Callable[[], ValueT]) -> ValueT:
+    """Read and validate command input files with the same error reporting as _run."""
+
+    try:
+        return load()
+    except (ValueError, OSError) as error:
+        _fail(cli, getattr(error, "code", "invalid_input"), str(error))
+
+
+def _require_workspace(cli: Context) -> None:
+    if not (cli.workspace / "events.sqlite3").is_file():
+        raise WorkspaceError(
+            f"Workspace does not exist: {cli.workspace}. Use project init to create it."
+        )
 
 
 def _session_progress(
@@ -912,10 +974,7 @@ def _read[ValueT: BaseModel](
     message: str,
 ) -> None:
     try:
-        if not (cli.workspace / "events.sqlite3").is_file():
-            raise WorkspaceError(
-                f"Workspace does not exist: {cli.workspace}. Use project init to create it."
-            )
+        _require_workspace(cli)
         repository = WorkspaceRepository.open(cli.workspace)
         try:
             value = operation(repository)
@@ -931,15 +990,8 @@ def _run_view[ValueT: BaseModel](
     operation: Callable[[WorkspaceRepository], ValueT],
     message: str,
 ) -> None:
-    try:
-        repository = WorkspaceRepository.open(cli.workspace)
-        try:
-            value = operation(repository)
-        finally:
-            repository.close()
-        _emit(cli, value, message)
-    except (commands.CommandError, WorkspaceError, ValueError, OSError) as error:
-        _fail(cli, getattr(error, "code", "operation_failed"), str(error))
+    value = _perform(cli, operation)
+    _emit(cli, value, message)
 
 
 def _emit(cli: Context, value: BaseModel | dict[str, object], message: str) -> None:
@@ -952,7 +1004,7 @@ def _emit(cli: Context, value: BaseModel | dict[str, object], message: str) -> N
         typer.echo(message)
 
 
-def _fail(cli: Context, code: str, message: str) -> None:
+def _fail(cli: Context, code: str, message: str) -> NoReturn:
     payload = {"schema_version": 2, "error": {"code": code, "message": message}}
     if cli.json_output:
         typer.echo(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), err=False)

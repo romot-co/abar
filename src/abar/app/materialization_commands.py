@@ -8,7 +8,6 @@ from abar.app.comparison_events import append_resolution_effects
 from abar.app.events import child_key, draft
 from abar.app.repository import WorkspaceRepository
 from abar.app.views import MaterializedAudioView, VariantMaterializationView
-from abar.compare.models import AudioObject
 from abar.compare.operands import OperandResolution, resolve_operand
 from abar.foundation.json_types import JSONValue
 
@@ -61,7 +60,7 @@ def materialize_variant(
     if output_directory.exists() and not output_directory.is_dir():
         raise CommandError("materialization output must be a directory")
 
-    render_cache: dict[str, AudioObject] = {}
+    render_cache = repository.render_memo
     resolutions: list[OperandResolution] = []
     items: list[MaterializedAudioView] = []
     try:

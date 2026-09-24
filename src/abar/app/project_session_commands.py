@@ -29,7 +29,6 @@ from abar.app.events import child_key, draft
 from abar.app.repository import WorkspaceRepository
 from abar.app.state import ABARState
 from abar.compare.models import (
-    AudioObject,
     ComparisonPlan,
     CriterionSnapshot,
     PreparedPair,
@@ -236,7 +235,7 @@ def _create_project_session(
         }:
             raise CommandError("an unfinished Session with the same fingerprint already exists")
     evidence_data: list[PreparedComparison] = []
-    render_cache: dict[str, AudioObject] = {}
+    render_cache = repository.render_memo
     for index, clip_id in enumerate(selected_clips, start=1):
         material_id = state.compare.clips[clip_id].material_id
         if progress is not None:
@@ -467,6 +466,17 @@ def _select_evidence_clips(
             raise CommandError(f"Session requires exactly {count} distinct Clip IDs")
         if any(item not in state.compare.clips for item in requested):
             raise CommandError("unknown Clip")
+        outside = [
+            item
+            for item in requested
+            if state.compare.clips[item].material_id not in project.material_ids
+        ]
+        if outside:
+            raise CommandError(
+                "clip_not_in_project",
+                "evidence Clips must belong to Materials attached to the Project: "
+                + ", ".join(outside),
+            )
         selection = explicit_selection(requested)
     else:
         try:

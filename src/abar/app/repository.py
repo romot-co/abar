@@ -1,12 +1,13 @@
 """Workspace persistence boundary used by all application use cases."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from platformdirs import user_data_path
 
 from abar.app.replay_cache import ReplayCache
 from abar.app.state import EVENT_SCHEMAS, ABARState, reduce_state
+from abar.compare.rendering import RenderOutcome
 from abar.foundation.replay import ReplayResult, full_replay
 from abar.infrastructure.object_store import ImmutableObjectStore
 from abar.infrastructure.sqlite_event_store import EventStore
@@ -31,6 +32,10 @@ class WorkspaceRepository:
     objects: ImmutableObjectStore
     cache: ReplayCache | None = None
     database_identity: tuple[int, int] = (0, 0)
+    # Renders are expensive and deterministic per Variant, Material and runtime.
+    # Keeping them for the repository's lifetime lets a command that lost a write
+    # race re-validate against fresh state without invoking the renderer again.
+    render_memo: dict[str, RenderOutcome] = field(default_factory=dict[str, RenderOutcome])
 
     @classmethod
     def open(
@@ -71,4 +76,5 @@ class WorkspaceRepository:
                 f"{degraded.schema_version}) degraded replay: {degraded.reason}. "
                 "Preserve this Workspace and create a new one; pre-release events are not migrated."
             )
+        self.events.observe(result.processed_through_event_seq)
         return result.state

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, UploadFile
 
 from abar.app import commands
 from abar.app.actors import Actor
+from abar.app.catalog_commands import UploadIdentity
 from abar.app.queries import session_result
 from abar.app.repository import WorkspaceRepository
 from abar.app.views import ActionView, SessionResultView, VariantMaterializationView
@@ -64,8 +65,14 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
         suffix = Path(file.filename or "upload.wav").suffix
         temporary = repository.root / f".upload-{secrets.token_urlsafe(12)}{suffix}"
         try:
-            temporary.write_bytes(await file.read())
-            audio_id = commands.import_audio(repository, temporary, idempotency_key=key)
+            data = await file.read()
+            temporary.write_bytes(data)
+            audio_id = commands.import_audio(
+                repository,
+                temporary,
+                upload=UploadIdentity.of(data, file.filename),
+                idempotency_key=key,
+            )
             return ActionView(result="imported", id=audio_id)
         finally:
             temporary.unlink(missing_ok=True)
@@ -82,12 +89,14 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
         suffix = Path(file.filename or "material.wav").suffix
         temporary = repository.root / f".material-{secrets.token_urlsafe(12)}{suffix}"
         try:
-            temporary.write_bytes(await file.read())
+            data = await file.read()
+            temporary.write_bytes(data)
             material_id = commands.add_material(
                 repository,
                 temporary,
                 source_group=source_group,
                 name=file.filename,
+                upload=UploadIdentity.of(data, file.filename),
                 idempotency_key=key,
             )
             return ActionView(result="registered", id=material_id)

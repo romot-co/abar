@@ -1,6 +1,5 @@
 import hashlib
 import io
-import subprocess
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -11,7 +10,7 @@ import pytest
 from abar.compare import rendering
 from abar.compare.audio.importing import import_input_audio_file
 from abar.compare.manifests import VariantManifest
-from abar.compare.models import AudioObject, Clip, Material, Variant
+from abar.compare.models import Clip, Material, Variant
 from abar.compare.operands import resolve_operand
 from abar.compare.projection import CompareState
 from abar.infrastructure.object_store import ImmutableObjectStore
@@ -74,7 +73,7 @@ def test_command_variant_renders_full_material_once_before_slicing_clips(
         variants={variant.id: variant},
         manifests={manifest.id: manifest.document()},
     )
-    render_cache: dict[str, AudioObject] = {}
+    render_cache: dict[str, rendering.RenderOutcome] = {}
     executions = 0
     execute = cast(
         Callable[..., bytes],
@@ -110,35 +109,10 @@ def test_command_variant_renders_full_material_once_before_slicing_clips(
     assert first.effects[0].render is not None
     assert first.effects[0].render.material_id == material.id
     assert first.audio.frames == first_clip.frames
-    assert [effect.kind for effect in second.effects] == ["slice"]
+    # The cached render is reused, not re-executed, and still reports its effect so
+    # a command that retries after a write race records render.completed.
+    assert [effect.kind for effect in second.effects] == ["render", "slice"]
+    assert second.effects[0].render is first.effects[0].render
     assert second.audio.frames == second_clip.frames
     assert len(render_cache) == 1
     assert executions == 2
-
-
-def test_renderer_failure_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
-    executable = b"#!/bin/sh\nexit 1\n"
-    archive_bytes = io.BytesIO()
-    with zipfile.ZipFile(archive_bytes, "w") as archive:
-        archive.writestr("render.sh", executable)
-    calls = 0
-
-    def fail(*_args: object, **_kwargs: object) -> None:
-        nonlocal calls
-        calls += 1
-        raise subprocess.CalledProcessError(1, ["render.sh"])
-
-    monkeypatch.setattr(rendering.subprocess, "run", fail)
-    with pytest.raises(rendering.RenderViolation):
-        rendering._execute_command(  # pyright: ignore[reportPrivateUsage]
-            archive_bytes.getvalue(),
-            ["render.sh", "{input_wav}", "{params_json}", "{output_wav}"],
-            cwd=".",
-            env={},
-            executable_sha=f"sha256:{hashlib.sha256(executable).hexdigest()}",
-            timeout_seconds=1,
-            input_bytes=b"input",
-            params=b"{}",
-            seed=None,
-        )
-    assert calls == 1

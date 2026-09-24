@@ -444,7 +444,9 @@ def skip_delivery(
         ),
         None,
     )
-    if plan is not None and delivery.session_item_id in plan.evidence_item_ids and not confirmed:
+    # Ask for every item of a Plan Session, not only evidence: answering differently
+    # for same/repeat checks would reveal the sealed item role before Session end.
+    if plan is not None and not confirmed:
         raise CommandError("skip_confirmation_required")
     session = state.compare.sessions[delivery.session_id]
     should_end = _would_complete(state, session.id, skipped_delivery_id=delivery_id)
@@ -469,7 +471,7 @@ def skip_delivery(
                     idempotency_key=child_key(key, 1),
                 )
             )
-            if _project_session_for_core(state, session.id) is not None:
+            if _reveals_on_end(state, session):
                 tx.append(
                     draft(
                         "session.revealed",
@@ -534,7 +536,7 @@ def abandon_session(
                 idempotency_key=child_key(key, 0),
             )
         )
-        if _project_session_for_core(state, session_id) is not None:
+        if _reveals_on_end(state, state.compare.sessions[session_id]):
             tx.append(
                 draft(
                     "session.revealed",
@@ -542,6 +544,18 @@ def abandon_session(
                     idempotency_key=child_key(key, 1),
                 )
             )
+
+
+def _reveals_on_end(state: ABARState, session: Session) -> bool:
+    """Whether ending the Session also reveals it, whichever way it ends.
+
+    Project Sessions reveal on end. A Quick Listen that reveals after answering has
+    nothing left to answer once it ends by skip or abandonment either.
+    """
+    return (
+        _project_session_for_core(state, session.id) is not None
+        or session.reveal_policy == "after_answer_or_manual"
+    )
 
 
 def _persist_comparison_session(

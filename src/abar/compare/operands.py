@@ -40,7 +40,7 @@ def resolve_operand(
     state: CompareState,
     objects: ObjectStore,
     runtime: str | None = None,
-    render_cache: dict[str, AudioObject] | None = None,
+    render_cache: dict[str, RenderOutcome] | None = None,
 ) -> OperandResolution:
     if text.startswith("audio:"):
         audio_id = text.removeprefix("audio:")
@@ -130,7 +130,9 @@ def resolve_operand(
         if cached_audio_id is not None:
             rendered_material = state.audio[cached_audio_id]
         elif locally_cached is not None:
-            rendered_material = locally_cached
+            # Not yet persisted: keep the render effect so the caller records it.
+            outcome = locally_cached
+            rendered_material = locally_cached.audio
         else:
             outcome = render_variant(
                 variant,
@@ -142,7 +144,7 @@ def resolve_operand(
             )
             rendered_material = outcome.audio
             if render_cache is not None:
-                render_cache[cache_key] = rendered_material
+                render_cache[cache_key] = outcome
         audio = slice_audio(
             rendered_material,
             start_frame=clip.start_frame,

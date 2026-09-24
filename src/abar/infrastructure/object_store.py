@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import os
 import re
@@ -14,6 +15,10 @@ class InvalidObjectIdError(ValueError):
 
 class ObjectIntegrityError(RuntimeError):
     """Raised when stored bytes do not match their content address."""
+
+
+class ObjectMissingError(FileNotFoundError):
+    """Raised when an object referenced by ID is absent from the store."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +75,7 @@ class ImmutableObjectStore:
         try:
             data = path.read_bytes()
         except FileNotFoundError:
-            raise FileNotFoundError(f"object does not exist: {object_id}") from None
+            raise ObjectMissingError(f"object does not exist: {object_id}") from None
         if hashlib.sha256(data).hexdigest() != digest:
             raise ObjectIntegrityError(f"object content does not match ID: {object_id}")
         return data
@@ -83,11 +88,14 @@ class ImmutableObjectStore:
         return self._root / digest[:2] / digest[2:]
 
     def _ensure_bucket(self, bucket: Path) -> None:
-        if bucket.exists():
-            if not bucket.is_dir():
-                raise ObjectIntegrityError(f"object bucket is not a directory: {bucket.name}")
+        if bucket.is_dir():
             return
-        bucket.mkdir()
+        # Concurrent writers (UI and agent CLI) may create the same bucket; a
+        # non-directory in its place still fails the check below.
+        with contextlib.suppress(FileExistsError):
+            bucket.mkdir(exist_ok=True)
+        if not bucket.is_dir():
+            raise ObjectIntegrityError(f"object bucket is not a directory: {bucket.name}")
         self._fsync_directory(self._root)
 
     @staticmethod

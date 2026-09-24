@@ -73,7 +73,7 @@ def test_pending_autoplay_owns_only_one_source_pair(
         # Autoplay has requested resume(), but the browser has not granted it yet.
         page.wait_for_function("audioProbe.contexts.some(c => c.resumes.length > 0)")
         page.locator(".slot-switcher button").nth(1).click()
-        page.get_by_role("button", name="Play", exact=True).click()
+        page.get_by_role("button", name="再生", exact=True).click()
         if action != "keep":
             page.get_by_role("button", name="受信箱", exact=True).click()
             page.get_by_role("heading", name="残りのセッション", exact=True).wait_for()
@@ -82,9 +82,9 @@ def test_pending_autoplay_owns_only_one_source_pair(
             page.locator(".slot-switcher button:not(:disabled)").first.wait_for()
         page.evaluate("audioProbe.contexts.forEach(c => c.release())")
         if action != "leave":
-            page.get_by_role("button", name="Pause", exact=True).wait_for()
+            page.get_by_role("button", name="一時停止", exact=True).wait_for()
             assert page.evaluate("audioProbe.sources.filter(s => s.started).length") == 2
-            page.get_by_role("button", name="Pause", exact=True).click()
+            page.get_by_role("button", name="一時停止", exact=True).click()
         # No delayed start may leak into a paused/unmounted deck, and Pause must stop all sound.
         assert (
             page.evaluate(

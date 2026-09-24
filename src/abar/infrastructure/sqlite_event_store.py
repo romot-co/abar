@@ -25,6 +25,10 @@ class EventIntegrityError(RuntimeError):
     pass
 
 
+class ConcurrentWriteError(RuntimeError):
+    """Another writer appended after the state this connection validated against."""
+
+
 class EventTransaction:
     def __init__(self, store: "EventStore", causation_id: str | None) -> None:
         self._store = store
@@ -58,6 +62,13 @@ class EventStore:
         ).fetchone()
         if schema_exists is None:
             self._create_schema()
+        # Event sequence of the projection the caller last validated against. A write
+        # transaction refuses to start when another writer appended after it, so a
+        # command never commits events that were checked against a stale projection.
+        self._observed_seq: int | None = None
+
+    def observe(self, event_seq: int) -> None:
+        self._observed_seq = event_seq
 
     def _create_schema(self) -> None:
         self._connection.executescript(
@@ -94,12 +105,19 @@ class EventStore:
     def transaction(self, *, causation_id: str | None = None) -> Generator[EventTransaction]:
         try:
             self._connection.execute("BEGIN IMMEDIATE")
+            if self._observed_seq is not None and self.latest_sequence() != self._observed_seq:
+                raise ConcurrentWriteError("Workspace changed after the command read its state")
             yield EventTransaction(self, causation_id)
         except BaseException:
             self._connection.rollback()
             raise
         else:
+            # Read inside the write lock: our own appends extend the validated
+            # projection, but a writer committing right after us must not.
+            committed_seq = self.latest_sequence()
             self._connection.commit()
+            if self._observed_seq is not None:
+                self._observed_seq = committed_seq
 
     def append_in_transaction(self, draft: EventDraft) -> EventEnvelope:
         payload_text = canonical_json_bytes(draft.payload).decode("utf-8")

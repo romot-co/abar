@@ -1,7 +1,8 @@
 """ui/src/styles.css のカラートークンが WCAG 2.1 AA を満たすか検証する。
 
 テキスト系ペア(ink/ink-2/ink-3 と bg/surface/wash、反転ペア)が
-4.5:1 以上であることを確認する。落ちたらexit 1。
+4.5:1 以上、フォームコントロールの境界(control-line)が
+3:1 以上(WCAG 1.4.11)であることを確認する。落ちたらexit 1。
 
     uv run python scripts/check_ui_contrast.py
 """
@@ -21,8 +22,10 @@ TOKENS = (
     "ink-2",
     "ink-3",
     "inverse",
+    "control-line",
 )
 AA_NORMAL = 4.5
+AA_NON_TEXT = 3.0
 
 TEXT_PAIRS: tuple[tuple[str, str], ...] = (
     ("ink", "bg"),
@@ -33,6 +36,12 @@ TEXT_PAIRS: tuple[tuple[str, str], ...] = (
     ("ink-3", "surface"),
     ("ink-3", "bg"),
     ("inverse", "ink"),
+)
+
+CONTROL_PAIRS: tuple[tuple[str, str], ...] = (
+    ("control-line", "bg"),
+    ("control-line", "surface"),
+    ("control-line", "wash"),
 )
 
 
@@ -77,6 +86,12 @@ def main() -> int:
             marker = "ok" if ratio >= AA_NORMAL else "FAIL"
             print(f"{theme:5s} {foreground:>8s} on {background:<14s} {ratio:5.2f} {marker}")
             if ratio < AA_NORMAL:
+                failures.append(f"{theme}: {foreground} on {background} = {ratio:.2f}")
+        for foreground, background in CONTROL_PAIRS:
+            ratio = _ratio(tokens[foreground], tokens[background])
+            marker = "ok" if ratio >= AA_NON_TEXT else "FAIL"
+            print(f"{theme:5s} {foreground:>8s} on {background:<14s} {ratio:5.2f} {marker}")
+            if ratio < AA_NON_TEXT:
                 failures.append(f"{theme}: {foreground} on {background} = {ratio:.2f}")
     if failures:
         print("\nWCAG AA違反:")

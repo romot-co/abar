@@ -1,6 +1,8 @@
 """Project catalog use cases: Project, Material, Clip, Audio, and Variant registration."""
 
 import hashlib
+import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -12,11 +14,34 @@ from abar.compare.audio.clip_selection import manual_clip_id
 from abar.compare.audio.importing import import_input_audio_file, import_material_file, slice_audio
 from abar.compare.bundles import validate_command_archive
 from abar.compare.manifests import VariantManifest
-from abar.compare.models import RecipeRef
+from abar.compare.models import Clip, RecipeRef
 from abar.compare.variants import register_variant
 from abar.foundation.json_types import JSONValue
 from abar.foundation.time_ids import new_id
 from abar.project.models import Project
+
+
+@dataclass(frozen=True, slots=True)
+class UploadIdentity:
+    """What an uploaded file is, independent of the spool path it was written to.
+
+    An HTTP upload lands on a fresh temporary path per request, so identifying the
+    request by that path would make every retry under the same Idempotency-Key look
+    like a different request.
+    """
+
+    sha256: str
+    filename: str | None
+
+    @classmethod
+    def of(cls, data: bytes, filename: str | None) -> "UploadIdentity":
+        return cls(f"sha256:{hashlib.sha256(data).hexdigest()}", filename)
+
+
+def _source_identity(path: Path, upload: UploadIdentity | None) -> dict[str, JSONValue]:
+    if upload is None:
+        return {"path": str(path.expanduser().resolve())}
+    return {"upload": {"sha256": upload.sha256, "filename": upload.filename}}
 
 
 def init_project(
@@ -128,13 +153,14 @@ def add_material(
     *,
     source_group: str | None = None,
     name: str | None = None,
+    upload: UploadIdentity | None = None,
     idempotency_key: str | None = None,
 ) -> str:
     key = operation_key(idempotency_key)
     fingerprint = request_hash(
         "material.add",
         {
-            "path": str(path.expanduser().resolve()),
+            **_source_identity(path, upload),
             "source_group": source_group,
             "name": name,
         },
@@ -212,10 +238,11 @@ def import_audio(
     repository: WorkspaceRepository,
     path: Path,
     *,
+    upload: UploadIdentity | None = None,
     idempotency_key: str | None = None,
 ) -> str:
     key = operation_key(idempotency_key)
-    fingerprint = request_hash("audio.import", {"path": str(path.expanduser().resolve())})
+    fingerprint = request_hash("audio.import", _source_identity(path, upload))
     existing = existing_operation(repository, key, "audio.imported", request_hash=fingerprint)
     if existing is not None:
         return cast(str, existing.payload["audio_id"])
@@ -247,6 +274,8 @@ def add_clip(
     role: str | None = None,
     idempotency_key: str | None = None,
 ) -> str:
+    if not (math.isfinite(start_seconds) and math.isfinite(duration_seconds)):
+        raise CommandError("invalid_clip", "Clip start and duration must be finite")
     key = operation_key(idempotency_key)
     fingerprint = request_hash(
         "clip.add",
@@ -268,7 +297,15 @@ def add_clip(
     start_frame = round(start_seconds * source.sample_rate)
     frames = round(duration_seconds * source.sample_rate)
     clip = manual_clip_id(material_id, start_frame, frames, role)
-    sliced = slice_audio(source, start_frame=start_frame, frames=frames, objects=repository.objects)
+    try:
+        # The reducer rebuilds this Clip from the appended event; reject what it
+        # would reject before the authoritative event exists.
+        Clip(clip, material_id, start_frame, frames, role)
+        sliced = slice_audio(
+            source, start_frame=start_frame, frames=frames, objects=repository.objects
+        )
+    except ValueError as error:
+        raise CommandError("invalid_clip", str(error)) from error
     repository.events.append(
         draft(
             "audio.slice.created",
@@ -322,7 +359,14 @@ def add_variant(
         provenance=provenance,
     )
     manifest = registration.manifest
-    archive_bytes = repository.objects.read(manifest.source_archive.object_id)
+    try:
+        archive_bytes = repository.objects.read(manifest.source_archive.object_id)
+    except FileNotFoundError as error:
+        raise CommandError(
+            "object_missing",
+            f"Variant source archive is not in the Workspace object store: "
+            f"{manifest.source_archive.object_id}; import it with the archive",
+        ) from error
     _validate_variant_archive(manifest, archive_bytes)
     state = repository.state()
     existing_variant = state.compare.variants.get(registration.variant.id)

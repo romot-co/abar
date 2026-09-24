@@ -23,8 +23,19 @@ def append_resolution_effects(
     persisted_audio: set[str] = set() if seen_audio is None else seen_audio
     for resolution in resolutions:
         for effect in resolution.effects:
-            if effect.audio.id in persisted_audio:
+            # A render is identified by Variant, Material and runtime, not by its
+            # output: two Variants that render byte-identical audio each need their
+            # own render.completed, or the second is re-rendered on every later use.
+            seen_key = (
+                "render:"
+                f"{resolution.operand.provenance_ref.get('variant_ref')}:"
+                f"{effect.render.material_id}:{effect.render.runtime_fingerprint}"
+                if effect.render is not None
+                else effect.audio.id
+            )
+            if seen_key in persisted_audio:
                 continue
+            persisted_audio.add(seen_key)
             persisted_audio.add(effect.audio.id)
             event_type = (
                 "render.completed"

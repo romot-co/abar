@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { api, type Action, type Project, type SessionCompletion } from "../api";
 import { humanError } from "../errors";
 import type { RelistenItemView, SessionResultView } from "../generated";
@@ -29,6 +30,11 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
     },
   });
 
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const loaded = completion.data !== undefined;
+  // 回答ボタンが消えた後のフォーカスをbodyへ落とさず、結果の見出しへ移す。
+  useEffect(() => { if (loaded) headingRef.current?.focus({ preventScroll: true }); }, [loaded]);
+
   if (completion.isPending) return <main className="centered">結果をまとめています…</main>;
   if (completion.isError || !completion.data) return <main className="centered error-panel"><h1>結果を表示できません</h1><p>{completion.error ? humanError(completion.error) : null}</p><button type="button" className="secondary-action" onClick={onBack}>受信箱へ</button></main>;
 
@@ -40,10 +46,10 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   return (
     <main className="summary-shell">
       <p className="result-eyebrow">
-        {data.current_best_check ? "現在最良チェック" : "観察"} · 全{data.comparison_count}比較
+        {data.current_best_check ? "現在最良チェック" : result ? "観察" : "試聴"} · 全{data.comparison_count}比較
         {data.recipe ? <> · <span>{`Recipe ${data.recipe}`}</span></> : ""}
       </p>
-      <h1>{data.focus ?? "比較の結果"}</h1>
+      <h1 ref={headingRef} tabIndex={-1}>{data.focus ?? "比較の結果"}</h1>
 
       <section className={result?.current_best_updated ? "verdict-card updated" : "verdict-card"}>
         <strong>{verdict.title}</strong>
@@ -68,7 +74,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
           </button>
         )}
       </div>
-      {start.isError && <p className="inline-error">{humanError(start.error)}</p>}
+      {start.isError && <p className="inline-error" role="alert">{humanError(start.error)}</p>}
     </main>
   );
 }
@@ -77,7 +83,6 @@ function AnswerRow({ item, result }: { item: RelistenItemView; result: SessionRe
   const preference = item.skipped ? null : item.judgment?.preference ?? null;
   const note = answerNote(item);
   const judgment = rowJudgment(item, preference, result);
-  const displayedJudgment = item.skipped && !["same", "repeat"].includes(item.role) ? "skip" : judgment;
   return (
     <div className="answer-table-row">
       <span>{item.sequence_index + 1}</span>
@@ -88,12 +93,12 @@ function AnswerRow({ item, result }: { item: RelistenItemView; result: SessionRe
         {item.material_name && <small>{item.material_name}</small>}
       </span>
       <span className="result-judgment">
-        <span className="answer-gauge" aria-label={judgment}>
+        <span className="answer-gauge" aria-hidden="true">
           {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
         </span>
-        <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{displayedJudgment}</strong>
+        <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{judgment}</strong>
       </span>
-      <span className="answer-note" title={note}>{note}</span>
+      <span className="answer-note" title={note || undefined}>{note}</span>
     </div>
   );
 }
@@ -111,9 +116,10 @@ function rowJudgment(
   result: SessionResultView | null,
 ): string {
   if (preference === null) {
-    if (item.role === "same") return "同一音: 未回答";
-    if (item.role === "repeat") return "再現性: 未回答";
-    return "回答なし";
+    const missing = item.skipped ? "飛ばした" : "未回答";
+    if (item.role === "same") return `同一音: ${missing}`;
+    if (item.role === "repeat") return `再現性: ${missing}`;
+    return item.skipped ? "飛ばした" : "回答なし";
   }
   if (item.role === "same") {
     const strength = preference === 1 || preference === 5 ? "明確" : "わずか";
@@ -127,8 +133,7 @@ function rowJudgment(
 }
 
 function answerNote(item: RelistenItemView): string {
-  if (item.skipped) return "skip";
-  if (!item.judgment) return "";
+  if (item.skipped || !item.judgment) return "";
   const notes: string[] = [];
   for (const slot of ["a", "b"] as const) {
     const blocker = item.judgment.blockers[slot];
@@ -142,12 +147,14 @@ function answerNote(item: RelistenItemView): string {
 
 function verdictCopy(data: SessionCompletion): { title: string; detail: string } {
   const result = data.result;
-  if (!result) return { title: "比較を記録しました", detail: "結果はProject Sessionへ記録されていません。" };
+  if (!result) return { title: "比較を記録しました", detail: "この試聴はProjectに属さないため、現在最良は変わりません。" };
   const detail = `${resultBreakdown(result)}${qcBreakdown(result, data.items)}`;
   if (data.current_best_check) {
-    return result.current_best_updated
-      ? { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新しました`, detail }
-      : { title: "現在最良を維持します", detail };
+    if (result.current_best_updated) {
+      return { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新しました`, detail };
+    }
+    const reason = keepReason(result);
+    return { title: "現在最良を維持します", detail: reason ? `${reason} · ${detail}` : detail };
   }
   const directional = Object.keys(result.variant_labels).map((variantId) => result.evidence_direction_counts[variantId] ?? 0);
   const tieCount = result.evidence_direction_counts.tie ?? 0;
@@ -161,6 +168,19 @@ function verdictCopy(data: SessionCompletion): { title: string; detail: string }
     title: "観察として記録しました（現在最良は変わりません）",
     detail: `${conclusion} · ${detail}`,
   };
+}
+
+// 更新しなかった理由を、サーバーの判定順(未回答 → blocker → 優勢条件)に合わせて一つだけ示す。
+function keepReason(result: SessionResultView): string | null {
+  const evidence = result.best_update_evidence;
+  if (!evidence) return null;
+  if (evidence.answered_count < evidence.evidence_count) return "飛ばした比較があるため、更新条件を満たしませんでした";
+  if (evidence.blocker_count > 0) return "提案版に残せない問題が報告されたため、更新しませんでした";
+  if (evidence.favorable_count < result.favored_required_count) {
+    return `提案版を支持した比較が${evidence.favorable_count}件で、優勢条件（${result.favored_required_count}件）に届きませんでした`;
+  }
+  if (evidence.score_sum <= 0) return "提案版への支持が反対の回答を上回らず、優勢条件を満たしませんでした";
+  return null;
 }
 
 function resultBreakdown(result: SessionResultView): string {
