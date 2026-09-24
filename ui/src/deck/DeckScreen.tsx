@@ -4,7 +4,7 @@ import { api, type Action, type Deck, type Judgment } from "../api";
 import { humanError, isNetworkError, isSkipConfirmationRequired } from "../errors";
 import { useComparisonPlayer } from "../useComparisonPlayer";
 import { EMPTY_DRAFT, buildRequest, type AnswerDraft } from "./answerDraft";
-import { AnswerEditor, DeckHeader, ListeningPanel, PausedPanel, SkipConfirmBar } from "./DeckPanels";
+import { AnswerDock, AnswerEditor, DeckHeader, ListeningPanel, PausedPanel, SkipConfirmBar } from "./DeckPanels";
 import { SessionSummary } from "./SessionSummary";
 import { useDeckShortcuts } from "./useDeckShortcuts";
 
@@ -171,8 +171,10 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
       <main className="centered error-panel">
         <h1>{isNetworkError(loadError) ? "サーバーに接続できません" : "比較を読み込めません"}</h1>
         <p>{humanError(loadError)}</p>
-        <button type="button" className="nibi-button secondary-action" onClick={() => void loadDeck()}>再試行</button>
-        <button type="button" className="nibi-button nibi-button--quiet weak-action" onClick={onBack}>受信箱へ</button>
+        <div className="centered-actions">
+          <button type="button" className="nibi-button secondary-action" onClick={() => void loadDeck()}>再試行</button>
+          <button type="button" className="nibi-button nibi-button--quiet weak-action" onClick={onBack}>受信箱へ</button>
+        </div>
       </main>
     );
   }
@@ -181,7 +183,9 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
       <main className="centered error-panel">
         <h1>進行中のセッションはありません</h1>
         <p>受信箱から次のセッションを始めてください。</p>
-        <button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button>
+        <div className="centered-actions">
+          <button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button>
+        </div>
       </main>
     );
   }
@@ -199,45 +203,50 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
   const skipError = skip.isError && skip.variables.deliveryId === deliveryId && !skipConfirm ? humanError(skip.error) : null;
   const revealError = reveal.isError ? humanError(reveal.error) : null;
   return (
-    <main className="deck-shell">
-      <div className="deck-top">
-        <DeckHeader deck={deck} onLeave={leave} />
-        {skipConfirm && (
+    <div className="docked-screen">
+      <main className="screen deck-shell">
+        <div className="deck-top">
+          <DeckHeader deck={deck} onLeave={leave} />
+          {actionError && <p className="inline-error" role="alert">{actionError}</p>}
+          {skipError && <p className="inline-error" role="alert">{skipError}</p>}
+          {revealError && <p className="inline-error" role="alert">{revealError}</p>}
+          {showHelp && <aside className="nibi-card shortcut-help" aria-label="キーボード操作">Space A/B切替 · 1〜5 選好 · A/B 問題の指摘 · N メモ · Enter 記録 · 0 飛ばす · ? この一覧（ボタンにフォーカスがあるときの Space・Enter はそのボタンを押します）</aside>}
+        </div>
+        <ListeningPanel
+          player={player}
+          deck={deck}
+          groupRef={slotGroupRef}
+          revealing={reveal.isPending}
+          onReveal={() => { if (deck.session_id) reveal.mutate(deck.session_id); }}
+        />
+        <div className="deck-answer">
+          <AnswerEditor
+            question={deck.question ?? "どちらを残しますか？"}
+            locked={!canAnswer}
+            draft={draft}
+            commentRef={commentRef}
+            error={answerError}
+            onChange={setDraft}
+          />
+        </div>
+      </main>
+      <AnswerDock
+        revealed={draft.preference !== null}
+        canSubmit={canSubmit}
+        pending={answer.isPending}
+        skippable={canSkip}
+        skipping={skip.isPending}
+        confirm={skipConfirm ? (
           <SkipConfirmBar
             deck={deck}
             pending={skip.isPending}
             onConfirm={() => requestSkip(true)}
             onCancel={() => { if (skip.isPending) return; setSkipConfirmFor(null); skip.reset(); }}
           />
-        )}
-        {actionError && <p className="inline-error" role="alert">{actionError}</p>}
-        {skipError && <p className="inline-error" role="alert">{skipError}</p>}
-        {revealError && <p className="inline-error" role="alert">{revealError}</p>}
-        {showHelp && <aside className="shortcut-help" aria-label="キーボード操作">Space A/B切替 · 1〜5 選好 · A/B 問題の指摘 · N メモ · Enter 記録 · 0 飛ばす · ? この一覧（ボタンにフォーカスがあるときの Space・Enter はそのボタンを押します）</aside>}
-      </div>
-      <ListeningPanel
-        player={player}
-        deck={deck}
-        groupRef={slotGroupRef}
-        revealing={reveal.isPending}
-        onReveal={() => { if (deck.session_id) reveal.mutate(deck.session_id); }}
+        ) : null}
+        onSubmit={submit}
+        onSkip={() => requestSkip(false)}
       />
-      <div className="deck-answer">
-        <AnswerEditor
-          question={deck.question ?? "どちらを残しますか？"}
-          skippable={canSkip}
-          locked={!canAnswer}
-          draft={draft}
-          commentRef={commentRef}
-          pending={answer.isPending}
-          error={answerError}
-          canSubmit={canSubmit}
-          skipping={skip.isPending}
-          onChange={setDraft}
-          onSubmit={submit}
-          onSkip={() => requestSkip(false)}
-        />
-      </div>
-    </main>
+    </div>
   );
 }

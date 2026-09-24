@@ -1,16 +1,13 @@
 import type { ReactNode } from "react";
 
-export type IconName = "arrow_back" | "pause" | "play_arrow" | "unfold_more";
+export type IconName = "chevron_left" | "chevron_right" | "check" | "pause" | "play_arrow" | "warning";
 
 /* Material Iconsのリガチャフォント代替。24pxグリッドのstrokeアイコン(Lucide系)。
-   アイコンは機能を持つもの(戻る・再生/停止・ピッカー開閉)に限る。装飾には使わない。 */
+   アイコンは機能か状態を持つもの(戻る・開閉・再生/停止・聴取済・問題あり)に限る。装飾には使わない。 */
 const PATHS: Record<IconName, ReactNode> = {
-  arrow_back: (
-    <>
-      <path d="M19 12H5" />
-      <path d="m12 19-7-7 7-7" />
-    </>
-  ),
+  chevron_left: <path d="m15 18-6-6 6-6" />,
+  chevron_right: <path d="m9 18 6-6-6-6" />,
+  check: <path d="M20 6 9 17l-5-5" />,
   pause: (
     <>
       <rect x="14" y="4" width="4" height="16" rx="1" />
@@ -18,10 +15,11 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   play_arrow: <path d="m6 3 14 9-14 9z" fill="currentColor" />,
-  unfold_more: (
+  warning: (
     <>
-      <path d="m7 15 5 5 5-5" />
-      <path d="m7 9 5-5 5 5" />
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
     </>
   ),
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import type { Deck } from "../api";
 import { Icon } from "../Icon";
 import type { ComparisonPlayer } from "../useComparisonPlayer";
@@ -8,8 +8,10 @@ export function PausedPanel({ pending, onResume, onBack }: { pending: boolean; o
   return (
     <main className="centered pause-panel">
       <h1>途中から再開できます</h1>
-      <button type="button" className="nibi-button nibi-button--primary primary-action" disabled={pending} onClick={onResume}><Icon name="play_arrow" />再開</button>
-      <button type="button" className="nibi-button nibi-button--quiet weak-action" onClick={onBack}>受信箱へ</button>
+      <div className="centered-actions">
+        <button type="button" className="nibi-button nibi-button--primary primary-action" disabled={pending} onClick={onResume}><Icon name="play_arrow" />再開</button>
+        <button type="button" className="nibi-button nibi-button--quiet weak-action" onClick={onBack}>受信箱へ</button>
+      </div>
     </main>
   );
 }
@@ -19,9 +21,11 @@ export function DeckHeader({ deck, onLeave }: { deck: Deck; onLeave: () => void 
   const index = deck.sequence_index ?? 0;
   return (
     <header className="deck-header">
-      <button type="button" className="nibi-button nibi-button--quiet weak-action" onClick={onLeave}><Icon name="arrow_back" />受信箱</button>
-      <strong className="deck-progress">{index + 1} / {total}</strong>
-      <span className="deck-recipe">{deck.recipe ? `Recipe ${deck.recipe}` : ""}</span>
+      <button type="button" className="nibi-button nibi-button--quiet weak-action back-action" onClick={onLeave}><Icon name="chevron_left" />受信箱</button>
+      <span className="deck-position">
+        <strong className="deck-progress">{index + 1} / {total}</strong>
+        {deck.recipe && <span className="deck-recipe">{`Recipe ${deck.recipe}`}</span>}
+      </span>
       {deck.criterion_text && (
         <p className="deck-criterion">
           <span>{deck.criterion_label ?? "今回の確認"}</span> {deck.criterion_text}
@@ -54,14 +58,12 @@ export function SkipConfirmBar({ deck, pending, onConfirm, onCancel }: { deck: D
     };
   }, []);
   return (
-    <div role="alertdialog" aria-modal="false" aria-labelledby="skip-confirm-title" aria-describedby="skip-confirm-message" className="confirm-bar">
-      <span>
-        <strong id="skip-confirm-title" className="visually-hidden">この比較を飛ばしますか</strong>
-        <span id="skip-confirm-message">{message}</span>
-      </span>
-      <span className="confirm-actions">
+    <div role="alertdialog" aria-modal="false" aria-labelledby="skip-confirm-title" aria-describedby="skip-confirm-message" className="nibi-card confirm-bar">
+      <strong id="skip-confirm-title" className="visually-hidden">この比較を飛ばしますか</strong>
+      <p id="skip-confirm-message">{message}</p>
+      <span className="pair-actions confirm-actions">
+        <button ref={cancelRef} type="button" className="nibi-button secondary-action" disabled={pending} onClick={onCancel}>続ける</button>
         <button type="button" className="nibi-button secondary-action" disabled={pending} onClick={onConfirm}>{pending ? "飛ばしています…" : "飛ばす"}</button>
-        <button ref={cancelRef} type="button" className="nibi-button nibi-button--quiet weak-action" disabled={pending} onClick={onCancel}>続ける</button>
       </span>
     </div>
   );
@@ -94,7 +96,7 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
               {identity?.[slot.toUpperCase()] && <span className="slot-identity">{identityName(identity[slot.toUpperCase()])}</span>}
               <span className={`slot-state ${state.state}`}>
                 {state.state === "playing" && <span className="state-dot" aria-hidden="true" />}
-                {state.state === "heard" && <span aria-hidden="true">✓</span>}
+                {state.state === "heard" && <Icon name="check" />}
                 {state.label}
               </span>
             </button>
@@ -120,52 +122,53 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
 
 type AnswerEditorProps = {
   question: string;
-  skippable: boolean;
   locked: boolean;
   draft: AnswerDraft;
   commentRef: RefObject<HTMLInputElement | null>;
-  pending: boolean;
   error: string | null;
-  canSubmit: boolean;
-  skipping: boolean;
   onChange: (draft: AnswerDraft) => void;
-  onSubmit: () => void;
-  onSkip: () => void;
 };
 
-export function AnswerEditor({ question, skippable, locked, draft, commentRef, pending, error, canSubmit, skipping, onChange, onSubmit, onSkip }: AnswerEditorProps) {
+export function AnswerEditor({ question, locked, draft, commentRef, error, onChange }: AnswerEditorProps) {
   const revealed = draft.preference !== null;
   return (
     <section className="answer-panel" aria-labelledby="preference-title">
       <h2 id="preference-title">{question}</h2>
+      {!revealed && (
+        <p className="submit-hint" aria-live="polite">
+          {locked ? "両方を聴くと回答できます" : "どちらかを選ぶと記録できます"}
+        </p>
+      )}
       <div className="nibi-segmented nibi-segmented--cards preference-scale" role="radiogroup" aria-label="どちらを残すか">
         {([1, 2, 3, 4, 5] as const).map((value) => {
-          const label = preferenceLabel(value);
+          const [strength, side] = preferenceLabel(value);
           return (
             <button
               type="button"
               className="nibi-segmented__option"
               data-neutral={value === 3 ? "" : undefined}
               role="radio"
-              aria-label={`${value} ${label.join("")}`}
+              aria-label={`${value} ${strength}${side}`}
               aria-checked={draft.preference === value}
               disabled={locked}
               key={value}
               onClick={() => onChange({ ...draft, preference: value })}
             >
-              <span>{label[0]}{label[1] && <><br />{label[1]}</>}</span>
+              {side ? (
+                <>
+                  <span className="preference-side">{side}</span>
+                  <span className="preference-strength">{strength}</span>
+                </>
+              ) : (
+                <span className="preference-side">{strength}</span>
+              )}
             </button>
           );
         })}
       </div>
       <p className="key-hint">キー 1〜5 でも選べます</p>
-      {!revealed && (
-        <p className="submit-hint" aria-live="polite">
-          {locked ? "両方を聴くと回答できます" : "どちらかを選ぶと記録できます"}
-        </p>
-      )}
       {revealed && (
-        <div className="answer-details">
+        <div className="nibi-card answer-details">
           <div className="blocker-question" role="group" aria-labelledby="blocker-title">
             <p id="blocker-title">残せない問題がありますか？</p>
             <div className="blocker-columns">
@@ -186,13 +189,35 @@ export function AnswerEditor({ question, skippable, locked, draft, commentRef, p
         </div>
       )}
       {error && <p className="inline-error" role="alert">{error}</p>}
-      {revealed && (
-        <button type="button" className="nibi-button nibi-button--primary submit-answer" disabled={!canSubmit} onClick={onSubmit}>{pending ? "記録中…" : "記録して次へ"}</button>
-      )}
-      <p className="skip-action">
-        <button type="button" className="nibi-button nibi-button--quiet weak-action" disabled={!skippable || skipping} onClick={onSkip}>{skipping ? "飛ばしています…" : "回答せずにこの比較を飛ばす"}</button>
-      </p>
     </section>
+  );
+}
+
+/* 回答カードの末尾(§2.13)。画面下に留め、記録は選好を決めた後だけ、skipはその下の弱いリンク。
+   Plan付きSessionのskip確認も同じ場所に出す(押した場所から目を離さずに確かめられる)。 */
+export function AnswerDock({ revealed, canSubmit, pending, skippable, skipping, confirm, onSubmit, onSkip }: {
+  revealed: boolean;
+  canSubmit: boolean;
+  pending: boolean;
+  skippable: boolean;
+  skipping: boolean;
+  confirm: ReactNode;
+  onSubmit: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="nibi-dock answer-dock">
+      {confirm ?? (
+        <>
+          {revealed && (
+            <button type="button" className="nibi-button nibi-button--primary submit-answer" disabled={!canSubmit} onClick={onSubmit}>{pending ? "記録中…" : "記録して次へ"}</button>
+          )}
+          <p className="skip-action">
+            <button type="button" className="nibi-button nibi-button--quiet weak-action" disabled={!skippable || skipping} onClick={onSkip}>{skipping ? "飛ばしています…" : "回答せずにこの比較を飛ばす"}</button>
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 

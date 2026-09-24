@@ -36,7 +36,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   useEffect(() => { if (loaded) headingRef.current?.focus({ preventScroll: true }); }, [loaded]);
 
   if (completion.isPending) return <main className="centered">結果をまとめています…</main>;
-  if (completion.isError || !completion.data) return <main className="centered error-panel"><h1>結果を表示できません</h1><p>{completion.error ? humanError(completion.error) : null}</p><button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button></main>;
+  if (completion.isError || !completion.data) return <main className="centered error-panel"><h1>結果を表示できません</h1><p>{completion.error ? humanError(completion.error) : null}</p><div className="centered-actions"><button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button></div></main>;
 
   const data = completion.data;
   const result = data.result;
@@ -44,38 +44,39 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   const verdict = verdictCopy(data);
 
   return (
-    <main className="summary-shell">
-      <p className="result-eyebrow">
-        {data.current_best_check ? "現在最良チェック" : result ? "観察" : "試聴"} · 全{data.comparison_count}比較
-        {data.recipe ? <> · <span>{`Recipe ${data.recipe}`}</span></> : ""}
-      </p>
-      <h1 ref={headingRef} tabIndex={-1}>{data.focus ?? "比較の結果"}</h1>
+    <div className="docked-screen">
+      <main className="screen summary-shell">
+        <p className="result-eyebrow">
+          {data.current_best_check ? "現在最良チェック" : result ? "観察" : "試聴"} · 全{data.comparison_count}比較
+          {data.recipe ? <> · <span>{`Recipe ${data.recipe}`}</span></> : ""}
+        </p>
+        <h1 ref={headingRef} tabIndex={-1}>{data.focus ?? "比較の結果"}</h1>
 
-      <section className={result?.current_best_updated ? "verdict-card updated" : "verdict-card"}>
-        <strong>{verdict.title}</strong>
-        {verdict.detail ? <p>{verdict.detail}</p> : null}
-      </section>
+        <section className={result?.current_best_updated ? "nibi-card nibi-card--lead verdict-card updated" : "nibi-card nibi-card--lead verdict-card"}>
+          <strong>{verdict.title}</strong>
+          {verdict.detail ? <p>{verdict.detail}</p> : null}
+        </section>
 
-      <section className="answer-record" aria-label="回答の記録">
-        <div className="answer-table-head">
-          <span>#</span>
-          <span>比較</span>
-          <span>判定</span>
-          <span>メモ</span>
-        </div>
-        {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} />)}
-      </section>
-
-      <div className="summary-actions">
-        <button type="button" className="nibi-button secondary-action" onClick={onBack}>受信箱へ</button>
+        <section className="answer-section" aria-labelledby="answer-record-heading">
+          <div className="section-heading">
+            <h2 id="answer-record-heading">回答</h2>
+            <span className="count">{data.items.length}</span>
+          </div>
+          <div className="nibi-card answer-record" aria-label="回答の記録">
+            {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} />)}
+          </div>
+        </section>
+        {start.isError && <p className="inline-error" role="alert">{humanError(start.error)}</p>}
+      </main>
+      <div className="nibi-dock summary-actions">
         {readyNext && (
           <button type="button" className="nibi-button nibi-button--primary primary-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.project_session_id)}>
             次を聴く（残り {readyCount}）
           </button>
         )}
+        <button type="button" className={readyNext ? "nibi-button nibi-button--quiet weak-action" : "nibi-button secondary-action"} onClick={onBack}>受信箱へ</button>
       </div>
-      {start.isError && <p className="inline-error" role="alert">{humanError(start.error)}</p>}
-    </main>
+    </div>
   );
 }
 
@@ -85,20 +86,20 @@ function AnswerRow({ item, result }: { item: RelistenItemView; result: SessionRe
   const judgment = rowJudgment(item, preference, result);
   return (
     <div className="answer-table-row">
-      <span>{item.sequence_index + 1}</span>
-      <span className="result-pair" title={item.clip_id ?? undefined}>
-        <span className={`result-role ${item.role}`}>{roleLabel(item.role)}</span>
-        <span><strong>A</strong> <span>{slotLabel(item, "A")}</span></span>
-        <span><strong>B</strong> <span>{slotLabel(item, "B")}</span></span>
-        {item.material_name && <small>{item.material_name}</small>}
-      </span>
-      <span className="result-judgment">
-        <span className="answer-gauge" aria-hidden="true">
-          {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
-        </span>
+      <span className="answer-index">{item.sequence_index + 1}</span>
+      <span className="answer-main">
         <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{judgment}</strong>
+        <span className="result-pair" title={item.clip_id ?? undefined}>
+          <span className={`result-role ${item.role}`}>{roleLabel(item.role)}</span>
+          <span><strong>A</strong> <span>{slotLabel(item, "A")}</span></span>
+          <span><strong>B</strong> <span>{slotLabel(item, "B")}</span></span>
+          {item.material_name && <small>{item.material_name}</small>}
+        </span>
+        {note && <span className="answer-note">{note}</span>}
       </span>
-      <span className="answer-note" title={note || undefined}>{note}</span>
+      <span className="answer-gauge" aria-hidden="true">
+        {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
+      </span>
     </div>
   );
 }

@@ -30,6 +30,7 @@
   --nibi-color-on-selected: #171B1F;
   --nibi-color-selected: #CBCED1;
   --nibi-color-focus: #CBCED1;
+  --nibi-color-text-disabled: #4F5358;
   --nibi-color-text-subtle: #6A6F74;
   --nibi-color-text-value: #A7ABAF;
   --nibi-color-text-strong: #E6E8EA;
@@ -44,20 +45,20 @@
   --nibi-color-line: #393E42;
   --nibi-color-well-control-hover: #2A2E32;
   --nibi-color-well-control: #1E2226;
-  --nibi-color-control-active: #393E42;
-  --nibi-color-control-hover: #2A2E32;
-  --nibi-color-control: #1E2226;
+  --nibi-color-control-active: #4F5358;
+  --nibi-color-control-hover: #393E42;
+  --nibi-color-control: #2A2E32;
   --nibi-color-row-alt: #171B1F;
   --nibi-color-well-alt: #171B1F;
   --nibi-color-surface: #1E2226;
   --nibi-color-bg: #171B1F;
   --nibi-color-well: #13161A;
-  --nibi-color-text-control: #91969A;
-  --nibi-color-text-muted: #91969A;
+  --nibi-color-text-control: #A4A8AC;
+  --nibi-color-text-muted: #A4A8AC;
   --nibi-color-fill: #CBCED1;
-  --nibi-color-rail: #41464A;
-  --nibi-color-fill-quiet: #7C8186;
-  --nibi-color-rail-hover: #54595D;
+  --nibi-color-rail: #51565A;
+  --nibi-color-fill-quiet: #91969A;
+  --nibi-color-rail-hover: #65696E;
   --nibi-color-halo: rgb(230 232 234 / 0.122);
   --nibi-color-scrim: rgb(0 0 0 / 0.502);
   --nibi-color-error-text: #E8594F;
@@ -68,7 +69,7 @@
   --nibi-color-error-subtle: #442320;
   --nibi-color-error-line: #843C36;
   --nibi-color-record-text: #EC544B;
-  --nibi-color-record-fill: #FF786D;
+  --nibi-color-record-fill: #FFA69B;
   --nibi-color-record-on: #171B1F;
   --nibi-color-record-subtle: #442320;
   --nibi-color-primary-fill: #CBCED1;
@@ -76,23 +77,23 @@
   --nibi-color-primary-fill-pressed: #E6E8EA;
   --nibi-color-primary-on: #171B1F;
   --nibi-color-primary-text: #CBCED1;
-  --nibi-color-primary-subtle: #1E2226;
+  --nibi-color-primary-subtle: #2A2E32;
   --nibi-raised-well-control-hover: #2A2E32;
   --nibi-flat-well-control-hover: #393E42;
   --nibi-raised-well-control: #1E2226;
   --nibi-flat-well-control: #2A2E32;
-  --nibi-raised-control-active: #393E42;
-  --nibi-flat-control-active: #4F5358;
-  --nibi-raised-control-hover: #2A2E32;
-  --nibi-flat-control-hover: #393E42;
-  --nibi-raised-control: #1E2226;
-  --nibi-flat-control: #2A2E32;
+  --nibi-raised-control-active: #4F5358;
+  --nibi-flat-control-active: #62676B;
+  --nibi-raised-control-hover: #393E42;
+  --nibi-flat-control-hover: #4F5358;
+  --nibi-raised-control: #2A2E32;
+  --nibi-flat-control: #393E42;
   --nibi-abar-primary-fill: #CBCED1;
   --nibi-abar-primary-fill-hover: #E6E8EA;
   --nibi-abar-primary-fill-pressed: #E6E8EA;
   --nibi-abar-primary-on: #171B1F;
   --nibi-abar-primary-text: #CBCED1;
-  --nibi-abar-primary-subtle: #1E2226;
+  --nibi-abar-primary-subtle: #2A2E32;
   --nibi-lifa-primary-fill: #FF7066;
   --nibi-lifa-primary-fill-hover: #FF897E;
   --nibi-lifa-primary-fill-pressed: #FF9F95;
@@ -107,13 +108,14 @@
 }
 
 @media (prefers-color-scheme: light) {
-  :root:not([data-nibi-theme]) { --nibi-color-on-selected: #FFFFFF; --nibi-color-selected: #171B1F; --nibi-color-focus: #171B1F; --nibi-color-text-subtle: #7C8186; --nibi-color-text-value: #393E42; --nibi-color-text-strong: #0E1216; --nibi-color-text: #171B1F; --nibi-color-rail-notch: #FFFFFF; --nibi-color-thumb-active: #0E1216; --nibi-color-thumb: #171B1F; --nibi-color-grid-bar: #CBCED1; --nibi-color-grid-beat: #DCDEE1; --nibi-color-grid-sub: #E6E8EA; --nibi-color-line-control: #7C8186; --nibi-color-line: #DCDEE1; --nibi-color-well-control-hover: #F8F8F9; --nibi-color-well-control: #FFFFFF; --nibi-color-control-active: #DCDEE1; --nibi-color-control-hover: #E6E8EA; --nibi-color-control: #F0F2F3; --nibi-color-row-alt: #F8F8F9; --nibi-color-well-alt: #E6E8EA; --nibi-color-surface: #FFFFFF; --nibi-color-bg: #F8F8F9; --nibi-color-well: #F0F2F3; --nibi-color-text-control: #62676B; --nibi-color-text-muted: #62676B; --nibi-color-fill: #171B1F; --nibi-color-rail: #C1C4C8; --nibi-color-fill-quiet: #767B80; --nibi-color-rail-hover: #A7ABAF; --nibi-color-halo: rgb(14 18 22 / 0.122); --nibi-color-scrim: rgb(23 27 31 / 0.322); --nibi-color-error-text: #B42318; --nibi-color-error-fill: #B42318; --nibi-color-error-fill-hover: #A60E06; --nibi-color-error-fill-pressed: #940300; --nibi-color-error-on: #FFFFFF; --nibi-color-error-subtle: #FFF2F0; --nibi-color-error-line: #FCC0B8; --nibi-color-record-text: #D23934; --nibi-color-record-fill: #D23934; --nibi-color-record-on: #FFFFFF; --nibi-color-record-subtle: #FFF2F0; --nibi-color-primary-fill: #171B1F; --nibi-color-primary-fill-hover: #0E1216; --nibi-color-primary-fill-pressed: #0E1216; --nibi-color-primary-on: #FFFFFF; --nibi-color-primary-text: #171B1F; --nibi-color-primary-subtle: #F0F2F3; --nibi-raised-well-control-hover: #F8F8F9; --nibi-flat-well-control-hover: #F0F2F3; --nibi-raised-well-control: #FFFFFF; --nibi-flat-well-control: #F8F8F9; --nibi-raised-control-active: #DCDEE1; --nibi-flat-control-active: #CBCED1; --nibi-raised-control-hover: #E6E8EA; --nibi-flat-control-hover: #DCDEE1; --nibi-raised-control: #F0F2F3; --nibi-flat-control: #E6E8EA; --nibi-abar-primary-fill: #171B1F; --nibi-abar-primary-fill-hover: #0E1216; --nibi-abar-primary-fill-pressed: #0E1216; --nibi-abar-primary-on: #FFFFFF; --nibi-abar-primary-text: #171B1F; --nibi-abar-primary-subtle: #F0F2F3; --nibi-lifa-primary-fill: #FF7066; --nibi-lifa-primary-fill-hover: #F1635A; --nibi-lifa-primary-fill-pressed: #E2564E; --nibi-lifa-primary-on: #171B1F; --nibi-lifa-primary-text: #CB403B; --nibi-lifa-primary-subtle: #FFEDEB; --nibi-shadow-raised-sm: 0 1px 3px rgb(0 0 0 / 0.16); --nibi-shadow-raised-lg: 0 3px 8px rgb(0 0 0 / 0.14); --nibi-shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.08); --nibi-shadow-raised-sm-on: 0 1px 3px rgb(0 0 0 / 0.16); --nibi-scheme: light; }
+  :root:not([data-nibi-theme]) { --nibi-color-on-selected: #FFFFFF; --nibi-color-selected: #171B1F; --nibi-color-focus: #171B1F; --nibi-color-text-disabled: #A7ABAF; --nibi-color-text-subtle: #7C8186; --nibi-color-text-value: #393E42; --nibi-color-text-strong: #0E1216; --nibi-color-text: #171B1F; --nibi-color-rail-notch: #FFFFFF; --nibi-color-thumb-active: #0E1216; --nibi-color-thumb: #171B1F; --nibi-color-grid-bar: #CBCED1; --nibi-color-grid-beat: #DCDEE1; --nibi-color-grid-sub: #E6E8EA; --nibi-color-line-control: #7C8186; --nibi-color-line: #DCDEE1; --nibi-color-well-control-hover: #F8F8F9; --nibi-color-well-control: #FFFFFF; --nibi-color-control-active: #CBCED1; --nibi-color-control-hover: #DCDEE1; --nibi-color-control: #E6E8EA; --nibi-color-row-alt: #F8F8F9; --nibi-color-well-alt: #E6E8EA; --nibi-color-surface: #FFFFFF; --nibi-color-bg: #F8F8F9; --nibi-color-well: #F0F2F3; --nibi-color-text-control: #5C6166; --nibi-color-text-muted: #5C6166; --nibi-color-fill: #171B1F; --nibi-color-rail: #B7BBBE; --nibi-color-fill-quiet: #70757A; --nibi-color-rail-hover: #9EA2A6; --nibi-color-halo: rgb(14 18 22 / 0.122); --nibi-color-scrim: rgb(23 27 31 / 0.322); --nibi-color-error-text: #B42318; --nibi-color-error-fill: #B42318; --nibi-color-error-fill-hover: #A60E06; --nibi-color-error-fill-pressed: #940300; --nibi-color-error-on: #FFFFFF; --nibi-color-error-subtle: #FFF2F0; --nibi-color-error-line: #FCC0B8; --nibi-color-record-text: #D23934; --nibi-color-record-fill: #C9302D; --nibi-color-record-on: #FFFFFF; --nibi-color-record-subtle: #FFF2F0; --nibi-color-primary-fill: #171B1F; --nibi-color-primary-fill-hover: #0E1216; --nibi-color-primary-fill-pressed: #0E1216; --nibi-color-primary-on: #FFFFFF; --nibi-color-primary-text: #171B1F; --nibi-color-primary-subtle: #E6E8EA; --nibi-raised-well-control-hover: #F8F8F9; --nibi-flat-well-control-hover: #F0F2F3; --nibi-raised-well-control: #FFFFFF; --nibi-flat-well-control: #F8F8F9; --nibi-raised-control-active: #CBCED1; --nibi-flat-control-active: #C1C4C8; --nibi-raised-control-hover: #DCDEE1; --nibi-flat-control-hover: #CBCED1; --nibi-raised-control: #E6E8EA; --nibi-flat-control: #DCDEE1; --nibi-abar-primary-fill: #171B1F; --nibi-abar-primary-fill-hover: #0E1216; --nibi-abar-primary-fill-pressed: #0E1216; --nibi-abar-primary-on: #FFFFFF; --nibi-abar-primary-text: #171B1F; --nibi-abar-primary-subtle: #E6E8EA; --nibi-lifa-primary-fill: #FF7066; --nibi-lifa-primary-fill-hover: #F1635A; --nibi-lifa-primary-fill-pressed: #E2564E; --nibi-lifa-primary-on: #171B1F; --nibi-lifa-primary-text: #CB403B; --nibi-lifa-primary-subtle: #FFEDEB; --nibi-shadow-raised-sm: 0 1px 3px rgb(0 0 0 / 0.16); --nibi-shadow-raised-lg: 0 3px 8px rgb(0 0 0 / 0.14); --nibi-shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.08); --nibi-shadow-raised-sm-on: 0 1px 3px rgb(0 0 0 / 0.16); --nibi-scheme: light; }
 }
 
 [data-nibi-theme="light"] {
   --nibi-color-on-selected: #FFFFFF;
   --nibi-color-selected: #171B1F;
   --nibi-color-focus: #171B1F;
+  --nibi-color-text-disabled: #A7ABAF;
   --nibi-color-text-subtle: #7C8186;
   --nibi-color-text-value: #393E42;
   --nibi-color-text-strong: #0E1216;
@@ -128,20 +130,20 @@
   --nibi-color-line: #DCDEE1;
   --nibi-color-well-control-hover: #F8F8F9;
   --nibi-color-well-control: #FFFFFF;
-  --nibi-color-control-active: #DCDEE1;
-  --nibi-color-control-hover: #E6E8EA;
-  --nibi-color-control: #F0F2F3;
+  --nibi-color-control-active: #CBCED1;
+  --nibi-color-control-hover: #DCDEE1;
+  --nibi-color-control: #E6E8EA;
   --nibi-color-row-alt: #F8F8F9;
   --nibi-color-well-alt: #E6E8EA;
   --nibi-color-surface: #FFFFFF;
   --nibi-color-bg: #F8F8F9;
   --nibi-color-well: #F0F2F3;
-  --nibi-color-text-control: #62676B;
-  --nibi-color-text-muted: #62676B;
+  --nibi-color-text-control: #5C6166;
+  --nibi-color-text-muted: #5C6166;
   --nibi-color-fill: #171B1F;
-  --nibi-color-rail: #C1C4C8;
-  --nibi-color-fill-quiet: #767B80;
-  --nibi-color-rail-hover: #A7ABAF;
+  --nibi-color-rail: #B7BBBE;
+  --nibi-color-fill-quiet: #70757A;
+  --nibi-color-rail-hover: #9EA2A6;
   --nibi-color-halo: rgb(14 18 22 / 0.122);
   --nibi-color-scrim: rgb(23 27 31 / 0.322);
   --nibi-color-error-text: #B42318;
@@ -152,7 +154,7 @@
   --nibi-color-error-subtle: #FFF2F0;
   --nibi-color-error-line: #FCC0B8;
   --nibi-color-record-text: #D23934;
-  --nibi-color-record-fill: #D23934;
+  --nibi-color-record-fill: #C9302D;
   --nibi-color-record-on: #FFFFFF;
   --nibi-color-record-subtle: #FFF2F0;
   --nibi-color-primary-fill: #171B1F;
@@ -160,23 +162,23 @@
   --nibi-color-primary-fill-pressed: #0E1216;
   --nibi-color-primary-on: #FFFFFF;
   --nibi-color-primary-text: #171B1F;
-  --nibi-color-primary-subtle: #F0F2F3;
+  --nibi-color-primary-subtle: #E6E8EA;
   --nibi-raised-well-control-hover: #F8F8F9;
   --nibi-flat-well-control-hover: #F0F2F3;
   --nibi-raised-well-control: #FFFFFF;
   --nibi-flat-well-control: #F8F8F9;
-  --nibi-raised-control-active: #DCDEE1;
-  --nibi-flat-control-active: #CBCED1;
-  --nibi-raised-control-hover: #E6E8EA;
-  --nibi-flat-control-hover: #DCDEE1;
-  --nibi-raised-control: #F0F2F3;
-  --nibi-flat-control: #E6E8EA;
+  --nibi-raised-control-active: #CBCED1;
+  --nibi-flat-control-active: #C1C4C8;
+  --nibi-raised-control-hover: #DCDEE1;
+  --nibi-flat-control-hover: #CBCED1;
+  --nibi-raised-control: #E6E8EA;
+  --nibi-flat-control: #DCDEE1;
   --nibi-abar-primary-fill: #171B1F;
   --nibi-abar-primary-fill-hover: #0E1216;
   --nibi-abar-primary-fill-pressed: #0E1216;
   --nibi-abar-primary-on: #FFFFFF;
   --nibi-abar-primary-text: #171B1F;
-  --nibi-abar-primary-subtle: #F0F2F3;
+  --nibi-abar-primary-subtle: #E6E8EA;
   --nibi-lifa-primary-fill: #FF7066;
   --nibi-lifa-primary-fill-hover: #F1635A;
   --nibi-lifa-primary-fill-pressed: #E2564E;
@@ -1012,17 +1014,19 @@
   cursor: progress;
 }
 
-/* disabled (0007 P-1): no face, no shadow, a hairline outline, words in text-subtle, and a reason nearby.
-   A face that shows what is on (toggle on, the chosen option) keeps its face. */
+/* disabled (0006, 0007 P-1): flat and faint. No face, no shadow, no outline (an outline reads as an outline
+   button, i.e. operable); words in text-disabled, and a reason nearby. A face that shows what is on (toggle on,
+   the chosen option) keeps its face, flat, with its words in text-subtle so they stay on that face. */
 .nibi-button:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
   cursor: not-allowed;
 }
 .nibi-button:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]):not([aria-pressed="true"], [data-state~="selected"], .nibi-button--quiet) {
   background: transparent;
-  box-shadow: inset 0 0 0 var(--nibi-stroke-hairline) var(--nibi-color-line);
+  box-shadow: none;
 }
 .nibi-button:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]):is([aria-pressed="true"], [data-state~="selected"]) {
+  color: var(--nibi-color-text-subtle);
   box-shadow: none;
 }
 .nibi-button:is(.nibi-button--toggle, .nibi-button--record):not(.nibi-button--primary, .nibi-button--disc):is(:disabled, [aria-disabled="true"], [data-state~="disabled"]):is([aria-pressed="true"], [data-state~="selected"])::after {
@@ -1086,21 +1090,24 @@
   box-shadow: none;
 }
 /* abar's neutral middle option ("even") reads quieter until chosen (0013 §11) */
-.nibi-segmented__option[data-neutral]:not([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"]) {
+.nibi-segmented__option[data-neutral]:not([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"], :disabled, [data-state~="disabled"]) {
   color: var(--nibi-color-text-muted);
 }
 
-/* disabled (0007 P-1): no face, a hairline outline, words in text-subtle; the chosen option keeps its face */
+/* disabled (0006, 0007 P-1): flat and faint, no outline, words in text-disabled; the chosen option keeps its face
+   (flat) with its words in text-subtle */
 .nibi-segmented:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-segmented__option,
 .nibi-segmented__option:is(:disabled, [data-state~="disabled"]) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
   cursor: not-allowed;
 }
 .nibi-segmented:not(.nibi-segmented--text, .nibi-segmented--cards):is([aria-disabled="true"], [data-state~="disabled"]) {
   background: transparent;
-  box-shadow: inset 0 0 0 var(--nibi-stroke-hairline) var(--nibi-color-line);
+  box-shadow: none;
 }
-.nibi-segmented:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-segmented__option:is([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"]) {
+.nibi-segmented:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-segmented__option:is([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"]),
+.nibi-segmented__option:is(:disabled, [data-state~="disabled"]):is([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"]) {
+  color: var(--nibi-color-text-subtle);
   box-shadow: none;
 }
 
@@ -1151,6 +1158,11 @@
   box-shadow: var(--nibi-shadow-raised-sm);
   text-align: center;
 }
+/* A card is content (a take, an answer), so its words are text, not the quiet text-control of a small choice (0006).
+   The neutral option ("even") stays quiet until chosen. */
+.nibi-segmented--cards:not([aria-disabled="true"], [data-state~="disabled"]) .nibi-segmented__option:not([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"], :disabled, [data-state~="disabled"], [data-neutral], :hover, [data-state~="hover"]) {
+  color: var(--nibi-color-text);
+}
 .nibi-segmented--cards .nibi-segmented__option:not([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"], :disabled, [data-state~="disabled"]):is(:active, [data-state~="grabbed"]) {
   background: var(--nibi-color-control-active);
   box-shadow: none;
@@ -1158,7 +1170,7 @@
 .nibi-segmented--cards:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-segmented__option:not([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"]),
 .nibi-segmented--cards .nibi-segmented__option:is(:disabled, [data-state~="disabled"]):not([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"]) {
   background: transparent;
-  box-shadow: inset 0 0 0 var(--nibi-stroke-hairline) var(--nibi-color-line);
+  box-shadow: none;
 }
 
 /* ================================================================== slider row (flagship) */
@@ -1309,7 +1321,7 @@
 
 .nibi-slider:is([aria-disabled="true"], [data-state~="disabled"]) { cursor: default; }
 .nibi-slider:is([aria-disabled="true"], [data-state~="disabled"]) :is(.nibi-slider__label, .nibi-slider__value) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
 }
 .nibi-slider:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-slider__thumb { background: var(--nibi-color-text-subtle); }
 
@@ -1471,7 +1483,7 @@
 .nibi-knob:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-knob__disc { background: var(--nibi-color-rail); }
 .nibi-knob:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-knob__indicator { background: var(--nibi-color-text-subtle); }
 .nibi-knob:is([aria-disabled="true"], [data-state~="disabled"]) :is(.nibi-knob__label, .nibi-knob__value) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
 }
 
 /* --ring: the one or two main amounts of a panel (Lifa DEPTH). A head row like the slider's (label left,
@@ -1593,7 +1605,7 @@
 .nibi-fader:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-fader__cap { box-shadow: none; }
 .nibi-fader:is([aria-disabled="true"], [data-state~="disabled"]) .nibi-fader__cap::after { background: var(--nibi-color-text-subtle); }
 .nibi-fader:is([aria-disabled="true"], [data-state~="disabled"]) :is(.nibi-fader__value, .nibi-fader__label) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
 }
 
 /* ================================================================== signal states: automated, modulated (0004 c)
@@ -1857,7 +1869,7 @@
 .nibi-tabs__tab:is([aria-selected="true"], [data-state~="selected"])::after { visibility: visible; }
 .nibi-tabs__tab:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]),
 .nibi-tabs[data-state~="disabled"] .nibi-tabs__tab {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
   cursor: default;
 }
 .nibi-tabs__panel[hidden] { display: none; }
@@ -1962,7 +1974,7 @@
 }
 .nibi-field__input:disabled,
 .nibi-field[data-state~="disabled"] .nibi-field__input {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
   cursor: not-allowed;
 }
 .nibi-field:not(.nibi-field--quiet) .nibi-field__input:disabled,
@@ -1971,7 +1983,7 @@
 }
 .nibi-field:has(.nibi-field__input:disabled) :is(.nibi-field__label, .nibi-field__unit),
 .nibi-field[data-state~="disabled"] :is(.nibi-field__label, .nibi-field__unit) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
 }
 .nibi-field + .nibi-alert { margin-top: calc(var(--nibi-grid-y) / 2); }
 
@@ -2820,9 +2832,10 @@
 .nibi-check[data-state~="invalid"] .nibi-check__input + .nibi-check__box {
   border-color: var(--nibi-color-error-line);
 }
-/* disabled (0007 P-1): no face, the hairline frame, words and mark in text-subtle; an "on" box keeps its face */
+/* disabled (0006, 0007 P-1): no face, the hairline frame (an input frame, C-3), words in text-disabled, the mark in
+   text-subtle; an "on" box keeps its face */
 .nibi-check:is(:has(.nibi-check__input:disabled), [data-state~="disabled"]) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
   cursor: not-allowed;
 }
 .nibi-check:is(:has(.nibi-check__input:disabled), [data-state~="disabled"]) .nibi-check__box {
@@ -2887,14 +2900,14 @@
 .nibi-switch:not(:disabled, [aria-disabled="true"], [data-state~="disabled"]):is([aria-checked="true"], [data-state~="selected"]):is(:hover, [data-state~="hover"], :active, [data-state~="grabbed"]) .nibi-switch__track {
   background: var(--nibi-color-thumb-active);
 }
-/* disabled (0007 P-1): off loses its face (hairline frame only); on keeps a quiet face */
+/* disabled (0006, 0007 P-1): off keeps only a flat rail (no shadow, no outline); on keeps a quiet face */
 .nibi-switch:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]) {
-  color: var(--nibi-color-text-subtle);
+  color: var(--nibi-color-text-disabled);
   cursor: not-allowed;
 }
 .nibi-switch:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]):not([aria-checked="true"], [data-state~="selected"]) .nibi-switch__track {
-  background: transparent;
-  box-shadow: inset 0 0 0 var(--nibi-stroke-hairline) var(--nibi-color-line);
+  background: var(--nibi-color-rail);
+  box-shadow: none;
 }
 .nibi-switch:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]):not([aria-checked="true"], [data-state~="selected"]) .nibi-switch__track::after {
   background: var(--nibi-color-text-subtle);
@@ -2968,11 +2981,11 @@
   background: transparent;
   box-shadow: none;
 }
-/* disabled (0007 P-1): no face, no shadow, a hairline outline, words in text-subtle */
-.nibi-select:is(:has(> :is(.nibi-select__button, .nibi-select__native):is(:disabled, [aria-disabled="true"])), [data-state~="disabled"]) { color: var(--nibi-color-text-subtle); }
+/* disabled (0006, 0007 P-1): flat and faint, no outline, words in text-disabled */
+.nibi-select:is(:has(> :is(.nibi-select__button, .nibi-select__native):is(:disabled, [aria-disabled="true"])), [data-state~="disabled"]) { color: var(--nibi-color-text-disabled); }
 .nibi-select:is(:has(> :is(.nibi-select__button, .nibi-select__native):is(:disabled, [aria-disabled="true"])), [data-state~="disabled"]) :is(.nibi-select__button, .nibi-select__native) {
   background: transparent;
-  box-shadow: inset 0 0 0 var(--nibi-stroke-hairline) var(--nibi-color-line);
+  box-shadow: none;
   cursor: not-allowed;
 }
 /* the popup under its button (select, menu button) */
@@ -3042,7 +3055,7 @@
 }
 .nibi-menu__item--danger { color: var(--nibi-color-error-text); }
 .nibi-menu__item--danger:not([aria-disabled="true"]):is(:hover, :focus, [data-state~="hover"], [data-state~="focus"]) { background: var(--nibi-color-error-subtle); }
-.nibi-menu__item[aria-disabled="true"] { color: var(--nibi-color-text-subtle); cursor: not-allowed; }
+.nibi-menu__item[aria-disabled="true"] { color: var(--nibi-color-text-disabled); cursor: not-allowed; }
 .nibi-menu__item:not(.nibi-menu__item--danger, [aria-disabled="true"]) > .nibi-icon { color: var(--nibi-color-text-muted); }
 .nibi-menu__hint { margin-inline-start: auto; padding-inline-start: var(--nibi-size-inset-x); color: var(--nibi-color-text-muted); }
 .nibi-menu__group { min-height: var(--nibi-type-label-line); padding-top: calc(var(--nibi-grid-y) / 2); color: var(--nibi-color-text-muted); }
@@ -3208,7 +3221,7 @@
   background: var(--nibi-color-control-hover);
 }
 .nibi-disclosure__header:is([aria-expanded="true"], [data-state~="selected"]) { color: var(--nibi-color-text); }
-.nibi-disclosure__header:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]) { color: var(--nibi-color-text-subtle); cursor: not-allowed; }
+.nibi-disclosure__header:is(:disabled, [aria-disabled="true"], [data-state~="disabled"]) { color: var(--nibi-color-text-disabled); cursor: not-allowed; }
 .nibi-disclosure__chevron { transition: rotate var(--nibi-motion-base) var(--nibi-motion-easing); }
 .nibi-disclosure__header:is([aria-expanded="true"], [data-state~="selected"]) .nibi-disclosure__chevron { rotate: 90deg; }
 .nibi-disclosure__region { min-width: 0; padding-top: calc(var(--nibi-grid-y) / 2); }
