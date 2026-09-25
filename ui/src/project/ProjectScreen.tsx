@@ -203,18 +203,18 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
       {blockedSessions.length > 0 && (
         <section className="inbox-section blocked-section" aria-labelledby="blocked-heading">
           <h2 id="blocked-heading" className="nibi-heading section-title">開始できない {blockedSessions.length} 件</h2>
-          <div className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack blocked-list" role="list" aria-label="開始できないセッション" style={cols("minmax(0, 1fr) auto")}>
+          <ul className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack blocked-list" aria-label="開始できないセッション" style={cols("minmax(0, 1fr) auto")}>
             {blockedSessions.map((item) => (
-              <div className="nibi-rowlist__row blocked-row" role="listitem" key={item.project_session_id}>
+              <li className="nibi-rowlist__row blocked-row" key={item.project_session_id}>
                 <span className="nibi-rowlist__title nibi-body">
                   <span className="nibi-rowlist__name queue-focus">{item.focus}</span>
                   <span className="nibi-rowlist__sub">{sessionKind(item)}{item.completed_at ? ` · ${formatDate(item.completed_at)}` : ""}</span>
                   <span className="nibi-rowlist__sub blocked-reason">理由: {blockedReason(item.outcome)}</span>
                 </span>
                 <span className="nibi-rowlist__status nibi-body blocked-status"><Mark kind="fail" /><span className="blocked-word">開始できません</span></span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 

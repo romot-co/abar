@@ -109,7 +109,7 @@ function interaction(element: Element | null, name: string, fallback: number): n
   return Number.isFinite(value) ? value : fallback;
 }
 
-export function formatTime(seconds: number): string {
+function formatTime(seconds: number): string {
   const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
   const minutes = Math.floor(safe / 60);
   return `${minutes}:${Math.floor(safe % 60).toString().padStart(2, "0")}`;
