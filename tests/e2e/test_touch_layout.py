@@ -15,6 +15,50 @@ from tests.e2e.test_project_ui_v2 import live_server
 
 
 @pytest.mark.browser
+@pytest.mark.parametrize(("width", "touch"), [(375, True), (1024, False)])
+def test_key_hint_only_with_keys_and_no_gap_after_choosing(
+    tmp_path: Path, free_tcp_port: int, width: int, touch: bool
+) -> None:
+    root = tmp_path / "workspace"
+    seed(root, project_name="Touch hint test")
+    with (
+        live_server(root, tmp_path / "other", free_tcp_port) as url,
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch()
+        context = browser.new_context(
+            viewport={"width": width, "height": 800}, has_touch=touch, is_mobile=touch
+        )
+        page = context.new_page()
+        page.goto(url)
+        page.get_by_role("button", name="続ける", exact=True).click()
+        page.locator(".slot-switcher button").nth(0).click()
+        page.locator(".slot-switcher button").nth(1).click()
+        page.locator(".preference-scale button:not(:disabled)").first.wait_for()
+        # 指の端末(pointer: coarse)ではキーの案内を出さない
+        key_hint = page.get_by_text("キー 1〜5 でも選べます", exact=True)
+        if touch:
+            expect(key_hint).to_be_hidden()
+        else:
+            expect(key_hint).to_be_visible()
+        page.locator(".preference-scale button").nth(3).click()
+        # 選んだ後の空の理由の文は場所を取らない(読み上げの live region としては残る)
+        hint = page.locator("#answer-hint")
+        expect(hint).to_have_text("")
+        expect(hint).to_have_attribute("aria-live", "polite")
+        box = hint.bounding_box()
+        assert box is None or box["height"] <= 1
+        scale = page.locator(".preference-scale").bounding_box()
+        after = page.locator(".key-hint" if not touch else ".blocker-question").bounding_box()
+        assert scale is not None and after is not None
+        gap = page.evaluate(
+            "parseFloat(getComputedStyle(document.querySelector('.answer-panel')).rowGap)"
+        )
+        assert after["y"] - (scale["y"] + scale["height"]) <= gap + 1
+        browser.close()
+
+
+@pytest.mark.browser
 @pytest.mark.parametrize("width", [375, 1024])
 def test_inbox_and_deck_keep_one_primary_action_and_confirm_in_the_dock(
     tmp_path: Path, free_tcp_port: int, width: int

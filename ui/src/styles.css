@@ -112,8 +112,12 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .preference-scale .nibi-segmented__option { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: calc(var(--nibi-grid-y) * 9); gap: 0; padding-inline: 0; }
 .preference-side { font-size: var(--nibi-type-heading-size); line-height: 1.2; font-weight: 500; }
 .preference-strength { font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); white-space: nowrap; }
-.submit-hint { min-height: var(--nibi-type-value-line); margin: 0; }
+/* 理由の文は空になったら場所を取らない(読み上げの live region としては残す) */
+.submit-hint { margin: 0; }
+.submit-hint:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .key-hint { margin: 0; }
+/* キーのない指の端末ではキーの案内を出さない */
+@media (pointer: coarse) { .key-hint { display: none; } }
 .answer-details { display: grid; gap: var(--nibi-size-inset); }
 .blocker-question { display: grid; gap: var(--nibi-grid-y); min-width: 0; margin: 0; padding: 0; border: 0; }
 .blocker-question > legend { margin: 0 0 var(--nibi-grid-y); padding: 0; color: var(--nibi-color-text-muted); }
