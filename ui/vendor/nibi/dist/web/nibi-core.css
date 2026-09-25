@@ -622,6 +622,8 @@
  *   --nibi-mod-from --nibi-mod-to --nibi-mod-at (modulation reach and heard value, fractions; signal states)
  * Properties the page may set (layout): --nibi-fader-length --nibi-meter-length --nibi-readout-width
  *   --nibi-grid-min (.nibi-grid column) --nibi-split-aside --nibi-split-main-min (.nibi-split) --nibi-dialog-width
+ *   --nibi-rowlist-cols --nibi-rowlist-cols-narrow (.nibi-rowlist column tracks, wide / under --stack-3)
+ * Set by this stylesheet from the language (icon.md): --nibi-icon-shift (0.05em up inside Japanese text)
  * Slots the product fills (0009 L-1; neutral roles when absent): --nibi-color-track --nibi-color-track-dim
  *   --nibi-color-track-live
  */
@@ -1042,6 +1044,8 @@
   grid-auto-flow: column;
   grid-auto-columns: 1fr; /* every option as wide as the longest: selection never moves them */
 }
+/* --fill: the full width of its column (a form on a phone, a row of a panel); options share it equally (0007) */
+.nibi-segmented--fill { display: grid; width: 100%; }
 .nibi-segmented__option {
   position: relative;
   display: inline-flex;
@@ -1930,6 +1934,8 @@
   align-items: center;
   column-gap: var(--nibi-grid-x);
 }
+/* --fill: the full width of its column; the input takes what the unit leaves (0007) */
+.nibi-field--fill { display: grid; width: 100%; }
 .nibi-field__label {
   grid-area: label;
   margin-bottom: calc(var(--nibi-grid-y) / 2);
@@ -2227,7 +2233,10 @@
   outline: var(--nibi-stroke-hairline) solid var(--nibi-color-text-strong);
   outline-offset: var(--nibi-stroke-hairline);
 }
-.nibi-xypad:is([aria-disabled="true"], [data-state~="disabled"]) > .nibi-node { background: var(--nibi-color-text-subtle); box-shadow: none; }
+.nibi-xypad:is([aria-disabled="true"], [data-state~="disabled"]) > .nibi-node,
+.nibi-node:is([aria-disabled="true"], [data-state~="disabled"]) { background: var(--nibi-color-text-subtle); box-shadow: none; }
+/* one node that cannot be moved now (the others can): same look, no pointer (0007) */
+.nibi-node:is([aria-disabled="true"], [data-state~="disabled"]) { cursor: default; pointer-events: none; }
 
 /* ================================================================== editable name */
 
@@ -3240,3 +3249,344 @@
 :is([data-nibi-step], .nibi-disclosure__region, .nibi-disclosure__summary):not([hidden], [inert]) {
   animation: nibi-reveal var(--nibi-motion-base) var(--nibi-motion-easing);
 }
+
+/* ================================================================== app screens (0008): link actions, title select,
+   scale, notice, rowlist, marks, icon alignment. Taken from the v0.7 handoff through nibi's rules: no outline for a
+   locked scale (0006), two weights (400 / 500), values from tokens only. */
+
+/* --link: an action with no face. For actions that line up with a column's text edge; hover darkens the words and
+   underlines them, so no face ever leaves the column (button.md). The hit area stays `hit` (C-2). */
+.nibi-button--link {
+  min-width: 0;
+  flex: none;
+  padding-inline: 0;
+  color: var(--nibi-color-text-muted);
+  background: transparent;
+  box-shadow: none;
+  text-underline-offset: calc(var(--nibi-grid-y) * .375);
+  text-decoration-thickness: var(--nibi-stroke-hairline);
+}
+.nibi-button--link:not(:disabled, [aria-disabled="true"], [data-state~="disabled"]):is(:hover, [data-state~="hover"]) {
+  color: var(--nibi-color-text-strong);
+  background: transparent;
+  text-decoration-line: underline;
+}
+.nibi-button--link:not(:disabled, [aria-disabled="true"], [data-state~="disabled"]):is(:active, [data-state~="grabbed"]) {
+  background: transparent;
+  box-shadow: none;
+}
+.nibi-disclosure--link > .nibi-disclosure__header {
+  padding-inline: 0;
+  background: transparent;
+  text-underline-offset: calc(var(--nibi-grid-y) * .375);
+  text-decoration-thickness: var(--nibi-stroke-hairline);
+}
+.nibi-disclosure--link > .nibi-disclosure__header:not(:disabled, [aria-disabled="true"]):is(:hover, [data-state~="hover"]) {
+  color: var(--nibi-color-text-strong);
+  background: transparent;
+  text-decoration-line: underline;
+}
+
+/* title select: the screen's title is the chooser. A transparent native select covers it; only the disc on the right
+   has a face (hover). align-self: start keeps it to the title's width inside a vertical stack (select.md). */
+.nibi-title-select {
+  position: relative;
+  display: inline-flex;
+  align-self: start;
+  justify-self: start;
+  align-items: center;
+  gap: var(--nibi-size-gap-x);
+  max-width: 100%;
+  min-width: 0;
+}
+.nibi-title-select__value { min-width: 0; overflow-wrap: anywhere; }
+.nibi-title-select__disc {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--nibi-size-control);
+  height: var(--nibi-size-control);
+  border-radius: var(--nibi-radius-pill);
+  color: var(--nibi-color-text-muted);
+  transition: background-color var(--nibi-motion-fast) var(--nibi-motion-easing), color var(--nibi-motion-fast) var(--nibi-motion-easing);
+}
+.nibi-title-select > select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.nibi-title-select:hover > .nibi-title-select__disc { color: var(--nibi-color-text); background: var(--nibi-color-control-hover); }
+.nibi-title-select:has(> select:focus-visible) > .nibi-title-select__disc {
+  outline: var(--nibi-stroke-focus) solid var(--nibi-color-focus);
+  outline-offset: var(--nibi-stroke-focus-offset);
+}
+.nibi-title-select:has(> select:disabled) { color: var(--nibi-color-text-disabled); }
+
+/* scale: a graded choice with a name at each end (segmented.md --scale). Locked = the options' own disabled state
+   (flat and faint, 0006) and the reason in words next to it (0007 P-1); no outline. */
+.nibi-scale {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--nibi-size-inset-x);
+}
+.nibi-scale__end {
+  display: grid;
+  place-items: center;
+  min-height: calc(var(--nibi-size-row) * 1.5);
+  font-family: var(--nibi-font-family);
+  font-size: var(--nibi-type-title-size);
+  line-height: var(--nibi-type-title-line);
+  font-weight: var(--nibi-type-title-weight);
+  color: var(--nibi-color-text-muted);
+  transition: color var(--nibi-motion-base) var(--nibi-motion-easing);
+}
+.nibi-scale__end[data-on] { color: var(--nibi-color-text-strong); }
+/* words of a grade never break mid-word; in a narrow column the end names move above the options. The column is the
+   nearest ancestor with `container-type: inline-size` (the product's page column). */
+.nibi-segmented--scale > .nibi-segmented__option { word-break: keep-all; overflow-wrap: normal; line-break: strict; }
+@container (max-width: 30rem) {
+  .nibi-scale { grid-template-columns: 1fr 1fr; row-gap: calc(var(--nibi-grid-y) / 2); }
+  .nibi-scale > .nibi-segmented--scale { grid-column: 1 / -1; grid-row: 2; }
+  .nibi-scale__end { min-height: 0; justify-self: start; font-size: var(--nibi-type-heading-size); line-height: var(--nibi-type-heading-line); }
+  .nibi-scale__end:last-child { justify-self: end; }
+  .nibi-segmented--scale { column-gap: calc(var(--nibi-grid-x) / 2); }
+  .nibi-segmented--scale > .nibi-segmented__option { font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); }
+}
+
+/* notice: a band that is not an error (alert.md) — one sentence and its actions, on the well face */
+.nibi-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nibi-grid-y) var(--nibi-size-inset-x);
+  min-height: var(--nibi-size-row);
+  padding: var(--nibi-grid-y) var(--nibi-size-inset-x);
+  border-radius: var(--nibi-radius-panel);
+  color: var(--nibi-color-text);
+  background: var(--nibi-color-well);
+}
+.nibi-notice__text { flex: 1 1 calc(var(--nibi-grid-x) * 58); min-width: 0; margin: 0; }
+.nibi-notice__actions { display: flex; flex-wrap: wrap; gap: var(--nibi-size-gap-x); }
+
+/* ------------------------------------------------------------------ rowlist (rowlist.md): between list and table.
+   The grid lives on the list; rows are subgrids, so columns line up across rows and groups. Separation in three steps:
+   rows by space or stripes, groups by a heading and space, the table by its face. No rules (0010). */
+.nibi-rowlist {
+  display: grid;
+  grid-template-columns: var(--nibi-rowlist-cols, minmax(0, 1fr) auto);
+  margin: 0;
+  padding: calc(var(--nibi-grid-y) / 2);
+  list-style: none;
+  border-radius: var(--nibi-radius-panel);
+  color: var(--nibi-color-text);
+  background: var(--nibi-color-surface);
+}
+.nibi-rowlist--bare { padding: 0; background: transparent; }
+.nibi-rowlist__head,
+.nibi-rowlist__group,
+.nibi-rowlist__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  column-gap: var(--nibi-size-inset-x);
+  padding: 0 calc(var(--nibi-size-inset-x) - var(--nibi-grid-y) / 2);
+  border-radius: calc(var(--nibi-radius-panel) - var(--nibi-grid-y) / 2);
+}
+.nibi-rowlist--bare > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { padding-inline: 0; }
+.nibi-rowlist > :not(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { grid-column: 1 / -1; }
+/* head: column names, smaller and quieter than a row, aligned with their column */
+.nibi-rowlist__head {
+  min-height: var(--nibi-size-control);
+  padding-bottom: calc(var(--nibi-grid-y) / 2);
+  color: var(--nibi-color-text-muted);
+  font-family: var(--nibi-font-family);
+  font-size: var(--nibi-type-label-size);
+  line-height: var(--nibi-type-label-line);
+  font-weight: var(--nibi-type-label-weight);
+}
+/* group: a heading (and an optional one-line summary) in the first column */
+.nibi-rowlist__group { min-height: var(--nibi-size-row); padding-block: calc(var(--nibi-grid-y) / 2); align-items: baseline; }
+.nibi-rowlist__group:not(:first-child) { margin-top: var(--nibi-size-gap); }
+.nibi-rowlist__group-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--nibi-grid-y) / 4) var(--nibi-size-gap-x); min-width: 0; }
+.nibi-rowlist__group-title > :is(h2, h3, h4) { margin: 0; }
+.nibi-rowlist__summary { display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) / 2); color: var(--nibi-color-text-muted); }
+.nibi-rowlist__summary[data-tone="error"] > :is(svg, .nibi-mark) { color: var(--nibi-color-error-text); }
+/* rows */
+.nibi-rowlist__row { min-height: var(--nibi-size-row); padding-block: var(--nibi-grid-y); row-gap: calc(var(--nibi-grid-y) / 4); }
+.nibi-rowlist--tall .nibi-rowlist__row { min-height: calc(var(--nibi-size-row) * 1.5); padding-block: calc(var(--nibi-grid-y) * 1.5); }
+.nibi-rowlist--striped > .nibi-rowlist__row:nth-child(even of .nibi-rowlist__row) { background: var(--nibi-color-row-alt); }
+/* with groups: the stripe restarts after each group heading (the first row of a group is plain) */
+.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__row { background: transparent; }
+.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row,
+.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row,
+.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row {
+  background: var(--nibi-color-row-alt);
+}
+.nibi-rowlist--striped.nibi-rowlist--bare > .nibi-rowlist__row { padding-inline: var(--nibi-size-gap-x); }
+/* pressable rows react as a whole; a disabled row is faint with its reason in the same row */
+:is(button, a).nibi-rowlist__row,
+.nibi-rowlist__row[role="button"] {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--nibi-motion-fast) var(--nibi-motion-easing);
+}
+:is(button, a, [role="button"]).nibi-rowlist__row:not([aria-disabled="true"], :disabled):hover { background: var(--nibi-color-control-hover); }
+:is(button, a, [role="button"]).nibi-rowlist__row:not([aria-disabled="true"], :disabled):active { background: var(--nibi-color-control-active); }
+:is(button, a, [role="button"]).nibi-rowlist__row:focus-visible { outline: var(--nibi-stroke-focus) solid var(--nibi-color-focus); outline-offset: calc(var(--nibi-stroke-focus) * -1); }
+.nibi-rowlist__row:is([aria-disabled="true"], :disabled) { cursor: default; }
+.nibi-rowlist__row:is([aria-disabled="true"], :disabled) :is(.nibi-rowlist__title, .nibi-rowlist__name) { color: var(--nibi-color-text-muted); }
+.nibi-rowlist__row[aria-selected="true"] { color: var(--nibi-color-text-strong); background: var(--nibi-color-control-active); }
+/* cells */
+.nibi-rowlist__title { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500; }
+.nibi-rowlist__title--plain { font-weight: 400; }
+.nibi-rowlist__sub {
+  display: block;
+  margin-top: calc(var(--nibi-grid-y) / 4);
+  color: var(--nibi-color-text-muted);
+  font-family: var(--nibi-font-family);
+  font-size: var(--nibi-type-label-size);
+  line-height: var(--nibi-type-label-line);
+  font-weight: var(--nibi-type-label-weight);
+}
+.nibi-rowlist__num { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nibi-rowlist__unit { color: var(--nibi-color-text-muted); }
+.nibi-rowlist__num--muted { color: var(--nibi-color-text-muted); }
+.nibi-rowlist__status { display: inline-flex; align-items: center; justify-content: flex-end; gap: calc(var(--nibi-grid-y) / 2); white-space: nowrap; text-align: end; }
+.nibi-rowlist__status--muted { color: var(--nibi-color-text-muted); }
+.nibi-rowlist__end { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--nibi-grid-x); white-space: nowrap; color: var(--nibi-color-text-muted); }
+:is(button, a, [role="button"]).nibi-rowlist__row:not([aria-disabled="true"]):hover .nibi-rowlist__end { color: var(--nibi-color-text); }
+/* a fixed-width slot for a leading mark, so every row's words start on one column; no icon starts a row otherwise */
+.nibi-rowlist__mark { display: inline-grid; place-items: center; width: var(--nibi-size-icon); height: var(--nibi-type-body-line); color: var(--nibi-color-text-muted); }
+.nibi-rowlist__mark:empty { visibility: hidden; }
+.nibi-rowlist__row > .nibi-rowlist__mark:first-child { width: auto; height: auto; justify-self: start; }
+/* detail: an explanation under the row, across all columns; __info is the small disc that opens it */
+.nibi-rowlist__detail {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-bottom: var(--nibi-grid-y);
+  color: var(--nibi-color-text-muted);
+  font-family: var(--nibi-font-family);
+  font-size: var(--nibi-type-label-size);
+  line-height: var(--nibi-type-label-line);
+}
+.nibi-rowlist__info {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  vertical-align: middle;
+  width: var(--nibi-size-icon);
+  height: var(--nibi-size-icon);
+  margin: 0 0 0 var(--nibi-grid-x);
+  padding: 0;
+  border: 0;
+  border-radius: var(--nibi-radius-pill);
+  color: var(--nibi-color-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.nibi-rowlist__info::before { content: ""; position: absolute; inset: calc((var(--nibi-size-icon) - var(--nibi-size-hit)) / 2); }
+.nibi-rowlist__info:is(:hover, [aria-expanded="true"]) { color: var(--nibi-color-text); background: var(--nibi-color-control-hover); }
+.nibi-rowlist__info:focus-visible { outline: var(--nibi-stroke-focus) solid var(--nibi-color-focus); outline-offset: var(--nibi-stroke-focus-offset); }
+.nibi-rowlist__info > svg { width: calc(var(--nibi-size-icon) * .75); height: calc(var(--nibi-size-icon) * .75); }
+/* progress of an item in steps (answered / current / to come) */
+.nibi-rowlist__progress { display: inline-flex; align-items: center; gap: var(--nibi-size-gap-x); white-space: nowrap; }
+.nibi-progress { display: flex; align-items: center; gap: calc(var(--nibi-grid-x) * .6); }
+.nibi-progress__seg { width: calc(var(--nibi-grid-y) * 2); height: calc(var(--nibi-grid-y) / 2); border-radius: var(--nibi-radius-pill); background: var(--nibi-color-rail); }
+.nibi-progress__seg[data-done] { background: var(--nibi-color-text-muted); }
+.nibi-progress__seg[data-current] { width: calc(var(--nibi-grid-y) * 3); background: var(--nibi-color-text-strong); }
+
+/* --line: one line per row (name · sub, ellipsised), rows as tall as the row size, so space alone counts them */
+.nibi-rowlist--line .nibi-rowlist__row { min-height: var(--nibi-size-row); padding-block: 0; row-gap: 0; }
+.nibi-rowlist--line .nibi-rowlist__title { display: flex; align-items: baseline; gap: var(--nibi-grid-x); min-width: 0; font-weight: 400; }
+.nibi-rowlist--line .nibi-rowlist__title > .nibi-rowlist__name { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nibi-rowlist--line .nibi-rowlist__title > .nibi-rowlist__sub {
+  display: inline;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nibi-type-body-size);
+  line-height: var(--nibi-type-body-line);
+}
+.nibi-rowlist--line .nibi-rowlist__title > .nibi-rowlist__sub::before { content: "· "; }
+/* weight: 400 throughout; one emphasis per row (500) on the name or the status */
+.nibi-rowlist--emph-name .nibi-rowlist__name { font-weight: 500; }
+.nibi-rowlist--emph-status .nibi-rowlist__status { font-weight: 500; }
+/* --faced: head and group headings on the well face */
+.nibi-rowlist--faced > :is(.nibi-rowlist__head, .nibi-rowlist__group) { min-height: var(--nibi-size-control); padding-block: 0; align-items: center; background: var(--nibi-color-well); }
+.nibi-rowlist--faced > .nibi-rowlist__group { min-height: var(--nibi-size-row); }
+.nibi-rowlist--faced > .nibi-rowlist__group:not(:first-child) { margin-top: calc(var(--nibi-grid-y) / 2); }
+.nibi-rowlist--faced > .nibi-rowlist__group > .nibi-rowlist__group-title { align-items: center; line-height: var(--nibi-type-heading-line); }
+.nibi-rowlist--faced > :is(.nibi-rowlist__head, .nibi-rowlist__group) + .nibi-rowlist__row { margin-top: calc(var(--nibi-grid-y) / 2); }
+/* --tight: numbers follow the name instead of the right edge (long tables) */
+.nibi-rowlist--tight > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { justify-content: start; }
+.nibi-rowlist--tight .nibi-rowlist__title { max-width: calc(var(--nibi-grid-x) * 70); }
+/* --start (the default to reach for): every column left-aligned, marks in one vertical line. Right alignment only for
+   numbers compared in one unit (__num--end), whose unit stays outside the aligned digits. */
+.nibi-rowlist--status-start .nibi-rowlist__status,
+.nibi-rowlist--start :is(.nibi-rowlist__num, .nibi-rowlist__status, .nibi-rowlist__end) { justify-content: flex-start; text-align: start; }
+.nibi-rowlist--start > :is(.nibi-rowlist__head, .nibi-rowlist__group) > * { text-align: start; }
+.nibi-rowlist__num--end,
+.nibi-rowlist--start .nibi-rowlist__num--end { justify-content: flex-end; text-align: end; font-variant-numeric: tabular-nums; }
+.nibi-rowlist__num--end > .nibi-rowlist__unit { display: inline-block; min-width: 2.2em; margin-inline-start: .25em; text-align: start; }
+/* --stack: in a narrow column (the nearest ancestor with container-type: inline-size) keep the first columns on line 1
+   and drop the rest under them: the sub first, then the status, then the value; the name stays. Default keeps 2
+   columns, --stack-3 keeps 3 (# | gauge | judgment). */
+@container (max-width: 26rem) {
+  .nibi-rowlist--stack > :is(.nibi-rowlist__head, .nibi-rowlist__group) > :nth-child(n + 2) { display: none; }
+  .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { grid-template-columns: minmax(0, 1fr) auto; }
+  .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > .nibi-rowlist__row > :nth-child(n + 3) { grid-column: 1 / -1; }
+  .nibi-rowlist--stack-3 > :is(.nibi-rowlist__head, .nibi-rowlist__group) > :nth-child(-n + 3) { display: revert; }
+  .nibi-rowlist--stack-3 > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { grid-template-columns: var(--nibi-rowlist-cols-narrow, auto minmax(0, 1fr) minmax(0, 1fr)); }
+  .nibi-rowlist--stack-3 > .nibi-rowlist__row > :nth-child(n + 4) { grid-column: 2 / -1; padding-inline-start: 0; }
+  .nibi-rowlist--stack > .nibi-rowlist__row > :is(.nibi-rowlist__status, .nibi-rowlist__num, .nibi-rowlist__end) { justify-content: flex-start; text-align: start; }
+  .nibi-rowlist--stack :is(.nibi-rowlist__sub, .nibi-rowlist__detail) { overflow: visible; white-space: normal; text-overflow: clip; }
+  .nibi-rowlist--line.nibi-rowlist--stack .nibi-rowlist__row { min-height: calc(var(--nibi-size-row) * 1.25); padding-block: var(--nibi-grid-y); }
+  .nibi-rowlist--line.nibi-rowlist--stack .nibi-rowlist__title { flex-wrap: wrap; row-gap: 0; }
+  .nibi-rowlist--line.nibi-rowlist--stack .nibi-rowlist__title > .nibi-rowlist__sub {
+    flex-basis: 100%;
+    font-size: var(--nibi-type-label-size);
+    line-height: var(--nibi-type-label-line);
+  }
+  .nibi-rowlist--line.nibi-rowlist--stack .nibi-rowlist__title > .nibi-rowlist__sub::before { content: none; }
+}
+
+/* ------------------------------------------------------------------ marks (mark.md) and icon alignment (icon.md)
+   A status mark is a disc of one diameter for every state; the inner glyph carries the meaning, the colour the weight.
+   Next to words, an icon or mark sits on the line's centre, raised 0.05em inside Japanese text (its ink sits higher). */
+:lang(ja), [data-nibi-script="ja"] { --nibi-icon-shift: -0.05em; }
+[lang]:not(:lang(ja)), [data-nibi-script="latin"] { --nibi-icon-shift: 0em; }
+:where(.nibi-body, .nibi-label, .nibi-value, .nibi-heading, .nibi-badge, .nibi-button, .nibi-rowlist__status, .nibi-rowlist__summary,
+  .nibi-rowlist__end, .nibi-note-text) > :is(.nibi-icon, .nibi-mark) {
+  translate: 0 var(--nibi-icon-shift, 0em);
+}
+/* an icon written as <svg data-nibi="icon"> has its size before init fills it (a bare svg is 300 × 150) */
+svg[data-nibi~="icon"] { flex: none; width: var(--nibi-size-icon); height: var(--nibi-size-icon); }
+.nibi-mark { display: inline-block; flex: none; width: 1em; height: 1em; overflow: visible; vertical-align: middle; fill: none; stroke: none; }
+.nibi-mark > .nibi-mark__disc { fill: currentColor; }
+.nibi-mark > .nibi-mark__glyph { fill: none; stroke: var(--nibi-color-surface); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.nibi-mark--pass { color: var(--nibi-color-text); }
+.nibi-mark--fail { color: var(--nibi-color-error-text); }
+.nibi-mark:is(.nibi-mark--unknown, .nibi-mark--neutral) { color: var(--nibi-color-text-muted); }
+.nibi-mark:is(.nibi-mark--unknown, .nibi-mark--neutral) > .nibi-mark__disc { fill: none; stroke: currentColor; stroke-width: 1.2; }
+.nibi-mark:is(.nibi-mark--unknown, .nibi-mark--neutral) > .nibi-mark__glyph { stroke: currentColor; }
+.nibi-badge > .nibi-mark { width: var(--nibi-type-label-size); height: var(--nibi-type-label-size); }
+.nibi-badge--error > .nibi-mark > .nibi-mark__glyph { stroke: var(--nibi-color-error-subtle); }

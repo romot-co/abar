@@ -1,7 +1,7 @@
 """受信箱・Deckの画面の組み方(1列、画面下のdock)が仕様の約束を保つこと。
 
-- 受信箱の主操作は一つ(先頭のSession)。
-- 記録ボタンは選好を決めた後だけ出る(§2.13)。skipは回答カード末尾の弱いリンク。
+- 受信箱の主操作は一つ(進行中のSessionの「続ける」)。
+- 記録ボタンは選好を決めた後だけ回答欄に出る(§2.13)。画面下のdockは弱いskipのリンクだけ。
 - Plan付きSessionのskip確認は、押したdockの中に画面内で出て、「続ける」にフォーカスする。
 """
 
@@ -29,13 +29,13 @@ def test_inbox_and_deck_keep_one_primary_action_and_confirm_in_the_dock(
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": width, "height": height})
         page.goto(url)
-        lead = page.locator(".queue-lead")
-        lead.wait_for()
+        queue = page.locator(".queue-list")
+        queue.wait_for()
         assert page.locator(".nibi-button--primary").count() == 1
-        assert lead.locator(".nibi-button--primary").count() == 1
+        assert queue.locator(".nibi-button--primary").count() == 1
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
-        lead.get_by_role("button", name="続きを聴く", exact=True).click()
+        queue.get_by_role("button", name="続ける", exact=True).click()
         dock = page.locator(".answer-dock")
         dock.wait_for()
         assert page.get_by_role("button", name="記録して次へ", exact=True).count() == 0
@@ -54,11 +54,15 @@ def test_inbox_and_deck_keep_one_primary_action_and_confirm_in_the_dock(
         page.locator(".slot-switcher button").nth(0).click()
         page.locator(".preference-scale button:not(:disabled)").first.wait_for()
         page.locator(".preference-scale button").nth(1).click()
-        submit = dock.get_by_role("button", name="記録して次へ", exact=True)
+        submit = page.get_by_role("button", name="記録して次へ", exact=True)
         expect(submit).to_be_enabled()
-        submit_box = submit.bounding_box()
+        # 記録は回答欄の中、その後(文書の順で下)に dock の弱い skip(§2.13)。dock は画面下に留まる
+        assert dock.get_by_role("button", name="記録して次へ", exact=True).count() == 0
+        assert submit.evaluate(
+            "(el, other) => !!(el.compareDocumentPosition(other)"
+            " & Node.DOCUMENT_POSITION_FOLLOWING)",
+            skip.element_handle(),
+        )
         skip_box = skip.bounding_box()
-        assert submit_box is not None and skip_box is not None
-        assert submit_box["y"] < skip_box["y"]  # 記録の下に弱いskip(§2.13)
-        assert submit_box["y"] + submit_box["height"] <= height
+        assert skip_box is not None and skip_box["y"] + skip_box["height"] <= height
         browser.close()

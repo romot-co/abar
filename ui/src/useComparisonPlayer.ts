@@ -168,8 +168,11 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     crossfadeTo(activeSlotRef.current === "a" ? "b" : "a");
   }, [crossfadeTo, play]);
 
+  // Pressing the card that is playing pauses it (also during the automatic alternation);
+  // pressing the active card while paused resumes it; pressing the other card switches to it.
   const selectSlot = useCallback(async (slot: Slot) => {
-    if (activeSlotRef.current === slot && modeRef.current === "manual") {
+    if (activeSlotRef.current === slot && (playingRef.current || modeRef.current === "manual")) {
+      modeRef.current = "manual";
       if (playingRef.current) pause();
       else await play();
       return;

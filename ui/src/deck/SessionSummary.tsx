@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { api, type Action, type Project, type SessionCompletion } from "../api";
 import { humanError } from "../errors";
 import type { RelistenItemView, SessionResultView } from "../generated";
+import { Mark, type MarkKind } from "../Mark";
 
 export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: string; onBack: () => void; onNext?: () => void }) {
   const queryClient = useQueryClient();
@@ -42,27 +43,45 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   const result = data.result;
   const readyCount = project.data?.sessions.filter((item) => item.status === "ready").length ?? 0;
   const verdict = verdictCopy(data);
+  const kind = data.current_best_check ? "最良の更新" : result ? "観察" : "試聴";
 
   return (
-    <div className="docked-screen">
+    <div className="docked-screen summary-page">
       <main className="screen summary-shell">
-        <p className="result-eyebrow">
-          {data.current_best_check ? "現在最良チェック" : result ? "観察" : "試聴"} · 全{data.comparison_count}比較
-          {data.recipe ? <> · <span>{`Recipe ${data.recipe}`}</span></> : ""}
-        </p>
-        <h1 ref={headingRef} tabIndex={-1}>{data.focus ?? "比較の結果"}</h1>
+        <div className="summary-heading">
+          <p className="nibi-label result-eyebrow">
+            {kind} · 全 {data.comparison_count} 比較{data.recipe ? <> · <span>{`Recipe ${data.recipe}`}</span></> : ""}
+          </p>
+          <h1 ref={headingRef} tabIndex={-1} className="nibi-title">{data.focus ?? "比較の結果"}</h1>
+        </div>
 
-        <section className={result?.current_best_updated ? "nibi-card nibi-card--lead verdict-card updated" : "nibi-card nibi-card--lead verdict-card"}>
-          <strong>{verdict.title}</strong>
-          {verdict.detail ? <p>{verdict.detail}</p> : null}
+        <section className={result?.current_best_updated ? "nibi-card nibi-card--lead verdict-card updated" : "nibi-card nibi-card--lead verdict-card"} aria-labelledby="verdict-title">
+          <strong id="verdict-title" className="nibi-title">{verdict.title}</strong>
+          {verdict.detail && <p className="nibi-body verdict-detail">{verdict.detail}</p>}
+          {result && <Tally result={result} />}
+          {result && (
+            <ul className="verdict-reasons" aria-label="根拠">
+              {reasons(data, result).map((reason) => (
+                <li key={reason.text} className="nibi-body"><Mark kind={reason.kind} /><span className={reason.kind === "fail" ? "reason-fail" : undefined}>{reason.text}</span></li>
+              ))}
+            </ul>
+          )}
+          {readyNext && <p className="nibi-body verdict-next">次の未回答:「{readyNext.focus}」</p>}
         </section>
 
         <section className="answer-section" aria-labelledby="answer-record-heading">
-          <div className="section-heading">
-            <h2 id="answer-record-heading">回答</h2>
-            <span className="count">{data.items.length}</span>
-          </div>
-          <div className="nibi-card answer-record" aria-label="回答の記録">
+          <h2 id="answer-record-heading" className="nibi-heading">回答 · 全 {data.items.length} 比較</h2>
+          <div
+            className="nibi-rowlist nibi-rowlist--faced nibi-rowlist--striped nibi-rowlist--start nibi-rowlist--stack nibi-rowlist--stack-3 answer-record"
+            role="table"
+            aria-label="回答"
+            style={{ "--nibi-rowlist-cols": "1.5rem auto minmax(0, 1fr)", "--nibi-rowlist-cols-narrow": "1.5rem auto minmax(0, 1fr)" } as CSSProperties}
+          >
+            <div className="nibi-rowlist__head" role="row">
+              <span role="columnheader">#</span>
+              <span role="columnheader" className="gauge-head"><span>A</span><span className="answer-gauge" aria-hidden="true">{[1, 2, 3, 4, 5].map((value) => <span key={value} />)}</span><span>B</span></span>
+              <span role="columnheader">判定</span>
+            </div>
             {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} />)}
           </div>
         </section>
@@ -71,11 +90,35 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
       <div className="nibi-dock summary-actions">
         {readyNext && (
           <button type="button" className="nibi-button nibi-button--primary primary-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.project_session_id)}>
-            次を聴く（残り {readyCount}）
+            次へ（残り {readyCount}）
           </button>
         )}
-        <button type="button" className={readyNext ? "nibi-button nibi-button--quiet weak-action" : "nibi-button secondary-action"} onClick={onBack}>受信箱へ</button>
+        <p className="summary-back">
+          <button type="button" className="nibi-button nibi-button--link weak-action" onClick={onBack}>受信箱へ</button>
+        </p>
       </div>
+    </div>
+  );
+}
+
+function Tally({ result }: { result: SessionResultView }) {
+  const entries = Object.entries(result.variant_labels).map(([variantId, label]) => ({
+    key: variantId,
+    label,
+    value: result.evidence_direction_counts[variantId] ?? 0,
+    strong: variantId === result.favored_variant_id,
+  }));
+  entries.push({ key: "tie", label: "互角", value: result.evidence_direction_counts.tie ?? 0, strong: false });
+  const answered = Object.values(result.evidence_direction_counts).reduce((total, count) => total + count, 0);
+  if (answered < result.evidence_count) entries.push({ key: "missing", label: "未回答", value: result.evidence_count - answered, strong: false });
+  return (
+    <div className="verdict-tally" aria-label="支持の数">
+      {entries.map((entry) => (
+        <span key={entry.key} className="tally-item">
+          <span className={entry.strong ? "nibi-display tally-value strong" : "nibi-display tally-value"}>{entry.value}</span>
+          <span className="nibi-label tally-label">{entry.label}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -84,21 +127,22 @@ function AnswerRow({ item, result }: { item: RelistenItemView; result: SessionRe
   const preference = item.skipped ? null : item.judgment?.preference ?? null;
   const note = answerNote(item);
   const judgment = rowJudgment(item, preference, result);
+  const muted = preference === null || preference === 3;
+  const gaugeLabel = preference === null ? "未回答" : preference === 3 ? "互角" : `${preference < 3 ? "A" : "B"} ${preference === 1 || preference === 5 ? "明確に" : "わずかに"}`;
   return (
-    <div className="answer-table-row">
-      <span className="answer-index">{item.sequence_index + 1}</span>
-      <span className="answer-main">
-        <strong className={preference === 3 ? "answer-judgment neutral" : "answer-judgment"}>{judgment}</strong>
-        <span className="result-pair" title={item.clip_id ?? undefined}>
-          <span className={`result-role ${item.role}`}>{roleLabel(item.role)}</span>
-          <span><strong>A</strong> <span>{slotLabel(item, "A")}</span></span>
-          <span><strong>B</strong> <span>{slotLabel(item, "B")}</span></span>
-          {item.material_name && <small>{item.material_name}</small>}
-        </span>
-        {note && <span className="answer-note">{note}</span>}
-      </span>
-      <span className="answer-gauge" aria-hidden="true">
+    <div className="nibi-rowlist__row answer-table-row" role="row">
+      <span role="rowheader" className="nibi-value answer-index">{item.sequence_index + 1}</span>
+      <span role="cell" className="answer-gauge" aria-label={gaugeLabel}>
         {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
+      </span>
+      <span role="cell" className="nibi-rowlist__title nibi-rowlist__title--plain nibi-body answer-main">
+        <span className={muted ? "nibi-rowlist__name answer-judgment neutral" : "nibi-rowlist__name answer-judgment"}>{judgment}</span>
+        <span className="nibi-rowlist__sub result-pair" title={item.clip_id ?? undefined}>
+          <span className={`result-role ${item.role}`}>{roleLabel(item.role)}</span>
+          {item.material_name && <span> · {item.material_name}</span>}
+          {item.role === "evidence" && <> · <strong>A</strong> <span>{slotLabel(item, "A")}</span> · <strong>B</strong> <span>{slotLabel(item, "B")}</span></>}
+        </span>
+        {note && <span className="nibi-rowlist__sub answer-note">{note}</span>}
       </span>
     </div>
   );
@@ -149,13 +193,9 @@ function answerNote(item: RelistenItemView): string {
 function verdictCopy(data: SessionCompletion): { title: string; detail: string } {
   const result = data.result;
   if (!result) return { title: "比較を記録しました", detail: "この試聴はProjectに属さないため、現在最良は変わりません。" };
-  const detail = `${resultBreakdown(result)}${qcBreakdown(result, data.items)}`;
   if (data.current_best_check) {
-    if (result.current_best_updated) {
-      return { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新しました`, detail };
-    }
-    const reason = keepReason(result);
-    return { title: "現在最良を維持します", detail: reason ? `${reason} · ${detail}` : detail };
+    if (result.current_best_updated) return { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新`, detail: "" };
+    return { title: "現在最良を維持", detail: keepReason(result) ?? "" };
   }
   const directional = Object.keys(result.variant_labels).map((variantId) => result.evidence_direction_counts[variantId] ?? 0);
   const tieCount = result.evidence_direction_counts.tie ?? 0;
@@ -165,10 +205,7 @@ function verdictCopy(data: SessionCompletion): { title: string; detail: string }
   else if (directional.every((count) => count === 0)) conclusion = "判定できる回答が不足しています";
   else if (directional.length === 2 && directional[0] === directional[1]) conclusion = "判断が素材によって分かれました";
   else conclusion = "支持が多い方向はありますが、優勢条件には届きませんでした";
-  return {
-    title: "観察として記録しました（現在最良は変わりません）",
-    detail: `${conclusion} · ${detail}`,
-  };
+  return { title: conclusion, detail: "観察として記録しました（現在最良は変わりません）" };
 }
 
 // 更新しなかった理由を、サーバーの判定順(未回答 → blocker → 優勢条件)に合わせて一つだけ示す。
@@ -184,19 +221,27 @@ function keepReason(result: SessionResultView): string | null {
   return null;
 }
 
-function resultBreakdown(result: SessionResultView): string {
-  const counts = Object.entries(result.variant_labels).map(([variantId, label]) => `${label} ${result.evidence_direction_counts[variantId] ?? 0}`);
-  counts.push(`互角 ${result.evidence_direction_counts.tie ?? 0}`);
-  const answered = Object.values(result.evidence_direction_counts).reduce((total, count) => total + count, 0);
-  if (answered < result.evidence_count) counts.push(`未回答 ${result.evidence_count - answered}`);
-  return `${counts.join(" / ")}（優勢条件 ${result.favored_required_count}/${result.evidence_count}）`;
-}
-
-function qcBreakdown(result: SessionResultView, items: RelistenItemView[]): string {
-  const checks: string[] = [];
-  if (items.some((item) => item.role === "same")) checks.push(`同一音: ${sameResultLabel(result.same_result)}`);
-  if (items.some((item) => item.role === "repeat")) checks.push(`再現性: ${repeatResultLabel(result.repeat_result)}`);
-  return checks.length > 0 ? ` · QC ${checks.join(" / ")}` : "";
+// 根拠の行: 優勢条件 / 同一音の確認 / 再現性の確認。1つでも不合格なら、どこで止まったかがここで読める。
+function reasons(data: SessionCompletion, result: SessionResultView): Array<{ kind: MarkKind; text: string }> {
+  const rows: Array<{ kind: MarkKind; text: string }> = [];
+  const condition = `優勢条件 ${result.favored_required_count} / ${result.evidence_count}`;
+  const evidence = result.best_update_evidence;
+  const favoredMet = evidence
+    ? evidence.answered_count === evidence.evidence_count && evidence.favorable_count >= result.favored_required_count && evidence.score_sum > 0
+    : result.favored_variant_label !== null;
+  if (favoredMet) rows.push({ kind: "pass", text: `${condition} を満たす` });
+  else rows.push({ kind: data.current_best_check ? "fail" : "unknown", text: `${condition} に届かない` });
+  if (evidence && evidence.blocker_count > 0) rows.push({ kind: "fail", text: "提案版に残せない問題の報告がある" });
+  if (data.items.some((item) => item.role === "same")) {
+    const kind: MarkKind = result.same_result === "tie" ? "pass" : result.same_result === "difference_reported" ? "fail" : "unknown";
+    rows.push({ kind, text: `同一音の確認: ${sameResultLabel(result.same_result)}` });
+  }
+  if (data.items.some((item) => item.role === "repeat")) {
+    const value = result.repeat_result;
+    const kind: MarkKind = value === "same_category" || value === "same_direction" ? "pass" : value === "reversed" ? "fail" : "unknown";
+    rows.push({ kind, text: `再現性の確認: ${repeatResultLabel(value)}` });
+  }
+  return rows;
 }
 
 function sameResultLabel(value: string | undefined): string {
@@ -214,7 +259,7 @@ function repeatResultLabel(value: string | undefined): string {
 }
 
 function roleLabel(role: RelistenItemView["role"]): string {
-  return { evidence: "素材", same: "同一音チェック", repeat: "再現性チェック", other: "比較" }[role];
+  return { evidence: "素材", same: "同一音の確認", repeat: "再現性の確認", other: "比較" }[role];
 }
 
 function slotLabel(item: RelistenItemView, slot: "A" | "B"): string {
