@@ -53,6 +53,14 @@ def test_inbox_and_deck_keep_one_primary_action_and_confirm_in_the_dock(
         page.locator(".slot-switcher button").nth(1).click()
         page.locator(".slot-switcher button").nth(0).click()
         page.locator(".preference-scale button:not(:disabled)").first.wait_for()
+        # 再生の状態は語でも(再生中)、聴いたことは再生の印と別の場所に「✓ 聴いた」
+        cards = page.locator(".slot-switcher button")
+        expect(cards.nth(0).locator(".slot-state")).to_have_text("再生中")
+        expect(cards.nth(1).locator(".slot-state")).to_have_text("")
+        for index in (0, 1):
+            expect(cards.nth(index).locator(".slot-heard")).to_have_text("聴いた")
+            expect(cards.nth(index).locator(".slot-heard .ui-icon")).to_have_count(1)
+        expect(cards.nth(0)).to_have_attribute("aria-label", "A、再生中、聴いた。押すと一時停止")
         page.locator(".preference-scale button").nth(1).click()
         # 入力欄はnibiの枠(line-control の 1px)で入力できると分かる(C-3、WCAG 1.4.11)
         memo = page.get_by_role("textbox", name="この比較のメモ")

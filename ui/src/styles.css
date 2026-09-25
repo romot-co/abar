@@ -99,7 +99,9 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .slot-name { font-size: var(--nibi-type-display-size); line-height: 1; font-weight: 500; }
 .slot-identity { max-width: 100%; color: inherit; font-size: var(--nibi-type-value-size); line-height: var(--nibi-type-value-line); overflow-wrap: anywhere; }
 .slot-state { display: inline-flex; align-items: center; justify-content: center; gap: calc(var(--nibi-grid-y) * .75); height: var(--nibi-type-label-line); color: inherit; font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); }
-.slot-state .ui-icon { width: var(--nibi-type-label-size); height: var(--nibi-type-label-size); }
+.slot-state .ui-icon, .slot-heard .ui-icon { width: var(--nibi-type-label-size); height: var(--nibi-type-label-size); }
+/* 聴いたかどうかは再生の操作と別の場所(カードの右上)に小さく。未聴取は何も出さない */
+.slot-heard { position: absolute; top: var(--nibi-grid-y); right: var(--nibi-size-gap-x); display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) / 2); color: inherit; font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); }
 .transport { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--nibi-size-inset-x); min-height: var(--nibi-size-control); }
 .transport .time { min-width: 9ch; color: var(--nibi-color-text-muted); font-variant-numeric: tabular-nums; text-align: end; white-space: nowrap; }
 /* 再生位置はReactが持つネイティブのrange(キー操作のため)。形だけnibiのレールとつまみに合わせる。 */

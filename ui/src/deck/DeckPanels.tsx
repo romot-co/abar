@@ -66,15 +66,16 @@ export function SkipConfirmBar({ deck, pending, onConfirm, onCancel }: { deck: D
 }
 
 /* A/Bのカードを押すとその側を再生し、再生中のカードをもう一度押すと一時停止する(§2.13)。
-   状態は印で示す: ‖ 再生中 / ▶ 停止中 / ✓ 聴取済。どちらもまだ聴いていない間だけ「押して聴く」。 */
+   再生の状態は印と語で(‖ 再生中 / ▶ 停止中)、聴いたかどうかは別の場所に小さく(✓ 聴いた、未聴取は何も出さない)。
+   どちらもまだ聴いていない間だけ「押して聴く」。今聴いている側は主題の選択なので反転する(nibi 0005)。 */
 export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: { player: ComparisonPlayer; deck: Deck; groupRef: RefObject<HTMLDivElement | null>; revealing: boolean; onReveal: () => void }) {
   const identity = deck.identity_by_slot;
   const disabled = player.loading || player.error !== null;
   const fresh = !player.heard.a && !player.heard.b;
-  const slotState = (slot: "a" | "b"): string => {
-    if (player.activeSlot === slot && player.playing) return "再生中";
-    if (player.activeSlot === slot && player.position > 0) return "停止中";
-    return player.heard[slot] ? "聴取済" : "未聴取";
+  const playState = (slot: "a" | "b"): "playing" | "paused" | null => {
+    if (player.activeSlot !== slot) return null;
+    if (player.playing) return "playing";
+    return player.position > 0 ? "paused" : null;
   };
   return (
     <section className="listen-panel" aria-label="試聴">
@@ -82,7 +83,9 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
       <div ref={groupRef} tabIndex={-1} className="nibi-segmented nibi-segmented--cards slot-switcher" role="group" aria-label={`試聴する音（比較 ${(deck.sequence_index ?? 0) + 1} / ${deck.comparison_count}）。押すと再生、もう一度押すと一時停止`}>
         {(["a", "b"] as const).map((slot) => {
           const active = player.activeSlot === slot;
-          const state = slotState(slot);
+          const state = playState(slot);
+          const heard = player.heard[slot];
+          const words = [slot.toUpperCase(), state === "playing" ? "再生中" : state === "paused" ? "停止中" : null, heard ? "聴いた" : "未聴取"].filter(Boolean).join("、");
           return (
             <button
               type="button"
@@ -90,16 +93,18 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
               disabled={disabled}
               className="nibi-segmented__option"
               aria-pressed={active}
-              aria-label={`${slot.toUpperCase()}（${state}）、${active && player.playing ? "押すと一時停止" : "押すと再生"}`}
+              aria-label={`${words}。${state === "playing" ? "押すと一時停止" : "押すと再生"}`}
               onClick={() => void player.selectSlot(slot)}
             >
+              <span className="slot-heard" aria-hidden="true" data-heard={heard ? "" : undefined}>
+                {heard && <><Icon name="check" />聴いた</>}
+              </span>
               <span className="slot-name">{slot.toUpperCase()}</span>
               {identity?.[slot.toUpperCase()] && <span className="slot-identity">{identityName(identity[slot.toUpperCase()])}</span>}
-              <span className="slot-state" aria-hidden="true">
-                {fresh && !player.playing && "押して聴く"}
-                {active && player.playing && <Icon name="pause" />}
-                {active && !player.playing && player.position > 0 && <Icon name="play_arrow" />}
-                {!active && player.heard[slot] && <Icon name="check" />}
+              <span className="slot-state" aria-hidden="true" data-state={state ?? undefined}>
+                {state === "playing" && <><Icon name="pause" />再生中</>}
+                {state === "paused" && <><Icon name="play_arrow" />停止中</>}
+                {state === null && fresh && !player.playing && "押して聴く"}
               </span>
             </button>
           );

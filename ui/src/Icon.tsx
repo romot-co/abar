@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type IconName = "chevron_down" | "chevron_left" | "chevron_right" | "check" | "pause" | "play_arrow";
 
 /* Material Iconsのリガチャフォント代替。24pxグリッドのstrokeアイコン(Lucide系)。
-   アイコンは機能か状態を持つもの(戻る・開閉・選択・再生/停止・聴取済)に限る。装飾には使わない。合否の印は Mark(nibi の mark)。 */
+   アイコンは機能か状態を持つもの(戻る・開閉・選択・再生/停止・聴いた)に限る。装飾には使わない。合否の印は Mark(nibi の mark)。 */
 const PATHS: Record<IconName, ReactNode> = {
   chevron_down: <path d="m6 9 6 6 6-6" />,
   chevron_left: <path d="m15 18-6-6 6-6" />,
