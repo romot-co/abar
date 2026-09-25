@@ -737,10 +737,15 @@
 .nibi-disclosure__header::before {
   content: "";
   position: absolute;
+  z-index: -1;
   inset-block: min(0px, calc((100% - var(--nibi-size-hit)) / 2));
   inset-inline: min(0px, calc((100% - var(--nibi-size-hit)) / 2));
   border-radius: inherit;
 }
+/* The hit layer sits behind the element's own content (its own stacking context), so the pointer reaches the words,
+   the input and the caret inside, and only the margin around them falls to the layer (0013 audit F03). */
+:is(.nibi-button, .nibi-segmented__option, .nibi-field, .nibi-editable, .nibi-scrollbar, .nibi-splitter__handle,
+  .nibi-select__button, .nibi-select:has(> .nibi-select__native), .nibi-disclosure__header) { isolation: isolate; }
 /* Debug aid: outline every hit area inside an element with this class. */
 .nibi-show-hit :is(.nibi-button, .nibi-segmented__option, .nibi-field, .nibi-editable, .nibi-scrollbar, .nibi-splitter__handle,
   .nibi-select__button, .nibi-select:has(> .nibi-select__native), .nibi-disclosure__header)::before,
@@ -2676,6 +2681,10 @@
 }
 .nibi-panel:not(.nibi-well) { background: var(--nibi-color-surface); }
 .nibi-panel .nibi-panel:not(.nibi-well) { background: var(--nibi-color-bg); }
+/* a third level alternates back to surface, so each level differs from the one it sits on (0013 audit); deeper
+   structure should be sections (heading + space), not more panels (layout.md) */
+.nibi-panel .nibi-panel .nibi-panel:not(.nibi-well) { background: var(--nibi-color-surface); }
+.nibi-panel .nibi-panel .nibi-panel .nibi-panel:not(.nibi-well) { background: var(--nibi-color-bg); }
 .nibi-panel--tight { padding: var(--nibi-size-gap) var(--nibi-size-gap-x); }
 .nibi-panel--flush { padding: 0; }
 /* R-5: heading → content 16u (gap + grid.y), content ↔ content gap, a note hugs its element (.nibi-note-text) */
@@ -3043,6 +3052,8 @@
 }
 :is(.nibi-select, .nibi-menu-button) > .nibi-menu[data-place="above"] { top: auto; bottom: calc(100% + var(--nibi-grid-y) / 2); }
 :is(.nibi-select, .nibi-menu-button) > .nibi-menu[data-align="end"] { left: auto; right: 0; }
+/* no room inside the clipping ancestors on either side: fixed to the viewport (the JS sets left, top, min-width) */
+:is(.nibi-select, .nibi-menu-button) > .nibi-menu[data-place="fixed"] { position: fixed; z-index: 2; }
 .nibi-menu-button {
   position: relative;
   display: inline-flex;
@@ -3436,7 +3447,7 @@
   padding: 0 calc(var(--nibi-size-inset-x) - var(--nibi-grid-y) / 2);
   border-radius: calc(var(--nibi-radius-panel) - var(--nibi-grid-y) / 2);
 }
-.nibi-rowlist--bare > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { padding-inline: 0; }
+.nibi-rowlist--bare > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row), .nibi-rowlist--bare > .nibi-rowlist__set > .nibi-rowlist__row { padding-inline: 0; }
 .nibi-rowlist > :not(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { grid-column: 1 / -1; }
 /* head: column names, smaller and quieter than a row, aligned with their column */
 .nibi-rowlist__head {
@@ -3458,14 +3469,22 @@
 /* rows */
 .nibi-rowlist__row { min-height: var(--nibi-size-row); padding-block: var(--nibi-grid-y); row-gap: calc(var(--nibi-grid-y) / 4); }
 .nibi-rowlist--tall .nibi-rowlist__row { min-height: calc(var(--nibi-size-row) * 1.5); padding-block: calc(var(--nibi-grid-y) * 1.5); }
-.nibi-rowlist--striped > .nibi-rowlist__row:nth-child(even of .nibi-rowlist__row) { background: var(--nibi-color-row-alt); }
-/* with groups: the stripe restarts after each group heading (the first row of a group is plain) */
-.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__row { background: transparent; }
-.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row,
-.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row,
-.nibi-rowlist--striped:has(> .nibi-rowlist__group) > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row {
+/* Stripes count rows from the list's start, or from each group heading (the first row of a group is plain). Without
+   groups: every even row. With groups: the even rows after each heading, up to 16 rows a group; a longer group wraps
+   its rows in .nibi-rowlist__set (display: contents), which counts any length (0013 audit F08). */
+.nibi-rowlist--striped:not(:has(> .nibi-rowlist__group)) > .nibi-rowlist__row:nth-child(even of .nibi-rowlist__row):not([aria-selected="true"]),
+.nibi-rowlist--striped .nibi-rowlist__set > .nibi-rowlist__row:nth-child(even of .nibi-rowlist__row):not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]),
+.nibi-rowlist--striped > .nibi-rowlist__group + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row + .nibi-rowlist__row:not([aria-selected="true"]) {
   background: var(--nibi-color-row-alt);
 }
+.nibi-rowlist__set { display: contents; }
 .nibi-rowlist--striped.nibi-rowlist--bare > .nibi-rowlist__row { padding-inline: var(--nibi-size-gap-x); }
 /* pressable rows react as a whole; a disabled row is faint with its reason in the same row */
 :is(button, a).nibi-rowlist__row,
@@ -3487,6 +3506,12 @@
 .nibi-rowlist__row:is([aria-disabled="true"], :disabled) { cursor: default; }
 .nibi-rowlist__row:is([aria-disabled="true"], :disabled) :is(.nibi-rowlist__title, .nibi-rowlist__name) { color: var(--nibi-color-text-muted); }
 .nibi-rowlist__row[aria-selected="true"] { color: var(--nibi-color-text-strong); background: var(--nibi-color-control-active); }
+/* Every word on a face selection is text-strong: on control-active only text-strong reaches 4.5:1 in both themes and
+   elevations (dark flat: text 3.6, text-muted 2.4). Secondary words stay apart by size and place (0013 audit F02). */
+:is(.nibi-list__item, .nibi-rowlist__row, .nibi-lane__header):is([aria-selected="true"], [data-state~="selected"])
+  :is(.nibi-list__kicker, .nibi-list__meta, .nibi-rowlist__sub, .nibi-rowlist__detail, .nibi-rowlist__unit, .nibi-rowlist__num--muted,
+    .nibi-rowlist__status--muted, .nibi-rowlist__end, .nibi-rowlist__mark, .nibi-note-text, .nibi-value),
+.nibi-table tr:is([aria-selected="true"], [data-state~="selected"]) .nibi-table__muted { color: var(--nibi-color-text-strong); }
 /* cells */
 .nibi-rowlist__title { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500; }
 .nibi-rowlist__title--plain { font-weight: 400; }
@@ -3502,7 +3527,8 @@
 .nibi-rowlist__num { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .nibi-rowlist__unit { color: var(--nibi-color-text-muted); }
 .nibi-rowlist__num--muted { color: var(--nibi-color-text-muted); }
-.nibi-rowlist__status { display: inline-flex; align-items: center; justify-content: flex-end; gap: calc(var(--nibi-grid-y) / 2); white-space: nowrap; text-align: end; }
+/* a status is words, not a compared number: left like the rest (SPEC §6.5.6, rowlist.md rule 2, 0013 audit F10) */
+.nibi-rowlist__status { display: inline-flex; align-items: center; justify-content: flex-start; gap: calc(var(--nibi-grid-y) / 2); white-space: nowrap; text-align: start; }
 .nibi-rowlist__status--muted { color: var(--nibi-color-text-muted); }
 .nibi-rowlist__end { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--nibi-grid-x); white-space: nowrap; color: var(--nibi-color-text-muted); }
 :is(button, a, [role="button"]).nibi-rowlist__row:not([aria-disabled="true"]):hover .nibi-rowlist__end { color: var(--nibi-color-text); }
@@ -3573,7 +3599,7 @@
 .nibi-rowlist--faced > .nibi-rowlist__group > .nibi-rowlist__group-title { align-items: center; line-height: var(--nibi-type-heading-line); }
 .nibi-rowlist--faced > :is(.nibi-rowlist__head, .nibi-rowlist__group) + .nibi-rowlist__row { margin-top: calc(var(--nibi-grid-y) / 2); }
 /* --tight: numbers follow the name instead of the right edge (long tables) */
-.nibi-rowlist--tight > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { justify-content: start; }
+.nibi-rowlist--tight > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row), .nibi-rowlist--tight > .nibi-rowlist__set > .nibi-rowlist__row { justify-content: start; }
 .nibi-rowlist--tight .nibi-rowlist__title { max-width: calc(var(--nibi-grid-x) * 70); }
 /* --start (the default to reach for): every column left-aligned, marks in one vertical line. Right alignment only for
    numbers compared in one unit (__num--end), whose unit stays outside the aligned digits. */
@@ -3588,13 +3614,16 @@
    columns, --stack-3 keeps 3 (# | gauge | judgment). */
 @container (max-width: 26rem) {
   .nibi-rowlist--stack > :is(.nibi-rowlist__head, .nibi-rowlist__group) > :nth-child(n + 2) { display: none; }
-  .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { grid-template-columns: minmax(0, 1fr) auto; }
-  .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > .nibi-rowlist__row > :nth-child(n + 3) { grid-column: 1 / -1; }
+  .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row), .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > .nibi-rowlist__set > .nibi-rowlist__row { grid-template-columns: minmax(0, 1fr) auto; }
+  .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > .nibi-rowlist__row > :nth-child(n + 3), .nibi-rowlist--stack:not(.nibi-rowlist--stack-3) > .nibi-rowlist__set > .nibi-rowlist__row > :nth-child(n + 3) { grid-column: 1 / -1; }
   .nibi-rowlist--stack-3 > :is(.nibi-rowlist__head, .nibi-rowlist__group) > :nth-child(-n + 3) { display: revert; }
-  .nibi-rowlist--stack-3 > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row) { grid-template-columns: var(--nibi-rowlist-cols-narrow, auto minmax(0, 1fr) minmax(0, 1fr)); }
-  .nibi-rowlist--stack-3 > .nibi-rowlist__row > :nth-child(n + 4) { grid-column: 2 / -1; padding-inline-start: 0; }
-  .nibi-rowlist--stack > .nibi-rowlist__row > :is(.nibi-rowlist__status, .nibi-rowlist__num, .nibi-rowlist__end) { justify-content: flex-start; text-align: start; }
+  .nibi-rowlist--stack-3 > :is(.nibi-rowlist__head, .nibi-rowlist__group, .nibi-rowlist__row), .nibi-rowlist--stack-3 > .nibi-rowlist__set > .nibi-rowlist__row { grid-template-columns: var(--nibi-rowlist-cols-narrow, auto minmax(0, 1fr) minmax(0, 1fr)); }
+  .nibi-rowlist--stack-3 > .nibi-rowlist__row > :nth-child(n + 4), .nibi-rowlist--stack-3 > .nibi-rowlist__set > .nibi-rowlist__row > :nth-child(n + 4) { grid-column: 2 / -1; padding-inline-start: 0; }
+  .nibi-rowlist--stack > .nibi-rowlist__row > :is(.nibi-rowlist__status, .nibi-rowlist__num, .nibi-rowlist__end), .nibi-rowlist--stack > .nibi-rowlist__set > .nibi-rowlist__row > :is(.nibi-rowlist__status, .nibi-rowlist__num, .nibi-rowlist__end) { justify-content: flex-start; text-align: start; }
   .nibi-rowlist--stack :is(.nibi-rowlist__sub, .nibi-rowlist__detail) { overflow: visible; white-space: normal; text-overflow: clip; }
+  /* stacked, the status has the row's width: its words wrap instead of running out of the row (0013 audit F07) */
+  .nibi-rowlist--stack .nibi-rowlist__status { min-width: 0; white-space: normal; text-align: start; }
+  .nibi-rowlist--stack .nibi-rowlist__status > * { min-width: 0; }
   .nibi-rowlist--line.nibi-rowlist--stack .nibi-rowlist__row { min-height: calc(var(--nibi-size-row) * 1.25); padding-block: var(--nibi-grid-y); }
   .nibi-rowlist--line.nibi-rowlist--stack .nibi-rowlist__title { flex-wrap: wrap; row-gap: 0; }
   .nibi-rowlist--line.nibi-rowlist--stack .nibi-rowlist__title > .nibi-rowlist__sub {
