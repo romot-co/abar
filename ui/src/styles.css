@@ -34,7 +34,7 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .inline-error::before { content: "!"; display: inline-grid; width: 1em; height: 1em; place-items: center; margin-inline-end: var(--nibi-grid-x); border: var(--nibi-stroke-hairline) solid currentColor; border-radius: 50%; font-weight: 600; }
 .empty-state code { display: block; padding: var(--nibi-grid-y) var(--nibi-size-gap-x); border-radius: var(--nibi-radius-field); color: var(--nibi-color-text-muted); background: var(--nibi-color-control); font-size: var(--nibi-type-value-size); }
 
-/* ---- 受信箱(§8.2): 題名の選択と目的 → 現在最良 → 未回答(セッション、単純化の確認、完了 N 件) */
+/* ---- 受信箱(§8.2): 題名の選択と目的 → 現在最良 → 未回答(セッション、単純化の確認)→ 開始できない N 件 → 完了 N 件 */
 .inbox { gap: calc(var(--nibi-size-inset) * 2.5); }
 .inbox-header { display: grid; gap: var(--nibi-grid-y); }
 .brief { max-width: 40em; overflow-wrap: anywhere; }
@@ -63,6 +63,15 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
   .queue-list > .nibi-rowlist__row > * { grid-column: 1 / -1; }
   .queue-list .nibi-rowlist__end { justify-self: start; justify-content: flex-start; }
 }
+/* 開始できない: 完了に混ぜず、理由を文で(印と語、色だけにしない)。狭い列では状態を題名の下へ */
+.blocked-reason { overflow-wrap: anywhere; white-space: normal; }
+.blocked-status { justify-self: end; }
+.blocked-word { color: var(--nibi-color-error-text); }
+@container (max-width: 34rem) {
+  .blocked-list > .nibi-rowlist__row { grid-template-columns: minmax(0, 1fr); }
+  .blocked-list > .nibi-rowlist__row > * { grid-column: 1 / -1; }
+  .blocked-list .blocked-status { justify-self: start; }
+}
 .notice-title { display: block; font-weight: 500; }
 .notice-reason { display: block; margin-top: calc(var(--nibi-grid-y) / 4); color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
 .completed-sessions { gap: var(--nibi-size-gap); }
@@ -73,7 +82,6 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
   .completed-list > .nibi-rowlist__row { grid-template-columns: 3rem minmax(0, 1fr); padding-block: var(--nibi-grid-y); }
   .completed-list > .nibi-rowlist__row > .completed-outcome { grid-column: 2 / -1; justify-self: start; justify-content: flex-start; max-width: none; text-align: start; }
 }
-.completed-row[aria-disabled="true"] .completed-outcome { color: var(--nibi-color-text-muted); }
 
 /* ---- Deck(§2.13) */
 .deck-shell { gap: calc(var(--nibi-size-inset) * 1.25); padding-top: var(--nibi-grid-y); }

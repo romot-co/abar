@@ -60,6 +60,7 @@ jobs:
         run: |
           npm run build
           npm run typecheck
+          npm test
           npm audit --audit-level=high
       - name: Verify generated UI assets are committed
         run: git diff --exit-code -- src/abar/server/static ui/openapi.json ui/src/generated
