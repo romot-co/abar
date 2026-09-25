@@ -68,23 +68,26 @@ def test_pending_autoplay_owns_only_one_source_pair(
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.add_init_script(DEFERRED_AUDIO_CONTEXT)
         page.goto(url)
-        page.get_by_role("button", name="続きを聴く", exact=True).click()
+        page.get_by_role("button", name="続ける", exact=True).click()
         page.locator(".slot-switcher button:not(:disabled)").first.wait_for()
         # Autoplay has requested resume(), but the browser has not granted it yet.
         page.wait_for_function("audioProbe.contexts.some(c => c.resumes.length > 0)")
+        # Two user presses on B while the autoplay permission is still pending: autoplay and both
+        # presses await the same resume(); only one may start (the cards are the play control).
         page.locator(".slot-switcher button").nth(1).click()
-        page.get_by_role("button", name="再生", exact=True).click()
+        page.locator(".slot-switcher button").nth(1).click()
         if action != "keep":
             page.get_by_role("button", name="受信箱", exact=True).click()
-            page.get_by_role("heading", name="残りのセッション", exact=True).wait_for()
+            page.get_by_role("heading", name="未回答", exact=True).wait_for()
         if action == "replace":
             page.get_by_role("button", name="再開", exact=True).click()
             page.locator(".slot-switcher button:not(:disabled)").first.wait_for()
         page.evaluate("audioProbe.contexts.forEach(c => c.release())")
         if action != "leave":
-            page.get_by_role("button", name="一時停止", exact=True).wait_for()
+            playing = page.locator('.slot-switcher button[aria-label$="押すと一時停止"]')
+            playing.wait_for()
             assert page.evaluate("audioProbe.sources.filter(s => s.started).length") == 2
-            page.get_by_role("button", name="一時停止", exact=True).click()
+            playing.click()  # pressing the playing card pauses it
         # No delayed start may leak into a paused/unmounted deck, and Pause must stop all sound.
         assert (
             page.evaluate(

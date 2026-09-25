@@ -13,6 +13,7 @@
     "build": "npm run generate:api && tsc -b && vite build",
     "dev": "vite",
     "generate:api": "uv run --project .. python ../scripts/export_openapi.py openapi.json && openapi-ts",
+    "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {

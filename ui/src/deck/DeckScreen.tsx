@@ -7,6 +7,7 @@ import { EMPTY_DRAFT, buildRequest, type AnswerDraft } from "./answerDraft";
 import { AnswerDock, AnswerEditor, DeckHeader, ListeningPanel, PausedPanel, SkipConfirmBar } from "./DeckPanels";
 import { SessionSummary } from "./SessionSummary";
 import { useDeckShortcuts } from "./useDeckShortcuts";
+import { InlineError } from "../InlineError";
 
 type Keyed<T> = { deliveryId: string | null; value: T };
 
@@ -173,7 +174,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
         <p>{humanError(loadError)}</p>
         <div className="centered-actions">
           <button type="button" className="nibi-button secondary-action" onClick={() => void loadDeck()}>再試行</button>
-          <button type="button" className="nibi-button nibi-button--quiet weak-action" onClick={onBack}>受信箱へ</button>
+          <button type="button" className="nibi-button nibi-button--link weak-action" onClick={onBack}>受信箱へ</button>
         </div>
       </main>
     );
@@ -193,7 +194,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
     return (
       <>
         <PausedPanel pending={lifecycle.isPending} onResume={resume} onBack={onBack} />
-        {actionError && <p className="inline-error centered-action-error" role="alert">{actionError}</p>}
+        {actionError && <InlineError className="centered-action-error">{actionError}</InlineError>}
       </>
     );
   }
@@ -207,10 +208,10 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
       <main className="screen deck-shell">
         <div className="deck-top">
           <DeckHeader deck={deck} onLeave={leave} />
-          {actionError && <p className="inline-error" role="alert">{actionError}</p>}
-          {skipError && <p className="inline-error" role="alert">{skipError}</p>}
-          {revealError && <p className="inline-error" role="alert">{revealError}</p>}
-          {showHelp && <aside className="nibi-card shortcut-help" aria-label="キーボード操作">Space A/B切替 · 1〜5 選好 · A/B 問題の指摘 · N メモ · Enter 記録 · 0 飛ばす · ? この一覧（ボタンにフォーカスがあるときの Space・Enter はそのボタンを押します）</aside>}
+          {actionError && <InlineError>{actionError}</InlineError>}
+          {skipError && <InlineError>{skipError}</InlineError>}
+          {revealError && <InlineError>{revealError}</InlineError>}
+          {showHelp && <aside className="nibi-notice shortcut-help" aria-label="キーボード操作">Space A/B切替 · 1〜5 選好 · A/B 問題の指摘 · N メモ · Enter 記録 · 0 飛ばす · ? この一覧（ボタンにフォーカスがあるときの Space・Enter はそのボタンを押します）</aside>}
         </div>
         <ListeningPanel
           player={player}
@@ -223,17 +224,18 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           <AnswerEditor
             question={deck.question ?? "どちらを残しますか？"}
             locked={!canAnswer}
+            heard={player.heard}
             draft={draft}
             commentRef={commentRef}
             error={answerError}
+            canSubmit={canSubmit}
+            pending={answer.isPending}
             onChange={setDraft}
+            onSubmit={submit}
           />
         </div>
       </main>
       <AnswerDock
-        revealed={draft.preference !== null}
-        canSubmit={canSubmit}
-        pending={answer.isPending}
         skippable={canSkip}
         skipping={skip.isPending}
         confirm={skipConfirm ? (
@@ -244,7 +246,6 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
             onCancel={() => { if (skip.isPending) return; setSkipConfirmFor(null); skip.reset(); }}
           />
         ) : null}
-        onSubmit={submit}
         onSkip={() => requestSkip(false)}
       />
     </div>

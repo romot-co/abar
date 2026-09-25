@@ -7,26 +7,32 @@ from playwright.sync_api import expect, sync_playwright
 @pytest.mark.browser
 @pytest.mark.parametrize("width", [375, 1024])
 def test_long_labels_and_notes_wrap_without_clipping(width: int) -> None:
-    css = Path("ui/src/styles.css").read_text()
+    css = (
+        Path("ui/vendor/nibi/dist/web/nibi-core.css").read_text()
+        + Path("ui/src/styles.css").read_text()
+    )
     text = "目的と判断の根拠を省略せず最後まで確認する。" * 12
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": width, "height": 800})
         page.set_content(f"""<style>{css}</style>
           <main style="width:160px">
-            <p class="queue-focus">{text}</p>
+            <div class="nibi-rowlist queue-list"><div class="nibi-rowlist__row">
+              <span class="nibi-rowlist__title">
+                <span class="nibi-rowlist__name queue-focus">{text}</span>
+              </span>
+            </div></div>
             <strong class="best-id">{text}</strong>
-            <div class="completed-row" style="display:block"><p>{text}</p></div>
-            <div class="result-pair"><span>{text}</span><small>{text}</small></div>
-            <div class="answer-note">{text}</div>
+            <span class="nibi-rowlist__sub result-pair"><span>{text}</span></span>
+            <span class="nibi-rowlist__sub answer-note">{text}</span>
+            <p class="nibi-body notice-reason">{text}</p>
           </main>""")
         for selector in (
             ".queue-focus",
             ".best-id",
-            ".completed-row p",
-            ".result-pair > span",
-            ".result-pair small",
+            ".result-pair",
             ".answer-note",
+            ".notice-reason",
         ):
             item = page.locator(selector)
             assert item.inner_text() == text
@@ -38,7 +44,7 @@ def test_long_labels_and_notes_wrap_without_clipping(width: int) -> None:
 
 @pytest.mark.browser
 @pytest.mark.parametrize("width", [375, 1024])
-def test_saved_criterion_stays_small_and_answer_controls_remain_reachable(
+def test_saved_criterion_wraps_as_the_title_and_answer_controls_remain_reachable(
     tmp_path: Path, free_tcp_port: int, width: int
 ) -> None:
     from playwright.sync_api import Route
@@ -65,20 +71,19 @@ def test_saved_criterion_stays_small_and_answer_controls_remain_reachable(
 
         page.route("**/api/deck/active", long_saved_criterion)
         page.goto(url)
-        page.get_by_role("button", name="続きを聴く", exact=True).click()
+        page.get_by_role("button", name="続ける", exact=True).click()
         purpose = page.locator(".deck-criterion")
         purpose.wait_for()
-        assert purpose.inner_text() == f"目的 {criterion}"
-        # nibi の value の役割(本文より1段小さい、密度で変わる)で表示する
+        # 観点は題名の大きさで、省略せずに折り返す(§2.13)
+        assert purpose.inner_text() == criterion
         sizes = purpose.evaluate(
             """el => [
               parseFloat(getComputedStyle(el).fontSize),
               parseFloat(getComputedStyle(document.documentElement)
-                .getPropertyValue('--nibi-type-value-size')),
-              parseFloat(getComputedStyle(document.body).fontSize),
+                .getPropertyValue('--nibi-type-title-size')),
             ]"""
         )
-        assert sizes[0] == sizes[1] and sizes[0] < sizes[2]
+        assert sizes[0] == sizes[1]
         assert purpose.evaluate("el => el.scrollWidth <= el.clientWidth + 1")
         assert purpose.evaluate("el => el.scrollHeight <= el.clientHeight + 1")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -106,4 +111,33 @@ def test_saved_criterion_stays_small_and_answer_controls_remain_reachable(
         submit.scroll_into_view_if_needed()
         box = submit.bounding_box()
         assert box is not None and box["y"] >= 0 and box["y"] + box["height"] <= 640
+        browser.close()
+
+
+@pytest.mark.browser
+def test_programmatic_focus_keeps_the_ring_and_errors_use_the_nibi_alert() -> None:
+    styles = Path("ui/src/styles.css").read_text()
+    # nibi は 400 / 500 だけ。エラーの印は手描きの「!」でなく nibi の alert の印
+    assert "font-weight: 600" not in styles
+    assert 'content: "!"' not in styles
+    assert "InlineError" in Path("ui/src/deck/DeckScreen.tsx").read_text()
+    css = Path("ui/vendor/nibi/dist/web/nibi-core.css").read_text() + styles
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 800, "height": 600})
+        page.set_content(f"""<style>{css}</style>
+          <div class="nibi-segmented nibi-segmented--cards slot-switcher" tabindex="-1"
+            role="group" aria-label="試聴"><button class="nibi-segmented__option">A</button></div>
+          <main class="screen summary-shell"><h1 tabindex="-1" class="nibi-title">結果</h1></main>
+          <p class="nibi-alert nibi-alert--banner inline-error" role="alert">
+            <span class="nibi-alert__icon" aria-hidden="true"></span>
+            <span class="nibi-alert__text">記録できませんでした。</span></p>""")
+        # キーボードの人には、移したフォーカスの輪が見える(比較が変わった時・結果の見出し)
+        page.keyboard.press("Shift")
+        for selector in (".slot-switcher", ".summary-shell h1"):
+            page.locator(selector).evaluate("el => el.focus()")
+            expect(page.locator(selector)).to_have_css("outline-style", "solid")
+        icon = page.locator(".inline-error .nibi-alert__icon")
+        box = icon.bounding_box()
+        assert box is not None and box["width"] > 0
         browser.close()
