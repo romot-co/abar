@@ -102,15 +102,8 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .slot-state .ui-icon, .slot-heard .ui-icon { width: var(--nibi-type-label-size); height: var(--nibi-type-label-size); }
 /* 聴いたかどうかは再生の操作と別の場所(カードの右上)に小さく。未聴取は何も出さない */
 .slot-heard { position: absolute; top: var(--nibi-grid-y); right: var(--nibi-size-gap-x); display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) / 2); color: inherit; font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); }
-.transport { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--nibi-size-inset-x); min-height: var(--nibi-size-control); }
-.transport .time { min-width: 9ch; color: var(--nibi-color-text-muted); font-variant-numeric: tabular-nums; text-align: end; white-space: nowrap; }
-/* 再生位置はReactが持つネイティブのrange(キー操作のため)。形だけnibiのレールとつまみに合わせる。 */
-.transport input[type="range"] { width: 100%; height: var(--nibi-size-hit); margin: 0; padding: 0; appearance: none; border: 0; background: transparent; cursor: pointer; -webkit-appearance: none; }
-.transport input[type="range"]::-webkit-slider-runnable-track { height: var(--nibi-slider-rail); border-radius: var(--nibi-radius-pill); background: var(--nibi-color-rail); }
-.transport input[type="range"]::-webkit-slider-thumb { width: var(--nibi-slider-thumb); height: var(--nibi-slider-thumb); margin-top: calc((var(--nibi-slider-rail) - var(--nibi-slider-thumb)) / 2); appearance: none; border: 0; border-radius: 50%; background: var(--nibi-color-thumb); -webkit-appearance: none; }
-.transport input[type="range"]::-moz-range-track { height: var(--nibi-slider-rail); border-radius: var(--nibi-radius-pill); background: var(--nibi-color-rail); }
-.transport input[type="range"]::-moz-range-thumb { width: var(--nibi-slider-thumb); height: var(--nibi-slider-thumb); border: 0; border-radius: 50%; background: var(--nibi-color-thumb); }
-.transport input[type="range"]:disabled { cursor: not-allowed; opacity: .5; }
+/* 再生位置: nibi のスライダー行(位置の形、1行)。値と操作はReact(PositionSlider)が持つ */
+.position-slider .time { white-space: nowrap; }
 .reveal-action { text-align: center; }
 
 .deck-answer { min-width: 0; }

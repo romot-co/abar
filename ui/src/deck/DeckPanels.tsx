@@ -3,6 +3,7 @@ import type { Deck } from "../api";
 import { Icon } from "../Icon";
 import type { ComparisonPlayer } from "../useComparisonPlayer";
 import type { AnswerDraft, BlockerDraft } from "./answerDraft";
+import { PositionSlider } from "./PositionSlider";
 
 export function PausedPanel({ pending, onResume, onBack }: { pending: boolean; onResume: () => void; onBack: () => void }) {
   return (
@@ -110,10 +111,7 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
           );
         })}
       </div>
-      <div className="transport">
-        <input aria-label="再生位置" type="range" min={0} max={Math.max(player.duration, 0.01)} step={0.01} value={player.position} disabled={disabled} onChange={(event) => player.seek(Number(event.currentTarget.value))} />
-        <span className="nibi-value time">{formatTime(player.position)} / {formatTime(player.duration)}</span>
-      </div>
+      <PositionSlider position={player.position} duration={player.duration} disabled={disabled} onSeek={player.seek} />
       {deck.can_reveal && !identity && (
         <p className="reveal-action">
           <button type="button" className="nibi-button nibi-button--link weak-action" disabled={revealing} onClick={onReveal}>A/Bの中身を表示する</button>
@@ -259,4 +257,3 @@ function preferenceLabel(value: number): readonly [string, string] {
     ["B", "明確に"],
   ] as const)[value - 1] ?? ["", ""];
 }
-function formatTime(seconds: number): string { const minutes = Math.floor(seconds / 60); return `${minutes}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`; }
