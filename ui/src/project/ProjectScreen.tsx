@@ -6,6 +6,7 @@ import type { IndicatorSummaryView, SessionCardView, SimplificationPromptView } 
 import { Icon } from "../Icon";
 import { Mark } from "../Mark";
 import { blockedReason, classifySessions, queueMessage } from "./inbox";
+import { decimalsByUnit, displayUnit, formatIndicatorValue } from "./indicators";
 
 /** Projectの受信箱に載らない進行中のSession(`abar listen` のQuick Listen等)。 */
 export type OtherSession = { sessionId: string; status: "active" | "paused" };
@@ -133,6 +134,10 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
   const blocked = inProgress !== "";
   const targets = project.indicators.filter((item) => item.role === "target");
   const guards = project.indicators.filter((item) => item.role === "guard");
+  const decimals = decimalsByUnit([...targets, ...guards]);
+  const hasUnits = [...targets, ...guards].some((item) => displayUnit(item.unit) !== "");
+  // 縞は3行以上の群があるときだけ(rowlist.md: 2行までは余白で分ける)。
+  const striped = targets.length > 2 || guards.length > 2;
   const sessionAction = (item: SessionCardView): ReactNode => {
     if (item.status === "active") return <button type="button" className="nibi-button nibi-button--primary" onClick={onOpenDeck}>続ける</button>;
     if (item.status === "paused") {
@@ -156,13 +161,13 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
         </div>
         {(targets.length > 0 || guards.length > 0) && (
           <div
-            className="nibi-rowlist nibi-rowlist--line nibi-rowlist--striped nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack state-card indicator-table"
+            className={`nibi-rowlist nibi-rowlist--line${striped ? " nibi-rowlist--striped" : ""} nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--tight state-card indicator-table`}
             role="table"
             aria-label="現在最良の指標"
-            style={cols("minmax(0, 1fr) auto 7rem")}
+            style={cols("minmax(0, max-content) auto minmax(0, 1fr)")}
           >
-            {targets.length > 0 && <IndicatorGroup label="目標" role="target" items={targets} />}
-            {guards.length > 0 && <IndicatorGroup label="制約" role="guard" items={guards} />}
+            {targets.length > 0 && <IndicatorGroup label="目標" role="target" items={targets} decimals={decimals} hasUnits={hasUnits} />}
+            {guards.length > 0 && <IndicatorGroup label="制約" role="guard" items={guards} decimals={decimals} hasUnits={hasUnits} />}
           </div>
         )}
       </section>
@@ -251,7 +256,9 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
   );
 }
 
-function IndicatorGroup({ label, role, items }: { label: string; role: "target" | "guard"; items: IndicatorSummaryView[] }) {
+type ValueFormat = { decimals: Map<string, number>; hasUnits: boolean };
+
+function IndicatorGroup({ label, role, items, decimals, hasUnits }: { label: string; role: "target" | "guard"; items: IndicatorSummaryView[] } & ValueFormat) {
   return (
     <>
       <div className="nibi-rowlist__group indicator-group" role="row">
@@ -259,19 +266,20 @@ function IndicatorGroup({ label, role, items }: { label: string; role: "target" 
         <span role="columnheader" />
         <span role="columnheader" />
       </div>
-      {items.map((item) => <IndicatorRow key={item.id} item={item} role={role} />)}
+      {items.map((item) => <IndicatorRow key={item.id} item={item} role={role} decimals={decimals} hasUnits={hasUnits} />)}
     </>
   );
 }
 
-function IndicatorRow({ item, role }: { item: IndicatorSummaryView; role: "target" | "guard" }) {
-  const unit = item.unit === "ratio" ? "" : item.unit;
+// 値は名前の直後(--tight)、同じ単位の値は小数の桁を揃えて右揃え(単位は揃えた数字の外)。
+function IndicatorRow({ item, role, decimals, hasUnits }: { item: IndicatorSummaryView; role: "target" | "guard" } & ValueFormat) {
+  const unit = displayUnit(item.unit);
   return (
     <div className="nibi-rowlist__row indicator-row" role="row">
       <span role="rowheader" className="nibi-rowlist__title nibi-body indicator-label"><span className="nibi-rowlist__name">{item.label}</span></span>
-      <span role="cell" className="nibi-rowlist__num nibi-body indicator-value">
-        <span className="indicator-number">{formatIndicatorValue(item.value)}</span>
-        {unit && <span className="nibi-rowlist__unit">{unit}</span>}
+      <span role="cell" className="nibi-rowlist__num nibi-rowlist__num--end nibi-body indicator-value">
+        <span className="indicator-number">{formatIndicatorValue(item.value, decimals.get(item.unit) ?? 0)}</span>
+        {hasUnits && <span className="nibi-rowlist__unit">{unit}</span>}
       </span>
       <span role="cell" className="nibi-rowlist__status nibi-body indicator-status">
         {role === "guard" && <GuardStatus result={item.guard_result} />}
@@ -311,9 +319,4 @@ function formatDate(value: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-function formatIndicatorValue(value: number | null): string {
-  if (value === null) return "—";
-  return String(Math.round(value * 1_000) / 1_000);
 }

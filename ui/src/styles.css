@@ -49,7 +49,7 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .indicator-table > .nibi-rowlist__group { min-height: 0; padding-top: var(--nibi-size-gap); padding-bottom: calc(var(--nibi-grid-y) / 2); }
 .indicator-table > .nibi-rowlist__group:first-child { padding-top: var(--nibi-grid-y); }
 .group-label { color: var(--nibi-color-text-muted); }
-.indicator-value { display: inline-flex; align-items: baseline; gap: var(--nibi-grid-x); }
+.indicator-value { display: inline-flex; align-items: baseline; }
 .indicator-number { font-variant-numeric: tabular-nums; }
 .indicator-row > .indicator-status:empty { display: none; }
 .guard-badge { display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) * .75); }

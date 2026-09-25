@@ -123,6 +123,14 @@ def _exercise_project_deck(page: Page, url: str) -> None:
             if (box := indicator_rows.nth(index).locator(selector).bounding_box()) is not None
         ]
         assert len(set(column_left_edges)) == 1
+    # 値は名前の直後(--tight)、小数の桁を揃える。2行までの群に縞は付けない(rowlist.md)
+    values = page.locator(".indicator-row .indicator-number").all_inner_texts()
+    assert "0.90" in values and "0.97" in values
+    assert page.locator(".indicator-table.nibi-rowlist--striped").count() == 0
+    label_box = indicator_rows.first.locator(".indicator-label").bounding_box()
+    value_box = indicator_rows.first.locator(".indicator-value").bounding_box()
+    assert label_box is not None and value_box is not None
+    assert value_box["x"] + value_box["width"] - label_box["x"] < 320
 
     page.get_by_role("button", name="続ける", exact=True).click()
     page.locator(".slot-switcher").wait_for()
