@@ -4,6 +4,7 @@ import { Icon } from "../Icon";
 import type { ComparisonPlayer } from "../useComparisonPlayer";
 import type { AnswerDraft, BlockerDraft } from "./answerDraft";
 import { PositionSlider } from "./PositionSlider";
+import { InlineError } from "../InlineError";
 
 export function PausedPanel({ pending, onResume, onBack }: { pending: boolean; onResume: () => void; onBack: () => void }) {
   return (
@@ -80,7 +81,7 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
   };
   return (
     <section className="listen-panel" aria-label="試聴">
-      {player.error && <p className="inline-error" role="alert">{player.error}</p>}
+      {player.error && <InlineError>{player.error}</InlineError>}
       <div ref={groupRef} tabIndex={-1} className="nibi-segmented nibi-segmented--cards slot-switcher" role="group" aria-label={`試聴する音（比較 ${(deck.sequence_index ?? 0) + 1} / ${deck.comparison_count}）。押すと再生、もう一度押すと一時停止`}>
         {(["a", "b"] as const).map((slot) => {
           const active = player.activeSlot === slot;
@@ -189,11 +190,11 @@ export function AnswerEditor({ question, locked, heard, draft, commentRef, error
               onChange={(event) => onChange({ ...draft, comment: event.currentTarget.value })}
             />
           </label>
-          {error && <p className="inline-error" role="alert">{error}</p>}
+          {error && <InlineError>{error}</InlineError>}
           <button type="button" className="nibi-button nibi-button--primary submit-answer" disabled={!canSubmit} onClick={onSubmit}>{pending ? "記録中…" : "記録して次へ"}</button>
         </div>
       )}
-      {!revealed && error && <p className="inline-error" role="alert">{error}</p>}
+      {!revealed && error && <InlineError>{error}</InlineError>}
     </section>
   );
 }

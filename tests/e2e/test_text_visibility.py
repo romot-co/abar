@@ -112,3 +112,32 @@ def test_saved_criterion_wraps_as_the_title_and_answer_controls_remain_reachable
         box = submit.bounding_box()
         assert box is not None and box["y"] >= 0 and box["y"] + box["height"] <= 640
         browser.close()
+
+
+@pytest.mark.browser
+def test_programmatic_focus_keeps_the_ring_and_errors_use_the_nibi_alert() -> None:
+    styles = Path("ui/src/styles.css").read_text()
+    # nibi は 400 / 500 だけ。エラーの印は手描きの「!」でなく nibi の alert の印
+    assert "font-weight: 600" not in styles
+    assert 'content: "!"' not in styles
+    assert "InlineError" in Path("ui/src/deck/DeckScreen.tsx").read_text()
+    css = Path("ui/vendor/nibi/dist/web/nibi-core.css").read_text() + styles
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 800, "height": 600})
+        page.set_content(f"""<style>{css}</style>
+          <div class="nibi-segmented nibi-segmented--cards slot-switcher" tabindex="-1"
+            role="group" aria-label="試聴"><button class="nibi-segmented__option">A</button></div>
+          <main class="screen summary-shell"><h1 tabindex="-1" class="nibi-title">結果</h1></main>
+          <p class="nibi-alert nibi-alert--banner inline-error" role="alert">
+            <span class="nibi-alert__icon" aria-hidden="true"></span>
+            <span class="nibi-alert__text">記録できませんでした。</span></p>""")
+        # キーボードの人には、移したフォーカスの輪が見える(比較が変わった時・結果の見出し)
+        page.keyboard.press("Shift")
+        for selector in (".slot-switcher", ".summary-shell h1"):
+            page.locator(selector).evaluate("el => el.focus()")
+            expect(page.locator(selector)).to_have_css("outline-style", "solid")
+        icon = page.locator(".inline-error .nibi-alert__icon")
+        box = icon.bounding_box()
+        assert box is not None and box["width"] > 0
+        browser.close()

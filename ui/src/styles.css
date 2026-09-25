@@ -30,8 +30,6 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .centered-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--nibi-size-gap-x); margin-top: var(--nibi-grid-y); }
 .pair-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--nibi-size-gap-x); }
 .pair-actions .nibi-button { width: 100%; }
-.inline-error { margin: 0; padding: var(--nibi-grid-y) var(--nibi-size-gap-x); border-radius: var(--nibi-radius-panel); color: var(--nibi-color-error-text); background: var(--nibi-color-error-subtle); font-size: var(--nibi-type-value-size); line-height: var(--nibi-type-value-line); }
-.inline-error::before { content: "!"; display: inline-grid; width: 1em; height: 1em; place-items: center; margin-inline-end: var(--nibi-grid-x); border: var(--nibi-stroke-hairline) solid currentColor; border-radius: 50%; font-weight: 600; }
 .empty-state code { display: block; padding: var(--nibi-grid-y) var(--nibi-size-gap-x); border-radius: var(--nibi-radius-field); color: var(--nibi-color-text-muted); background: var(--nibi-color-control); font-size: var(--nibi-type-value-size); }
 
 /* ---- 受信箱(§8.2): 題名の選択と目的 → 現在最良 → 未回答(セッション、単純化の確認)→ 開始できない N 件 → 完了 N 件 */
@@ -94,7 +92,6 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 
 .listen-panel { display: grid; gap: var(--nibi-grid-y); }
 .slot-switcher { display: grid; grid-template-columns: 1fr 1fr; gap: var(--nibi-size-gap-x); }
-.slot-switcher:focus { outline: none; }
 .slot-switcher .nibi-segmented__option { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: calc(var(--nibi-size-row) * 2.5); gap: var(--nibi-grid-y); }
 .slot-name { font-size: var(--nibi-type-display-size); line-height: 1; font-weight: 500; }
 .slot-identity { max-width: 100%; color: inherit; font-size: var(--nibi-type-value-size); line-height: var(--nibi-type-value-line); overflow-wrap: anywhere; }
@@ -134,7 +131,6 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .result-eyebrow { color: var(--nibi-color-text-muted); }
 .result-eyebrow span { white-space: nowrap; }
 .summary-shell h1 { overflow-wrap: anywhere; text-wrap: pretty; }
-.summary-shell h1:focus { outline: none; }
 .verdict-card { gap: var(--nibi-size-gap); }
 .verdict-detail, .verdict-next { color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
 .verdict-tally { display: flex; flex-wrap: wrap; align-items: start; gap: var(--nibi-grid-y) calc(var(--nibi-size-gap-x) * 2); }

@@ -7,6 +7,7 @@ import { Icon } from "../Icon";
 import { Mark } from "../Mark";
 import { blockedReason, classifySessions, queueMessage } from "./inbox";
 import { decimalsByUnit, displayUnit, formatIndicatorValue } from "./indicators";
+import { InlineError } from "../InlineError";
 
 /** Projectの受信箱に載らない進行中のSession(`abar listen` のQuick Listen等)。 */
 export type OtherSession = { sessionId: string; status: "active" | "paused" };
@@ -87,7 +88,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
     );
   }
 
-  const lifecycleError = start.isError || resume.isError ? <p className="inline-error" role="alert">{humanError(start.error ?? resume.error)}</p> : null;
+  const lifecycleError = start.isError || resume.isError ? <InlineError>{humanError(start.error ?? resume.error)}</InlineError> : null;
   // Projectに属さない進行中の試聴も「未回答」の先頭に並べる(続けるのが次の一手)。
   const otherRow = otherSession && (
     <div className="nibi-rowlist__row queue-row">
@@ -196,7 +197,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
         {project.pending_simplifications.map((prompt) => (
           <SimplificationNotice key={prompt.id} prompt={prompt} pending={decide.isPending} onDecision={(decision) => decide.mutate({ id: prompt.id, decision })} />
         ))}
-        {decide.isError && <p className="inline-error" role="alert">{humanError(decide.error)}</p>}
+        {decide.isError && <InlineError>{humanError(decide.error)}</InlineError>}
       </section>
 
       {blockedSessions.length > 0 && (

@@ -6,6 +6,7 @@ import type { RelistenItemView, SessionResultView } from "../generated";
 import { Mark, type MarkKind } from "../Mark";
 import { activeCells, answerWords, gaugeEnds, identityLabel, orientAnswer, type GaugeEnds } from "./gauge";
 import { conditionReason } from "./resultCopy";
+import { InlineError } from "../InlineError";
 
 export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: string; onBack: () => void; onNext?: () => void }) {
   const queryClient = useQueryClient();
@@ -90,7 +91,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
             {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} ends={ends} />)}
           </div>
         </section>
-        {start.isError && <p className="inline-error" role="alert">{humanError(start.error)}</p>}
+        {start.isError && <InlineError>{humanError(start.error)}</InlineError>}
       </main>
       <div className="nibi-dock summary-actions">
         {readyNext && (
