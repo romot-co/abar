@@ -51,23 +51,26 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
   });
   const [completedOpen, setCompletedOpen] = useState(false);
 
-  // 題名がそのままProjectの選択になる。読み込めないWorkspaceやProjectのないWorkspaceからも他へ戻れる。
+  // 題名(頁のh1)がそのままProjectの選択になる。読み込めないWorkspaceやProjectのないWorkspaceからも他へ戻れる。
+  // 見出しの名前は題名の文字だけ(中の選択肢の値を重ねて読まない)。
   const selectedName = workspaces.workspaces.find((workspace) => workspace.id === workspaces.selected_id)?.name ?? "ABAR";
   const picker = (
-    <label className="nibi-title-select project-picker">
-      <span className="nibi-title nibi-title-select__value">{selectedName}</span>
-      <span className="nibi-title-select__disc" aria-hidden="true"><Icon name="chevron_down" /></span>
-      <select
-        aria-label="プロジェクト"
-        value={workspaces.selected_id}
-        disabled={switchingWorkspace}
-        onChange={(event) => onSelectWorkspace(event.currentTarget.value)}
-      >
-        {workspaces.workspaces.map((workspace) => (
-          <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
-        ))}
-      </select>
-    </label>
+    <h1 className="project-title" aria-labelledby="project-title-text">
+      <label className="nibi-title-select project-picker">
+        <span id="project-title-text" className="nibi-title nibi-title-select__value">{selectedName}</span>
+        <span className="nibi-title-select__disc" aria-hidden="true"><Icon name="chevron_down" /></span>
+        <select
+          aria-label="プロジェクト"
+          value={workspaces.selected_id}
+          disabled={switchingWorkspace}
+          onChange={(event) => onSelectWorkspace(event.currentTarget.value)}
+        >
+          {workspaces.workspaces.map((workspace) => (
+            <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+          ))}
+        </select>
+      </label>
+    </h1>
   );
 
   if (project.health.status === "degraded") {
@@ -76,7 +79,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
         <header className="inbox-header">{picker}</header>
         <section className="nibi-notice error-panel" role="alert">
           <div className="nibi-notice__text">
-            <h1 className="nibi-heading notice-title">Workspaceを読み込めません</h1>
+            <h2 className="nibi-heading notice-title">Workspaceを読み込めません</h2>
             <p className="nibi-body">{project.health.degradation?.recovery ?? project.health.reasons?.join("、")}</p>
           </div>
         </section>
@@ -111,7 +114,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
         </header>
         {otherRow && (
           <section className="inbox-section" aria-labelledby="queue-heading">
-            <h2 id="queue-heading" className="section-title">未回答</h2>
+            <h2 id="queue-heading" className="nibi-heading section-title">未回答</h2>
             <div className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack queue-list" role="group" aria-label="未回答のセッション" style={cols("minmax(0, 1fr) auto")}>{otherRow}</div>
           </section>
         )}
@@ -156,8 +159,8 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
 
       <section className="inbox-section current-best-section" aria-labelledby="current-best-heading">
         <div className="best-heading">
-          <h2 id="current-best-heading" className="nibi-label best-label">現在最良</h2>
-          <strong className="nibi-title best-id">{project.current_best}</strong>
+          <h2 id="current-best-heading" className="nibi-heading section-title">現在最良</h2>
+          <p className="nibi-body best-id">{project.current_best}</p>
         </div>
         {(targets.length > 0 || guards.length > 0) && (
           <div
@@ -173,7 +176,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
       </section>
 
       <section className="inbox-section queue-section" aria-labelledby="queue-heading">
-        <h2 id="queue-heading" className="section-title">未回答</h2>
+        <h2 id="queue-heading" className="nibi-heading section-title">未回答</h2>
         {emptyQueue && <p className="nibi-body empty-queue">{emptyQueue}</p>}
         {(pending.length > 0 || otherRow) && (
           <div className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack queue-list" role="group" aria-label="未回答のセッション" style={cols("minmax(0, 1fr) auto")}>
@@ -198,7 +201,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
 
       {blockedSessions.length > 0 && (
         <section className="inbox-section blocked-section" aria-labelledby="blocked-heading">
-          <h2 id="blocked-heading" className="section-title">開始できない {blockedSessions.length} 件</h2>
+          <h2 id="blocked-heading" className="nibi-heading section-title">開始できない {blockedSessions.length} 件</h2>
           <div className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack blocked-list" role="list" aria-label="開始できないセッション" style={cols("minmax(0, 1fr) auto")}>
             {blockedSessions.map((item) => (
               <div className="nibi-rowlist__row blocked-row" role="listitem" key={item.project_session_id}>
@@ -215,7 +218,8 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
       )}
 
       {completed.length > 0 && (
-        <section className="inbox-section completed-section">
+        <section className="inbox-section completed-section" aria-labelledby="completed-heading">
+          <h2 id="completed-heading" className="nibi-heading section-title">完了</h2>
           <div className="nibi-disclosure nibi-disclosure--link completed-sessions">
             <button
               type="button"
@@ -224,7 +228,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
               aria-controls="completed-region"
               onClick={() => setCompletedOpen((open) => !open)}
             >
-              <Icon name="chevron_right" className="nibi-disclosure__chevron" />完了 {completed.length} 件を見る
+              <Icon name="chevron_right" className="nibi-disclosure__chevron" />{completed.length} 件を見る
             </button>
             <div id="completed-region" className="nibi-disclosure__region" hidden={!completedOpen}>
               <div className="nibi-rowlist nibi-rowlist--line nibi-rowlist--start completed-list" role="group" aria-label="完了したセッション" style={cols("3rem minmax(0, 1fr) auto")}>

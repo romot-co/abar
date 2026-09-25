@@ -40,10 +40,10 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .brief { max-width: 40em; overflow-wrap: anywhere; }
 .inbox-section { display: grid; gap: var(--nibi-size-gap); }
 .current-best-section { gap: var(--nibi-size-inset); }
+/* 見出しの段: 頁の題名(h1、title)> 欄の見出し(h2、heading)。現在最良のIDは見出しでなく、見出しの下の値(body) */
+.project-title { display: flex; min-width: 0; }
 .best-heading { display: grid; gap: calc(var(--nibi-grid-y) / 2); }
-.best-label { color: var(--nibi-color-text-muted); }
-.best-id { display: block; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: normal; }
-.section-title { font-size: var(--nibi-type-title-size); line-height: var(--nibi-type-title-line); font-weight: 500; }
+.best-id { display: block; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: normal; }
 .empty-queue { color: var(--nibi-color-text-muted); }
 /* 指標: 群の見出しは面なし・小さく薄く、上に余白。値は本文の大きさ */
 .indicator-table > .nibi-rowlist__group { min-height: 0; padding-top: var(--nibi-size-gap); padding-bottom: calc(var(--nibi-grid-y) / 2); }

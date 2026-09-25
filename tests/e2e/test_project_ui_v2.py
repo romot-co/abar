@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Page, expect, sync_playwright
 
 from abar.server import create_app
 from scripts.dev_seed import seed, seed_degraded
@@ -81,13 +81,28 @@ def _exercise_project_deck(page: Page, url: str) -> None:
     project.select_option(label="Xifa")
     page.get_by_text("Increase density without losing attack or air", exact=True).wait_for()
     page.get_by_role("heading", name="未回答", exact=True).wait_for()
+    # 見出しの段: 題名(h1)= Project名、欄(h2)= 現在最良 / 未回答 / 完了。IDは見出しでない値
+    expect(page.get_by_role("heading", level=1)).to_have_count(1)
+    expect(page.get_by_role("heading", level=1, name="Xifa", exact=True)).to_have_count(1)
+    assert page.get_by_role("heading", level=2).all_inner_texts() == ["現在最良", "未回答", "完了"]
+    assert page.get_by_role("heading", name="dense-chorus-v2").count() == 0
+    sizes = page.evaluate(
+        """() => [
+          parseFloat(getComputedStyle(
+            document.querySelector('.project-title .nibi-title')).fontSize),
+          parseFloat(getComputedStyle(document.querySelector('#queue-heading')).fontSize),
+          parseFloat(getComputedStyle(document.querySelector('.best-id')).fontWeight),
+        ]"""
+    )
+    assert sizes[0] > sizes[1]
+    assert sizes[2] == 400
     assert page.get_by_role("button", name="Projectを作らず比較する").count() == 0
     # §8.2: 目的 → 現在最良(指標)→ 未回答 → 完了 N 件
     queue_box = page.locator(".queue-section").bounding_box()
     state_box = page.locator(".state-card").bounding_box()
     assert queue_box is not None and state_box is not None
     assert state_box["y"] < queue_box["y"]
-    completed_sessions = page.get_by_text("完了 3 件を見る", exact=True)
+    completed_sessions = page.get_by_role("button", name="3 件を見る", exact=True)
     current_best_heading = page.get_by_role("heading", name="現在最良", exact=True)
     completed_sessions.wait_for()
     current_best_heading.wait_for()
