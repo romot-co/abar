@@ -4,6 +4,8 @@ import { api, type Action, type Project, type SessionCompletion } from "../api";
 import { humanError } from "../errors";
 import type { RelistenItemView, SessionResultView } from "../generated";
 import { Mark, type MarkKind } from "../Mark";
+import { activeCells, answerWords, gaugeEnds, identityLabel, orientAnswer, type GaugeEnds } from "./gauge";
+import { conditionReason } from "./resultCopy";
 
 export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: string; onBack: () => void; onNext?: () => void }) {
   const queryClient = useQueryClient();
@@ -44,6 +46,8 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   const readyCount = project.data?.sessions.filter((item) => item.status === "ready").length ?? 0;
   const verdict = verdictCopy(data);
   const kind = data.current_best_check ? "最良の更新" : result ? "観察" : "試聴";
+  // この画面は終了したSessionだけを表示する(§7.9: A/Bと候補の対応はここで公開できる)。ゲージは候補の向きに固定する。
+  const ends = gaugeEnds(result, data.items);
 
   return (
     <div className="docked-screen summary-page">
@@ -58,7 +62,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
         <section className={result?.current_best_updated ? "nibi-card nibi-card--lead verdict-card updated" : "nibi-card nibi-card--lead verdict-card"} aria-labelledby="verdict-title">
           <strong id="verdict-title" className="nibi-title">{verdict.title}</strong>
           {verdict.detail && <p className="nibi-body verdict-detail">{verdict.detail}</p>}
-          {result && <Tally result={result} />}
+          {result && <Tally result={result} ends={ends} />}
           {result && (
             <ul className="verdict-reasons" aria-label="根拠">
               {reasons(data, result).map((reason) => (
@@ -71,6 +75,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
 
         <section className="answer-section" aria-labelledby="answer-record-heading">
           <h2 id="answer-record-heading" className="nibi-heading">回答 · 全 {data.items.length} 比較</h2>
+          <GaugeLegend ends={ends} />
           <div
             className="nibi-rowlist nibi-rowlist--faced nibi-rowlist--striped nibi-rowlist--start nibi-rowlist--stack nibi-rowlist--stack-3 answer-record"
             role="table"
@@ -79,10 +84,10 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
           >
             <div className="nibi-rowlist__head" role="row">
               <span role="columnheader">#</span>
-              <span role="columnheader" className="gauge-head"><span>A</span><span className="answer-gauge" aria-hidden="true">{[1, 2, 3, 4, 5].map((value) => <span key={value} />)}</span><span>B</span></span>
+              <span role="columnheader" className="gauge-head">向き</span>
               <span role="columnheader">判定</span>
             </div>
-            {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} />)}
+            {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} ends={ends} />)}
           </div>
         </section>
         {start.isError && <p className="inline-error" role="alert">{humanError(start.error)}</p>}
@@ -101,39 +106,67 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   );
 }
 
-function Tally({ result }: { result: SessionResultView }) {
-  const entries = Object.entries(result.variant_labels).map(([variantId, label]) => ({
-    key: variantId,
-    label,
-    value: result.evidence_direction_counts[variantId] ?? 0,
-    strong: variantId === result.favored_variant_id,
-  }));
-  entries.push({ key: "tie", label: "互角", value: result.evidence_direction_counts.tie ?? 0, strong: false });
+/* ゲージの両端の名前。狭い列でも省かない(折り返す)。 */
+function GaugeLegend({ ends }: { ends: GaugeEnds }) {
+  return (
+    <p className="gauge-legend nibi-label" aria-label={`ゲージの向き: 左 ${endWords(ends.left)}、右 ${endWords(ends.right)}`}>
+      <span className="gauge-end start" aria-hidden="true">
+        <span className="gauge-end-name">{ends.left.label}</span>
+        {ends.left.role && <span className="gauge-end-role">{ends.left.role}</span>}
+      </span>
+      <span className="answer-gauge" aria-hidden="true">{[1, 2, 3, 4, 5].map((value) => <span key={value} />)}</span>
+      <span className="gauge-end end" aria-hidden="true">
+        <span className="gauge-end-name">{ends.right.label}</span>
+        {ends.right.role && <span className="gauge-end-role">{ends.right.role}</span>}
+      </span>
+    </p>
+  );
+}
+
+function endWords(end: GaugeEnds["left"]): string {
+  return end.role ? `${end.label}（${end.role}）` : end.label;
+}
+
+/* 支持の数: ゲージと同じ並び(左の候補 · 互角 · 右の候補)。Plan付きでは現在最良と提案を名前の下に言う。 */
+function Tally({ result, ends }: { result: SessionResultView; ends: GaugeEnds }) {
+  const side = (end: GaugeEnds["left"]) => ({
+    key: end.key,
+    label: end.label,
+    role: end.role,
+    value: result.evidence_direction_counts[end.key] ?? 0,
+    strong: end.key === result.favored_variant_id,
+  });
+  const entries = ends.bySlot
+    ? Object.entries(result.variant_labels).map(([key, label]) => side({ key, label, role: null }))
+    : [side(ends.left), { key: "tie", label: "互角", role: null, value: result.evidence_direction_counts.tie ?? 0, strong: false }, side(ends.right)];
+  if (ends.bySlot) entries.push({ key: "tie", label: "互角", role: null, value: result.evidence_direction_counts.tie ?? 0, strong: false });
   const answered = Object.values(result.evidence_direction_counts).reduce((total, count) => total + count, 0);
-  if (answered < result.evidence_count) entries.push({ key: "missing", label: "未回答", value: result.evidence_count - answered, strong: false });
+  if (answered < result.evidence_count) entries.push({ key: "missing", label: "未回答", role: null, value: result.evidence_count - answered, strong: false });
   return (
     <div className="verdict-tally" aria-label="支持の数">
       {entries.map((entry) => (
         <span key={entry.key} className="tally-item">
           <span className={entry.strong ? "nibi-display tally-value strong" : "nibi-display tally-value"}>{entry.value}</span>
           <span className="nibi-label tally-label">{entry.label}</span>
+          {entry.role && <span className="nibi-label tally-role">{entry.role}</span>}
         </span>
       ))}
     </div>
   );
 }
 
-function AnswerRow({ item, result }: { item: RelistenItemView; result: SessionResultView | null }) {
+function AnswerRow({ item, result, ends }: { item: RelistenItemView; result: SessionResultView | null; ends: GaugeEnds }) {
   const preference = item.skipped ? null : item.judgment?.preference ?? null;
   const note = answerNote(item);
   const judgment = rowJudgment(item, preference, result);
   const muted = preference === null || preference === 3;
-  const gaugeLabel = preference === null ? "未回答" : preference === 3 ? "互角" : `${preference < 3 ? "A" : "B"} ${preference === 1 || preference === 5 ? "明確に" : "わずかに"}`;
+  const oriented = orientAnswer(item, ends, preference);
+  const active = activeCells(oriented);
   return (
     <div className="nibi-rowlist__row answer-table-row" role="row">
       <span role="rowheader" className="nibi-value answer-index">{item.sequence_index + 1}</span>
-      <span role="cell" className="answer-gauge" aria-label={gaugeLabel}>
-        {([1, 2, 3, 4, 5] as const).map((value) => <span key={value} className={preference === value ? "active" : ""} />)}
+      <span role="cell" className="answer-gauge" data-orientation={oriented.kind} aria-label={answerWords(oriented, ends)}>
+        {[0, 1, 2, 3, 4].map((cell) => <span key={cell} className={active.includes(cell) ? "active" : ""} />)}
       </span>
       <span role="cell" className="nibi-rowlist__title nibi-rowlist__title--plain nibi-body answer-main">
         <span className={muted ? "nibi-rowlist__name answer-judgment neutral" : "nibi-rowlist__name answer-judgment"}>{judgment}</span>
@@ -215,7 +248,7 @@ function keepReason(result: SessionResultView): string | null {
   if (evidence.answered_count < evidence.evidence_count) return "飛ばした比較があるため、更新条件を満たしませんでした";
   if (evidence.blocker_count > 0) return "提案版に残せない問題が報告されたため、更新しませんでした";
   if (evidence.favorable_count < result.favored_required_count) {
-    return `提案版を支持した比較が${evidence.favorable_count}件で、優勢条件（${result.favored_required_count}件）に届きませんでした`;
+    return `提案版を支持した比較は${evidence.evidence_count}件中${evidence.favorable_count}件で、必要な${result.favored_required_count}件に届きませんでした`;
   }
   if (evidence.score_sum <= 0) return "提案版への支持が反対の回答を上回らず、優勢条件を満たしませんでした";
   return null;
@@ -223,15 +256,10 @@ function keepReason(result: SessionResultView): string | null {
 
 // 根拠の行: 優勢条件 / 同一音の確認 / 再現性の確認。1つでも不合格なら、どこで止まったかがここで読める。
 function reasons(data: SessionCompletion, result: SessionResultView): Array<{ kind: MarkKind; text: string }> {
-  const rows: Array<{ kind: MarkKind; text: string }> = [];
-  const condition = `優勢条件 ${result.favored_required_count} / ${result.evidence_count}`;
+  // 条件に届かないこと・問題の報告は現在最良を維持する普通の理由なので、失敗(fail)の印にしない。
+  const rows: Array<{ kind: MarkKind; text: string }> = [conditionReason(result)];
   const evidence = result.best_update_evidence;
-  const favoredMet = evidence
-    ? evidence.answered_count === evidence.evidence_count && evidence.favorable_count >= result.favored_required_count && evidence.score_sum > 0
-    : result.favored_variant_label !== null;
-  if (favoredMet) rows.push({ kind: "pass", text: `${condition} を満たす` });
-  else rows.push({ kind: data.current_best_check ? "fail" : "unknown", text: `${condition} に届かない` });
-  if (evidence && evidence.blocker_count > 0) rows.push({ kind: "fail", text: "提案版に残せない問題の報告がある" });
+  if (evidence && evidence.blocker_count > 0) rows.push({ kind: "unknown", text: "提案に残せない問題の報告あり" });
   if (data.items.some((item) => item.role === "same")) {
     const kind: MarkKind = result.same_result === "tie" ? "pass" : result.same_result === "difference_reported" ? "fail" : "unknown";
     rows.push({ kind, text: `同一音の確認: ${sameResultLabel(result.same_result)}` });
@@ -265,15 +293,4 @@ function roleLabel(role: RelistenItemView["role"]): string {
 function slotLabel(item: RelistenItemView, slot: "A" | "B"): string {
   if (item.role === "same") return "同一音";
   return identityLabel(item.identity_by_slot[slot]);
-}
-
-function identityLabel(value: Record<string, unknown> | undefined): string {
-  if (!value) return "unknown";
-  if (typeof value.label === "string") return value.label;
-  const provenance = value.provenance;
-  if (provenance && typeof provenance === "object") {
-    const record = provenance as Record<string, unknown>;
-    return String(record.variant_ref ?? record.name ?? record.audio_id ?? value.audio_id ?? "audio");
-  }
-  return String(value.audio_id ?? "audio");
 }

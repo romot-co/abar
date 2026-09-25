@@ -170,7 +170,23 @@ def _exercise_project_deck(page: Page, url: str) -> None:
         "支持が多い方向はありますが、優勢条件には届きませんでした",
         exact=False,
     ).wait_for()
-    page.get_by_text("優勢条件 2 / 3 に届かない", exact=True).wait_for()
+    # 件数と必要数を言葉で(「2 / 3」のような読めない形にしない)。届かないのは失敗の印にしない
+    page.get_by_text(
+        "どちらも優勢に届かない: 3件中、最多はdense-chorus-v2の1件（必要 2件）",  # noqa: RUF001
+        exact=True,
+    ).wait_for()
+    assert page.locator(".verdict-reasons li").first.locator(".nibi-mark--fail").count() == 0
+    # ゲージは候補の向きに固定する(左 = 組の1つ目、右 = 2つ目)。A/Bの位置では描かない
+    legend = page.locator(".gauge-legend")
+    assert legend.locator(".gauge-end.start").inner_text() == "原音"
+    assert legend.locator(".gauge-end.end").inner_text() == "dense-chorus-v2"
+    gauges = page.locator(".answer-table-row .answer-gauge")
+    orientation = gauges.evaluate_all(
+        """els => els.map(el => [el.getAttribute('aria-label'), el.dataset.orientation,
+          [...el.children].findIndex(cell => cell.classList.contains('active'))])"""
+    )
+    assert orientation[0] == ["dense-chorus-v2を明確に支持", "directed", 4]
+    assert orientation[2][1] == "symmetric"
     page.get_by_text("同一音の確認: 差を報告", exact=True).wait_for()
     page.get_by_text("再現性の確認: 片方tie", exact=True).wait_for()
     page.get_by_text("同一音: 差を報告（明確）", exact=True).wait_for()  # noqa: RUF001

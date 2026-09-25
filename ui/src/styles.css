@@ -138,21 +138,27 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .summary-shell h1:focus { outline: none; }
 .verdict-card { gap: var(--nibi-size-gap); }
 .verdict-detail, .verdict-next { color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
-.verdict-tally { display: grid; grid-auto-flow: column; justify-content: start; gap: var(--nibi-size-inset); }
-.tally-item { display: grid; gap: calc(var(--nibi-grid-y) / 4); }
+.verdict-tally { display: flex; flex-wrap: wrap; align-items: start; gap: var(--nibi-grid-y) calc(var(--nibi-size-gap-x) * 2); }
+.tally-item { display: grid; gap: calc(var(--nibi-grid-y) / 4); min-width: 0; overflow-wrap: anywhere; }
 .tally-value { color: var(--nibi-color-text-muted); line-height: 1; font-variant-numeric: tabular-nums; }
 .tally-value.strong { color: var(--nibi-color-text-strong); }
-.tally-label { color: var(--nibi-color-text-muted); }
+.tally-label { color: var(--nibi-color-text); }
 .verdict-reasons { display: grid; gap: calc(var(--nibi-grid-y) / 2); margin: 0; padding: 0; list-style: none; }
 .verdict-reasons > li { display: flex; align-items: center; gap: calc(var(--nibi-grid-y) * .75); }
 .reason-fail { color: var(--nibi-color-error-text); }
 .answer-section { display: grid; gap: var(--nibi-size-gap); }
 .answer-record > .nibi-rowlist__row { align-items: start; }
 .answer-index { color: var(--nibi-color-text-muted); line-height: var(--nibi-type-body-line); font-variant-numeric: tabular-nums; }
-.gauge-head { display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) * .75); }
+/* ゲージの向き: 両端の候補の名前(Plan付きは役割も)。狭い列でも省かず、名前を折り返す */
+.gauge-legend { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; column-gap: var(--nibi-size-gap-x); margin: 0; }
+.gauge-legend > .answer-gauge { height: var(--nibi-type-label-line); }
+.gauge-end { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.gauge-end.end { text-align: end; }
+.gauge-end-name { color: var(--nibi-color-text); }
+.gauge-end-role, .tally-role { color: var(--nibi-color-text-muted); }
 .answer-gauge { display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) / 4); height: var(--nibi-type-body-line); }
-.answer-record > .nibi-rowlist__row > .answer-gauge { padding-inline: calc(var(--nibi-grid-x) * 2.4); }
-@container (max-width: 26rem) { .answer-record > .nibi-rowlist__row > .answer-gauge { padding-inline: 0; } .gauge-head > span:not(.answer-gauge) { display: none; } }
+/* 列の見出しはゲージと同じ幅(狭い列で見出しと中身の列がずれないように) */
+.answer-record .gauge-head { min-width: calc(var(--nibi-grid-x) * 12 + var(--nibi-grid-y)); }
 .answer-gauge > span { width: calc(var(--nibi-grid-x) * 2.4); height: calc(var(--nibi-grid-y) * .75); border-radius: var(--nibi-radius-pill); background: var(--nibi-color-rail); }
 .answer-gauge > span.active { background: var(--nibi-color-text-strong); }
 .answer-main { display: grid; gap: calc(var(--nibi-grid-y) / 4); min-width: 0; }
