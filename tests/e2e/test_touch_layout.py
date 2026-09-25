@@ -54,6 +54,21 @@ def test_inbox_and_deck_keep_one_primary_action_and_confirm_in_the_dock(
         page.locator(".slot-switcher button").nth(0).click()
         page.locator(".preference-scale button:not(:disabled)").first.wait_for()
         page.locator(".preference-scale button").nth(1).click()
+        # 入力欄はnibiの枠(line-control の 1px)で入力できると分かる(C-3、WCAG 1.4.11)
+        memo = page.get_by_role("textbox", name="この比較のメモ")
+        line_control = page.evaluate(
+            """() => {
+              const probe = document.createElement('i');
+              probe.style.color = 'var(--nibi-color-line-control)';
+              document.body.append(probe);
+              const color = getComputedStyle(probe).color;
+              probe.remove();
+              return color;
+            }"""
+        )
+        expect(memo).to_have_css("border-top-width", "1px")
+        expect(memo).to_have_css("border-top-style", "solid")
+        expect(memo).to_have_css("border-top-color", line_control)
         submit = page.get_by_role("button", name="記録して次へ", exact=True)
         expect(submit).to_be_enabled()
         # 記録は回答欄の中、その後(文書の順で下)に dock の弱い skip(§2.13)。dock は画面下に留まる
