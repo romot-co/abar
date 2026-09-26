@@ -1161,24 +1161,29 @@
 }
 .nibi-segmented--text .nibi-segmented__option:first-child { padding-inline-start: 0; }
 .nibi-segmented--text .nibi-segmented__option:last-child { padding-inline-end: 0; }
-.nibi-segmented--text .nibi-segmented__option + .nibi-segmented__option::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: var(--nibi-stroke-hairline);
-  height: var(--nibi-grid-y);
-  translate: 0 -50%;
-  background: var(--nibi-color-rail);
+/* the 8u mark between words is a background (::before is the hit area, ::after the chosen word's mark) */
+.nibi-segmented--text .nibi-segmented__option + .nibi-segmented__option {
+  background: linear-gradient(var(--nibi-color-rail), var(--nibi-color-rail)) left center / var(--nibi-stroke-hairline) var(--nibi-grid-y) no-repeat;
 }
 .nibi-segmented--text .nibi-segmented__option:not([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"], :disabled, [data-state~="disabled"]):is(:hover, [data-state~="hover"]) {
   color: var(--nibi-color-text);
 }
-/* the mark under the chosen word is a background on the content box (::before is the hit area, ::after the separator) */
+/* the mark under the chosen word: its own round-ended bar under the words (a clipped background took the button's
+   corner radius on one side only) */
 .nibi-segmented--text .nibi-segmented__option:is([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"]) {
   color: var(--nibi-color-text-strong);
-  background: linear-gradient(currentColor, currentColor) center bottom calc((var(--nibi-size-control) - var(--nibi-type-label-line)) / 2 - var(--nibi-stroke-rail) * 2) / 100% var(--nibi-stroke-rail) no-repeat content-box;
 }
+.nibi-segmented--text .nibi-segmented__option:is([aria-checked="true"], [aria-pressed="true"], [data-state~="selected"])::after {
+  content: "";
+  position: absolute;
+  inset-inline: var(--nibi-size-gap-x);
+  bottom: calc((var(--nibi-size-control) - var(--nibi-type-label-line)) / 2 - var(--nibi-stroke-rail) * 2);
+  height: var(--nibi-stroke-rail);
+  border-radius: var(--nibi-radius-pill);
+  background: currentColor;
+}
+.nibi-segmented--text .nibi-segmented__option:first-child::after { inset-inline-start: 0; }
+.nibi-segmented--text .nibi-segmented__option:last-child::after { inset-inline-end: 0; }
 
 /* --cards: each option is its own raised face (A/B, a 5-step preference), the chosen one inverted;
    words may take two lines, sentence case. */
