@@ -257,7 +257,13 @@
   --nibi-type-body-line: var(--nibi-type-body-line-base);
   --nibi-type-body-weight: 400;
   --nibi-type-body-tracking: 0em;
-  --nibi-type-heading-size-base: 14px;
+  --nibi-type-lead-size-base: 18px;
+  --nibi-type-lead-line-base: 32px;
+  --nibi-type-lead-size: var(--nibi-type-lead-size-base);
+  --nibi-type-lead-line: var(--nibi-type-lead-line-base);
+  --nibi-type-lead-weight: 400;
+  --nibi-type-lead-tracking: 0em;
+  --nibi-type-heading-size-base: 16px;
   --nibi-type-heading-line-base: 24px;
   --nibi-type-heading-size: var(--nibi-type-heading-size-base);
   --nibi-type-heading-line: var(--nibi-type-heading-line-base);
@@ -355,6 +361,12 @@
   --nibi-type-body-line: var(--nibi-type-body-line-base);
   --nibi-type-body-weight: 400;
   --nibi-type-body-tracking: 0em;
+  --nibi-type-lead-size-base: 14px;
+  --nibi-type-lead-line-base: 24px;
+  --nibi-type-lead-size: var(--nibi-type-lead-size-base);
+  --nibi-type-lead-line: var(--nibi-type-lead-line-base);
+  --nibi-type-lead-weight: 400;
+  --nibi-type-lead-tracking: 0em;
   --nibi-type-heading-size-base: 12px;
   --nibi-type-heading-line-base: 16px;
   --nibi-type-heading-size: var(--nibi-type-heading-size-base);
@@ -453,7 +465,13 @@
   --nibi-type-body-line: var(--nibi-type-body-line-base);
   --nibi-type-body-weight: 400;
   --nibi-type-body-tracking: 0em;
-  --nibi-type-heading-size-base: 16px;
+  --nibi-type-lead-size-base: 20px;
+  --nibi-type-lead-line-base: 32px;
+  --nibi-type-lead-size: var(--nibi-type-lead-size-base);
+  --nibi-type-lead-line: var(--nibi-type-lead-line-base);
+  --nibi-type-lead-weight: 400;
+  --nibi-type-lead-tracking: 0em;
+  --nibi-type-heading-size-base: 18px;
   --nibi-type-heading-line-base: 24px;
   --nibi-type-heading-size: var(--nibi-type-heading-size-base);
   --nibi-type-heading-line: var(--nibi-type-heading-line-base);
@@ -531,6 +549,8 @@
   --nibi-type-value-line: 16px;
   --nibi-type-body-size: 10px;
   --nibi-type-body-line: 16px;
+  --nibi-type-lead-size: 12px;
+  --nibi-type-lead-line: 24px;
   --nibi-type-heading-size: 10px;
   --nibi-type-heading-line: 16px;
   --nibi-type-title-size: 12px;
@@ -548,6 +568,8 @@
   --nibi-type-value-line: var(--nibi-type-value-line-base);
   --nibi-type-body-size: var(--nibi-type-body-size-base);
   --nibi-type-body-line: var(--nibi-type-body-line-base);
+  --nibi-type-lead-size: var(--nibi-type-lead-size-base);
+  --nibi-type-lead-line: var(--nibi-type-lead-line-base);
   --nibi-type-heading-size: var(--nibi-type-heading-size-base);
   --nibi-type-heading-line: var(--nibi-type-heading-line-base);
   --nibi-type-title-size: var(--nibi-type-title-size-base);
@@ -586,6 +608,7 @@
 .nibi-label { font-family: var(--nibi-font-family); font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); font-weight: var(--nibi-type-label-weight); letter-spacing: calc(var(--nibi-type-label-tracking) * var(--nibi-tracking-scale)); }
 .nibi-value { font-family: var(--nibi-font-family); font-size: var(--nibi-type-value-size); line-height: var(--nibi-type-value-line); font-weight: var(--nibi-type-value-weight); letter-spacing: calc(var(--nibi-type-value-tracking) * var(--nibi-tracking-scale)); font-variant-numeric: tabular-nums; }
 .nibi-body { font-family: var(--nibi-font-family); font-size: var(--nibi-type-body-size); line-height: var(--nibi-type-body-line); font-weight: var(--nibi-type-body-weight); letter-spacing: calc(var(--nibi-type-body-tracking) * var(--nibi-tracking-scale)); }
+.nibi-lead { font-family: var(--nibi-font-family); font-size: var(--nibi-type-lead-size); line-height: var(--nibi-type-lead-line); font-weight: var(--nibi-type-lead-weight); letter-spacing: calc(var(--nibi-type-lead-tracking) * var(--nibi-tracking-scale)); }
 .nibi-heading { font-family: var(--nibi-font-family); font-size: var(--nibi-type-heading-size); line-height: var(--nibi-type-heading-line); font-weight: var(--nibi-type-heading-weight); letter-spacing: calc(var(--nibi-type-heading-tracking) * var(--nibi-tracking-scale)); }
 .nibi-title { font-family: var(--nibi-font-family); font-size: var(--nibi-type-title-size); line-height: var(--nibi-type-title-line); font-weight: var(--nibi-type-title-weight); letter-spacing: calc(var(--nibi-type-title-tracking) * var(--nibi-tracking-scale)); }
 .nibi-display { font-family: var(--nibi-font-family); font-size: var(--nibi-type-display-size); line-height: var(--nibi-type-display-line); font-weight: var(--nibi-type-display-weight); letter-spacing: calc(var(--nibi-type-display-tracking) * var(--nibi-tracking-scale)); }
@@ -3808,5 +3831,46 @@ svg[data-nibi~="icon"] { flex: none; width: var(--nibi-size-icon); height: var(-
 }
 @media (prefers-reduced-motion: reduce) {
   .nibi-progressbar[data-state~="indeterminate"] .nibi-progressbar__fill { animation: none; }
+}
+
+/* ================================================================== 0014: web-screen hierarchy (lead role, next-action
+   panel, rowlist styles). Type steps are in tokens (heading one step above body, `lead` for the screen's question). */
+
+/* The next-action panel: the one thing the screen is for now (an inbox's "listen next"), inverted as a primary
+   choice is (0005, 0011 D-1 — counted with them). One per screen; inside it only that thing and its main action.
+   Every text role reads as on-selected there; the main action inverts again (on-selected face, selected words). */
+.nibi-panel.nibi-panel--lead {
+  --nibi-color-text: var(--nibi-color-on-selected);
+  --nibi-color-text-strong: var(--nibi-color-on-selected);
+  --nibi-color-text-value: var(--nibi-color-on-selected);
+  --nibi-color-text-muted: var(--nibi-color-on-selected);
+  --nibi-color-focus: var(--nibi-color-on-selected);
+  --nibi-color-primary-fill: var(--nibi-color-on-selected);
+  --nibi-color-primary-fill-hover: var(--nibi-color-on-selected);
+  --nibi-color-primary-fill-pressed: var(--nibi-color-on-selected);
+  --nibi-color-primary-on: var(--nibi-color-selected);
+  color: var(--nibi-color-on-selected);
+  background: var(--nibi-color-selected);
+}
+.nibi-panel--lead .nibi-progress__seg:not([data-done], [data-current]) { background: var(--nibi-color-text-subtle); }
+
+/* Rowlist styles, like a table's "striped" or "bordered": --ruled draws a hairline (line) between rows — an
+   opt-in style for lists of prose, not the default (rows are told apart by space and stripes, 0010; 0014 D-3).
+   No rule above the first row of the list or of a group. */
+.nibi-rowlist--ruled > .nibi-rowlist__row + .nibi-rowlist__row,
+.nibi-rowlist--ruled .nibi-rowlist__set > .nibi-rowlist__row + .nibi-rowlist__row {
+  box-shadow: inset 0 var(--nibi-stroke-hairline) 0 var(--nibi-color-line);
+}
+/* --prose: rows whose words run to several lines (comments, questions). Everything top-aligned and wrapping; marks,
+   numbers and small figures sit centred on the first line; rows get 1.5 grid rows of space above and below. */
+.nibi-rowlist--prose > .nibi-rowlist__row,
+.nibi-rowlist--prose .nibi-rowlist__set > .nibi-rowlist__row { align-items: start; padding-block: calc(var(--nibi-grid-y) * 1.5); }
+.nibi-rowlist--prose :is(.nibi-rowlist__title, .nibi-rowlist__name, .nibi-rowlist__sub, .nibi-rowlist__detail, .nibi-rowlist__status, .nibi-rowlist__end) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.nibi-rowlist--prose :is(.nibi-rowlist__num, .nibi-rowlist__mark, .nibi-rowlist__status, .nibi-rowlist__end) {
+  min-height: var(--nibi-type-body-line);
+  align-items: center;
 }
 
