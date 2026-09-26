@@ -23,7 +23,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
   const [finishedDelivery, setFinishedDelivery] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [completedSessionId, setCompletedSessionId] = useState<string | null>(null);
-  const commentRef = useRef<HTMLInputElement>(null);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
   const slotGroupRef = useRef<HTMLDivElement>(null);
   // 同じtick内の二重クリック・キー連打でPOSTが二度出ないよう、送信中のdeliveryを同期的に保持する。
   const inFlightRef = useRef<string | null>(null);
@@ -228,10 +228,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
             draft={draft}
             commentRef={commentRef}
             error={answerError}
-            canSubmit={canSubmit}
-            pending={answer.isPending}
             onChange={setDraft}
-            onSubmit={submit}
           />
         </div>
       </main>
@@ -247,6 +244,10 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           />
         ) : null}
         onSkip={() => requestSkip(false)}
+        showSubmit={draft.preference !== null}
+        canSubmit={canSubmit}
+        submitting={answer.isPending}
+        onSubmit={submit}
       />
     </div>
   );

@@ -1,8 +1,10 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import type { Deck } from "../api";
+import { ClampedText } from "../ClampedText";
 import { Icon } from "../Icon";
 import type { ComparisonPlayer } from "../useComparisonPlayer";
 import type { AnswerDraft, BlockerDraft } from "./answerDraft";
+import { shortenPair } from "./candidateNames";
 import { PositionSlider } from "./PositionSlider";
 import { InlineError } from "../InlineError";
 
@@ -18,7 +20,8 @@ export function PausedPanel({ pending, onResume, onBack }: { pending: boolean; o
   );
 }
 
-/* ヘッダーは戻る操作と「n / N」だけ(Recipeと進みの棒は出さない、§2.13)。観点は題名の大きさで。 */
+/* ヘッダーは戻る操作と「n / N」だけ(Recipeと進みの棒は出さない、§2.13)。観点は画面の主題の一文(`.nibi-lead`)で、
+   2行(480px 未満は3行)で止めて「全文を表示」で開く。 */
 export function DeckHeader({ deck, onLeave }: { deck: Deck; onLeave: () => void }) {
   const total = deck.comparison_count;
   const index = deck.sequence_index ?? 0;
@@ -28,7 +31,11 @@ export function DeckHeader({ deck, onLeave }: { deck: Deck; onLeave: () => void 
         <button type="button" className="nibi-button nibi-button--link weak-action back-action" onClick={onLeave}><Icon name="chevron_left" />受信箱</button>
         <span className="nibi-value deck-progress" aria-label={`比較 ${index + 1} / ${total}`}>{index + 1} / {total}</span>
       </header>
-      {deck.criterion_text && <h1 className="nibi-title deck-criterion">{deck.criterion_text}</h1>}
+      {deck.criterion_text && (
+        <div className="deck-question">
+          <ClampedText as="h1" className="nibi-lead deck-criterion">{deck.criterion_text}</ClampedText>
+        </div>
+      )}
     </>
   );
 }
@@ -72,6 +79,8 @@ export function SkipConfirmBar({ deck, pending, onConfirm, onCancel }: { deck: D
    どちらもまだ聴いていない間だけ「押して聴く」。今聴いている側は主題の選択なので反転する(nibi 0005)。 */
 export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: { player: ComparisonPlayer; deck: Deck; groupRef: RefObject<HTMLDivElement | null>; revealing: boolean; onReveal: () => void }) {
   const identity = deck.identity_by_slot;
+  // 中身を表示したときは、結果と同じ規則で短縮した名前を出す(正式名は title 属性)。
+  const names = identity?.A && identity.B ? shortenPair(identityName(identity.A), identityName(identity.B)) : null;
   const disabled = player.loading || player.error !== null;
   const fresh = !player.heard.a && !player.heard.b;
   const playState = (slot: "a" | "b"): "playing" | "paused" | null => {
@@ -102,7 +111,11 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
                 {heard && <><Icon name="check" />聴いた</>}
               </span>
               <span className="slot-name">{slot.toUpperCase()}</span>
-              {identity?.[slot.toUpperCase()] && <span className="slot-identity">{identityName(identity[slot.toUpperCase()])}</span>}
+              {identity?.[slot.toUpperCase()] && (
+                <span className="slot-identity" title={identityName(identity[slot.toUpperCase()])}>
+                  {names ? names[slot === "a" ? 0 : 1].short : identityName(identity[slot.toUpperCase()])}
+                </span>
+              )}
               <span className="slot-state" aria-hidden="true" data-state={state ?? undefined}>
                 {state === "playing" && <><Icon name="pause" />再生中</>}
                 {state === "paused" && <><Icon name="play_arrow" />停止中</>}
@@ -127,15 +140,13 @@ type AnswerEditorProps = {
   locked: boolean;
   heard: { a: boolean; b: boolean };
   draft: AnswerDraft;
-  commentRef: RefObject<HTMLInputElement | null>;
+  commentRef: RefObject<HTMLTextAreaElement | null>;
   error: string | null;
-  canSubmit: boolean;
-  pending: boolean;
   onChange: (draft: AnswerDraft) => void;
-  onSubmit: () => void;
 };
 
-export function AnswerEditor({ question, locked, heard, draft, commentRef, error, canSubmit, pending, onChange, onSubmit }: AnswerEditorProps) {
+/* 選好 → (選んだ後に)残せない問題とメモ(段階的な開示、nibi SPEC §6.7 / §2.13)。記録は画面下の操作欄。 */
+export function AnswerEditor({ question, locked, heard, draft, commentRef, error, onChange }: AnswerEditorProps) {
   const revealed = draft.preference !== null;
   // 押せない間は理由と次の一手を直下に(nibi 0006 / 0007 P-1)。
   const hint = locked
@@ -143,70 +154,89 @@ export function AnswerEditor({ question, locked, heard, draft, commentRef, error
     : revealed ? "" : "どちらかを選ぶと記録できます";
   return (
     <section className="answer-panel" aria-labelledby="preference-title">
-      <h2 id="preference-title" className="nibi-heading">{question}</h2>
-      <div className="nibi-segmented nibi-segmented--cards nibi-segmented--scale preference-scale" role="radiogroup" aria-label="どちらを残すか" aria-describedby="answer-hint">
-        {([1, 2, 3, 4, 5] as const).map((value) => {
-          const [side, strength] = preferenceLabel(value);
-          return (
-            <button
-              type="button"
-              className="nibi-segmented__option"
-              data-neutral={value === 3 ? "" : undefined}
-              role="radio"
-              aria-label={`${value} ${side ? `${side} が${strength}` : strength}`}
-              aria-checked={draft.preference === value}
-              disabled={locked}
-              key={value}
-              onClick={() => onChange({ ...draft, preference: value })}
-            >
-              {side && <span className="preference-side">{side}</span>}
-              <span className="preference-strength">{strength}</span>
-            </button>
-          );
-        })}
+      <div className="answer-choice">
+        <h2 id="preference-title" className="nibi-heading">{question}</h2>
+        <div className="nibi-segmented nibi-segmented--cards nibi-segmented--scale preference-scale" role="radiogroup" aria-label="どちらを残すか" aria-describedby="answer-hint">
+          {([1, 2, 3, 4, 5] as const).map((value) => {
+            const [side, strength] = preferenceLabel(value);
+            return (
+              <button
+                type="button"
+                className="nibi-segmented__option"
+                data-neutral={value === 3 ? "" : undefined}
+                role="radio"
+                aria-label={`${value} ${side ? `${side} が${strength}` : strength}`}
+                aria-checked={draft.preference === value}
+                disabled={locked}
+                key={value}
+                onClick={() => onChange({ ...draft, preference: value })}
+              >
+                {side && <span className="preference-side">{side}</span>}
+                <span className="preference-strength">{strength}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="answer-notes">
+          <p id="answer-hint" className="nibi-note-text submit-hint" aria-live="polite">{hint}</p>
+          <p className="nibi-note-text key-hint">キー 1〜5 でも選べます</p>
+        </div>
       </div>
-      <p id="answer-hint" className="nibi-note-text submit-hint" aria-live="polite">{hint}</p>
-      <p className="nibi-note-text key-hint">キー 1〜5 でも選べます</p>
       {revealed && (
-        <div className="answer-details">
-          <fieldset className="blocker-question">
-            <legend className="nibi-label">補足（任意）· 残せない問題</legend>
-            <div className="blocker-toggles">
+        <>
+          <section className="blocker-question" aria-labelledby="blocker-title">
+            <h2 id="blocker-title" className="nibi-heading">残せない問題がありますか</h2>
+            <div className="blocker-toggles" role="group" aria-labelledby="blocker-title">
               <BlockerToggle slot="A" value={draft.blockerA} disabled={locked} onChange={(blockerA) => onChange({ ...draft, blockerA })} />
               <BlockerToggle slot="B" value={draft.blockerB} disabled={locked} onChange={(blockerB) => onChange({ ...draft, blockerB })} />
             </div>
             <BlockerNote slot="A" value={draft.blockerA} onChange={(blockerA) => onChange({ ...draft, blockerA })} />
             <BlockerNote slot="B" value={draft.blockerB} onChange={(blockerB) => onChange({ ...draft, blockerB })} />
-          </fieldset>
-          <label className="nibi-field nibi-field--fill comment-field">
-            <span className="nibi-field__label">この比較のメモ</span>
-            <input
-              ref={commentRef}
-              className="nibi-field__input"
-              maxLength={500}
-              placeholder="任意"
-              disabled={locked}
-              value={draft.comment}
-              onChange={(event) => onChange({ ...draft, comment: event.currentTarget.value })}
-            />
-          </label>
-          {error && <InlineError>{error}</InlineError>}
-          <button type="button" className="nibi-button nibi-button--primary submit-answer" disabled={!canSubmit} onClick={onSubmit}>{pending ? "記録中…" : "記録して次へ"}</button>
-        </div>
+          </section>
+          <section className="memo-section" aria-labelledby="memo-title">
+            <h2 id="memo-title" className="nibi-heading">メモ</h2>
+            <div className="nibi-field nibi-field--fill comment-field">
+              <textarea
+                ref={commentRef}
+                aria-labelledby="memo-title"
+                className="nibi-field__input memo-input"
+                rows={3}
+                maxLength={500}
+                placeholder="任意"
+                disabled={locked}
+                value={draft.comment}
+                onChange={(event) => onChange({ ...draft, comment: event.currentTarget.value })}
+              />
+            </div>
+          </section>
+        </>
       )}
-      {!revealed && error && <InlineError>{error}</InlineError>}
+      {error && <InlineError>{error}</InlineError>}
     </section>
   );
 }
 
-/* 画面下のdock: 弱い skip のリンクだけ(§2.13)。Plan付きSessionの確認も同じ場所に出す。 */
-export function AnswerDock({ skippable, skipping, confirm, onSkip }: { skippable: boolean; skipping: boolean; confirm: ReactNode; onSkip: () => void }) {
+/* 画面下の操作欄: 左に弱い「飛ばす」、選好を決めた後だけ右に主ボタン「記録して次へ」(§2.13、段階的な開示)。
+   Plan付きSessionのskipの確認も同じ場所に出す。 */
+export function AnswerDock({ skippable, skipping, confirm, onSkip, canSubmit, showSubmit, submitting, onSubmit }: {
+  skippable: boolean;
+  skipping: boolean;
+  confirm: ReactNode;
+  onSkip: () => void;
+  canSubmit: boolean;
+  showSubmit: boolean;
+  submitting: boolean;
+  onSubmit: () => void;
+}) {
   return (
-    <div className="nibi-dock answer-dock">
+    <div className="nibi-dock screen-dock answer-dock">
       {confirm ?? (
-        <p className="skip-action">
-          <button type="button" className="nibi-button nibi-button--link weak-action" disabled={!skippable || skipping} onClick={onSkip}>{skipping ? "飛ばしています…" : "回答せずにこの比較を飛ばす"}</button>
-        </p>
+        <div className="screen-dock__inner answer-dock__inner">
+          <button type="button" className="nibi-button nibi-button--link weak-action skip-action" aria-label="回答せずにこの比較を飛ばす" disabled={!skippable || skipping} onClick={onSkip}>{skipping ? "飛ばしています…" : "飛ばす"}</button>
+          {showSubmit && (
+            <button type="button" className="nibi-button nibi-button--primary submit-answer" disabled={!canSubmit} onClick={onSubmit}>{submitting ? "記録中…" : "記録して次へ"}</button>
+          )}
+        </div>
       )}
     </div>
   );

@@ -17,21 +17,15 @@ def test_long_labels_and_notes_wrap_without_clipping(width: int) -> None:
         page = browser.new_page(viewport={"width": width, "height": 800})
         page.set_content(f"""<style>{css}</style>
           <main style="width:160px">
-            <div class="nibi-rowlist queue-list"><div class="nibi-rowlist__row">
-              <span class="nibi-rowlist__title">
-                <span class="nibi-rowlist__name queue-focus">{text}</span>
-              </span>
-            </div></div>
             <strong class="best-id">{text}</strong>
-            <span class="nibi-rowlist__sub result-pair"><span>{text}</span></span>
-            <span class="nibi-rowlist__sub answer-note">{text}</span>
+            <p class="nibi-body answer-comment">{text}</p>
+            <span class="nibi-rowlist__sub blocked-reason">{text}</span>
             <p class="nibi-body notice-reason">{text}</p>
           </main>""")
         for selector in (
-            ".queue-focus",
             ".best-id",
-            ".result-pair",
-            ".answer-note",
+            ".answer-comment",
+            ".blocked-reason",
             ".notice-reason",
         ):
             item = page.locator(selector)
@@ -44,7 +38,7 @@ def test_long_labels_and_notes_wrap_without_clipping(width: int) -> None:
 
 @pytest.mark.browser
 @pytest.mark.parametrize("width", [375, 1024])
-def test_saved_criterion_wraps_as_the_title_and_answer_controls_remain_reachable(
+def test_long_criterion_is_clamped_and_expands_and_answer_controls_remain_reachable(
     tmp_path: Path, free_tcp_port: int, width: int
 ) -> None:
     from playwright.sync_api import Route
@@ -71,21 +65,33 @@ def test_saved_criterion_wraps_as_the_title_and_answer_controls_remain_reachable
 
         page.route("**/api/deck/active", long_saved_criterion)
         page.goto(url)
-        page.get_by_role("button", name="続ける", exact=True).click()
+        page.get_by_role("button", name="続きから", exact=False).click()
         purpose = page.locator(".deck-criterion")
         purpose.wait_for()
-        # 観点は題名の大きさで、省略せずに折り返す(§2.13)
+        # 観点は画面の主題の一文(lead)。2行(480px 未満は3行)で止め、「全文を表示」で開く(§2.13)
         assert purpose.inner_text() == criterion
         sizes = purpose.evaluate(
             """el => [
               parseFloat(getComputedStyle(el).fontSize),
               parseFloat(getComputedStyle(document.documentElement)
-                .getPropertyValue('--nibi-type-title-size')),
+                .getPropertyValue('--nibi-type-lead-size')),
+              parseFloat(getComputedStyle(el).lineHeight),
+              el.clientHeight,
             ]"""
         )
         assert sizes[0] == sizes[1]
-        assert purpose.evaluate("el => el.scrollWidth <= el.clientWidth + 1")
+        lines = round(sizes[3] / sizes[2])
+        assert lines == (3 if width < 480 else 2)
+        assert purpose.evaluate("el => el.scrollHeight > el.clientHeight + 1")
+        toggle = page.get_by_role("button", name="全文を表示", exact=True)
+        expect(toggle).to_have_attribute("aria-expanded", "false")
+        toggle.click()
+        collapse = page.get_by_role("button", name="たたむ", exact=True)
+        expect(collapse).to_have_attribute("aria-expanded", "true")
         assert purpose.evaluate("el => el.scrollHeight <= el.clientHeight + 1")
+        assert purpose.evaluate("el => el.scrollWidth <= el.clientWidth + 1")
+        collapse.click()
+        expect(page.get_by_role("button", name="全文を表示", exact=True)).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.screenshot(path=str(tmp_path / f"purpose-{width}.png"), full_page=True)
         page.locator(".slot-switcher button").nth(1).click()
@@ -107,8 +113,8 @@ def test_saved_criterion_wraps_as_the_title_and_answer_controls_remain_reachable
         expect(page.locator('.slot-switcher button[aria-pressed="true"]')).to_have_css(
             "background-color", inverted
         )
-        submit = page.get_by_role("button", name="記録して次へ", exact=True)
-        submit.scroll_into_view_if_needed()
+        # 記録は画面下に固定した操作欄(選んだ後だけ)。スクロールしなくても画面の中にある
+        submit = page.locator(".answer-dock").get_by_role("button", name="記録して次へ", exact=True)
         box = submit.bounding_box()
         assert box is not None and box["y"] >= 0 and box["y"] + box["height"] <= 640
         browser.close()

@@ -1,13 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, type Action, type Project, type SessionCompletion } from "../api";
+import { ClampedText } from "../ClampedText";
 import { humanError } from "../errors";
 import type { RelistenItemView, SessionResultView } from "../generated";
+import { Icon } from "../Icon";
 import { Mark, type MarkKind } from "../Mark";
-import { activeCells, answerWords, gaugeEnds, identityLabel, orientAnswer, type GaugeEnds } from "./gauge";
-import { conditionReason } from "./resultCopy";
+import { axisNames, shortenPair, type CandidateName } from "./candidateNames";
+import { answerWords, gaugeEnds, identityKey, orientAnswer, rowGauge, supportChart, type GaugeEnds, type OrientedAnswer, type Preference, type RowGauge, type SupportChart } from "./gauge";
+import { conclusion } from "./resultCopy";
 import { InlineError } from "../InlineError";
 
+/*
+ * 結果(§8.3): 終了したSessionだけを表示する(§7.9: A/Bと候補の対応はここで初めて公開できる)。
+ * 上段(受信箱へ · 種類と比較数)→ 結論(見出しと支える文1つ)→ 集計の面(左右の軸、件数、支持の図、候補の正式名)
+ * → 問い → 回答(比較ごとのゲージとコメント)→ 回答の確かさ(同一音・再現性の確認)。下に固定した操作欄に「次へ」。
+ */
 export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: string; onBack: () => void; onNext?: () => void }) {
   const queryClient = useQueryClient();
   const completion = useQuery({
@@ -33,6 +41,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
       onNext?.();
     },
   });
+  const [showSlots, setShowSlots] = useState(false);
 
   const headingRef = useRef<HTMLHeadingElement>(null);
   const loaded = completion.data !== undefined;
@@ -45,253 +54,271 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
   const data = completion.data;
   const result = data.result;
   const readyCount = project.data?.sessions.filter((item) => item.status === "ready").length ?? 0;
-  const verdict = verdictCopy(data);
   const kind = data.current_best_check ? "最良の更新" : result ? "観察" : "試聴";
-  // この画面は終了したSessionだけを表示する(§7.9: A/Bと候補の対応はここで公開できる)。ゲージは候補の向きに固定する。
+  // ゲージは候補の向きに固定する(左 = 開始時の現在最良 / 組の1つ目、右 = 提案 / 2つ目)。
   const ends = gaugeEnds(result, data.items);
+  const [leftName, rightName] = shortenPair(ends.left.label, ends.right.label);
+  const axis = ends.bySlot ? { left: "A", right: "B", aliased: false } : axisNames(leftName, rightName, data.current_best_check);
+  const proposedName = [...rightName.short].length <= 12 ? rightName.short : null;
+  const verdict = conclusion(result, ends, axis, proposedName);
+  const axisEnds: GaugeEnds = { ...ends, left: { ...ends.left, label: axis.left }, right: { ...ends.right, label: axis.right } };
+  const answers = data.items.filter((item) => item.role !== "same" && item.role !== "repeat");
+  const checks = data.items.filter((item) => item.role === "same" || item.role === "repeat");
+  const oriented = answers.map((item) => orientAnswer(item, ends, preferenceOf(item)));
 
   return (
     <div className="docked-screen summary-page">
       <main className="screen summary-shell">
-        <div className="summary-heading">
-          <p className="nibi-label result-eyebrow">
-            {kind} · 全 {data.comparison_count} 比較{data.recipe ? <> · <span>{`Recipe ${data.recipe}`}</span></> : ""}
-          </p>
-          <h1 ref={headingRef} tabIndex={-1} className="nibi-title">{data.focus ?? "比較の結果"}</h1>
+        <div className="summary-lead">
+          <div className="summary-top">
+            <button type="button" className="nibi-button nibi-button--link weak-action" onClick={onBack}>受信箱へ</button>
+            <span className="nibi-body summary-kind">{kind} · {data.comparison_count} 比較</span>
+          </div>
+          <header className="summary-conclusion">
+            <h1 ref={headingRef} tabIndex={-1} id="verdict-title" className="nibi-display verdict-title">{verdict.headline}</h1>
+            {verdict.detail && <p className="nibi-body verdict-detail">{verdict.detail}</p>}
+          </header>
         </div>
 
-        <section className={result?.current_best_updated ? "nibi-card nibi-card--lead verdict-card updated" : "nibi-card nibi-card--lead verdict-card"} aria-labelledby="verdict-title">
-          <strong id="verdict-title" className="nibi-title">{verdict.title}</strong>
-          {verdict.detail && <p className="nibi-body verdict-detail">{verdict.detail}</p>}
-          {result && <Tally result={result} ends={ends} />}
-          {result && (
-            <ul className="verdict-reasons" aria-label="根拠">
-              {reasons(data, result).map((reason) => (
-                <li key={reason.text} className="nibi-body"><Mark kind={reason.kind} /><span className={reason.kind === "fail" ? "reason-fail" : undefined}>{reason.text}</span></li>
-              ))}
-            </ul>
-          )}
-          {readyNext && <p className="nibi-body verdict-next">次の未回答:「{readyNext.focus}」</p>}
-        </section>
+        {result && (
+          <section className="nibi-panel tally-panel" aria-label="支持の数">
+            <Tally result={result} ends={ends} axis={axis} names={[leftName, rightName]} plan={data.current_best_check} />
+            <SupportChartView chart={supportChart(oriented.filter((_, index) => answers[index]?.role === "evidence"), result.favored_required_count, result.evidence_count)} />
+            {!ends.bySlot && <NamesDisclosure names={[leftName, rightName]} />}
+          </section>
+        )}
 
-        <section className="answer-section" aria-labelledby="answer-record-heading">
-          <h2 id="answer-record-heading" className="nibi-heading">回答 · 全 {data.items.length} 比較</h2>
-          <GaugeLegend ends={ends} />
+        {data.focus && (
+          <section className="summary-section question-section" aria-labelledby="question-heading">
+            <h2 id="question-heading" className="nibi-heading">問い</h2>
+            <div className="summary-question">
+              <ClampedText className="nibi-body result-question">{data.focus}</ClampedText>
+            </div>
+          </section>
+        )}
+
+        <section className="summary-section answer-section" aria-labelledby="answer-record-heading">
+          <div className="section-head">
+            <h2 id="answer-record-heading" className="nibi-heading">回答<span className="heading-count"> {answers.length} 比較</span></h2>
+            {!ends.bySlot && answers.length > 0 && (
+              <button type="button" className="nibi-button nibi-button--link weak-action slots-toggle" aria-pressed={showSlots} onClick={() => setShowSlots((value) => !value)}>
+                {showSlots ? "A/B の割り当てを隠す" : "A/B の割り当てを表示"}
+              </button>
+            )}
+          </div>
           <div
-            className="nibi-rowlist nibi-rowlist--faced nibi-rowlist--striped nibi-rowlist--start nibi-rowlist--stack nibi-rowlist--stack-3 answer-record"
+            className="nibi-rowlist nibi-rowlist--prose nibi-rowlist--ruled nibi-rowlist--start answer-list"
             role="table"
             aria-label="回答"
-            style={{ "--nibi-rowlist-cols": "1.5rem auto minmax(0, 1fr)", "--nibi-rowlist-cols-narrow": "1.5rem auto minmax(0, 1fr)" } as CSSProperties}
           >
             <div className="nibi-rowlist__head" role="row">
-              <span role="columnheader">#</span>
-              <span role="columnheader" className="gauge-head">向き</span>
-              <span role="columnheader">判定</span>
+              <span role="columnheader" className="answer-head-index">#</span>
+              <span role="columnheader" className="answer-head-material">素材</span>
+              <span role="columnheader" className="gauge-head" aria-label={`向き: 左 ${axis.left}、右 ${axis.right}`}>
+                <span className="gauge-head-end start" aria-hidden="true">← {axis.left}</span>
+                <span className="gauge-head-end end" aria-hidden="true">{axis.right} →</span>
+              </span>
+              <span role="columnheader" className="answer-head-comment">コメント</span>
             </div>
-            {data.items.map((item) => <AnswerRow key={item.delivery_id} item={item} result={result} ends={ends} />)}
+            {answers.map((item, index) => (
+              <AnswerRow key={item.delivery_id} item={item} ends={axisEnds} oriented={oriented[index] ?? { kind: "missing" }} showSlots={showSlots} />
+            ))}
           </div>
         </section>
+
+        {checks.length > 0 && (
+          <section className="summary-section checks-section" aria-labelledby="checks-heading">
+            <h2 id="checks-heading" className="nibi-heading">回答の確かさ</h2>
+            <ul className="nibi-rowlist nibi-rowlist--bare nibi-rowlist--prose nibi-rowlist--ruled check-list" aria-label="回答の確かさ" style={{ "--nibi-rowlist-cols": "minmax(0, 1fr) auto" } as CSSProperties}>
+              {checks.map((item) => {
+                const check = checkResult(item, result);
+                return (
+                  <li key={item.delivery_id} className="nibi-rowlist__row check-row">
+                    <span className="nibi-rowlist__title nibi-rowlist__title--plain nibi-body">
+                      <span className="nibi-rowlist__name check-name">{item.role === "same" ? "同一音の確認" : "再現性の確認"}</span>
+                      {item.material_name && <span className="check-material">{item.material_name}</span>}
+                    </span>
+                    <span className={`nibi-rowlist__status nibi-body check-status ${check.kind}`}><Mark kind={check.kind} />{check.words}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
         {start.isError && <InlineError>{humanError(start.error)}</InlineError>}
       </main>
-      <div className="nibi-dock summary-actions">
-        {readyNext && (
-          <button type="button" className="nibi-button nibi-button--primary primary-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.project_session_id)}>
-            次へ（残り {readyCount}）
-          </button>
-        )}
-        <p className="summary-back">
-          <button type="button" className="nibi-button nibi-button--link weak-action" onClick={onBack}>受信箱へ</button>
-        </p>
+      {readyNext && (
+        <div className="nibi-dock screen-dock summary-dock">
+          <div className="screen-dock__inner">
+            <span className="nibi-body next-focus" title={readyNext.focus}>次: {readyNext.focus}</span>
+            <button type="button" className="nibi-button nibi-button--primary primary-action next-action" disabled={start.isPending} onClick={() => start.mutate(readyNext.project_session_id)}>
+              次へ（残り {readyCount}）
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function preferenceOf(item: RelistenItemView): Preference | null {
+  return item.skipped ? null : item.judgment?.preference ?? null;
+}
+
+/* 集計: 左右の軸の名前(短縮名、2行まで)、役割か「候補 1 / 2」、件数、互角と未回答。 */
+function Tally({ result, ends, axis, names, plan }: { result: SessionResultView; ends: GaugeEnds; axis: { left: string; right: string; aliased: boolean }; names: [CandidateName, CandidateName]; plan: boolean }) {
+  const count = (key: string) => result.evidence_direction_counts[key] ?? 0;
+  const ties = result.evidence_direction_counts.tie ?? 0;
+  const answered = Object.values(result.evidence_direction_counts).reduce((total, value) => total + value, 0);
+  const missing = Math.max(0, result.evidence_count - answered);
+  const roles = plan || axis.aliased;
+  const favored = result.favored_variant_id;
+  return (
+    <div className="tally-grid">
+      <span className="nibi-body tally-name start" title={names[0].full}>← {ends.bySlot ? axis.left : names[0].short}</span>
+      <span />
+      <span className="nibi-body tally-name end" title={names[1].full}>{ends.bySlot ? axis.right : names[1].short} →</span>
+      {roles && (
+        <>
+          <span className="nibi-body tally-role start">{plan ? ends.left.role ?? axis.left : axis.left}</span>
+          <span />
+          <span className="nibi-body tally-role end">{plan ? ends.right.role ?? axis.right : axis.right}</span>
+        </>
+      )}
+      <span className={favored === ends.left.key ? "nibi-display tally-count start favored" : "nibi-display tally-count start"} aria-label={`${axis.left} ${count(ends.left.key)} 件`}>{count(ends.left.key)}</span>
+      <span className="tally-middle">
+        <span className="nibi-body">互角 {ties}</span>
+        {missing > 0 && <span className="nibi-body">未回答 {missing}</span>}
+      </span>
+      <span className={favored === ends.right.key ? "nibi-display tally-count end favored" : "nibi-display tally-count end"} aria-label={`${axis.right} ${count(ends.right.key)} 件`}>{count(ends.right.key)}</span>
+    </div>
+  );
+}
+
+/* 支持の図(handoff 3.1)。読み上げの対象から外す(同じ内容は集計と結論の文で伝える)。 */
+function SupportChartView({ chart }: { chart: SupportChart }) {
+  const style = { "--slots": chart.slots, "--tick-left": chart.tickLeft, "--tick-right": chart.tickRight } as CSSProperties;
+  return (
+    <div className="support-chart" aria-hidden="true" style={style}>
+      <span className="support-chart__rail" />
+      <span className="support-chart__half start">
+        {chart.left.map((strength, index) => <span key={index} className="support-chart__block" data-strength={strength} />)}
+      </span>
+      <span className="support-chart__half end">
+        {chart.right.map((strength, index) => <span key={index} className="support-chart__block" data-strength={strength} />)}
+      </span>
+      <span className="support-chart__center" />
+      <span className="support-chart__tick start" />
+      <span className="support-chart__tick end" />
+    </div>
+  );
+}
+
+function NamesDisclosure({ names }: { names: [CandidateName, CandidateName] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="nibi-disclosure nibi-disclosure--link names-disclosure">
+      <button type="button" className="nibi-disclosure__header" aria-expanded={open} aria-controls="candidate-names" onClick={() => setOpen((value) => !value)}>
+        <Icon name="chevron_right" className="nibi-disclosure__chevron" />候補の正式名
+      </button>
+      <div id="candidate-names" className="nibi-disclosure__region" hidden={!open}>
+        <div className="candidate-names">
+          {names.map((name, index) => (
+            <p key={index} className="nibi-body candidate-name">
+              <span className="candidate-side" aria-label={index === 0 ? "左" : "右"}>{index === 0 ? "←" : "→"}</span>
+              <span className="candidate-full">
+                {name.tokens.map((token, tokenIndex) => (
+                  <span key={tokenIndex} className={token.differs ? "candidate-token differs" : "candidate-token"}>{tokenIndex > 0 ? " " : ""}{token.text}</span>
+                ))}
+              </span>
+            </p>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-/* ゲージの両端の名前。狭い列でも省かない(折り返す)。 */
-function GaugeLegend({ ends }: { ends: GaugeEnds }) {
+function AnswerRow({ item, ends, oriented, showSlots }: { item: RelistenItemView; ends: GaugeEnds; oriented: OrientedAnswer; showSlots: boolean }) {
+  const gauge = rowGauge(oriented, item.skipped);
+  const note = answerNote(item, ends);
+  const words = oriented.kind === "missing" ? gauge.word : answerWords(oriented, ends);
   return (
-    <p className="gauge-legend nibi-label" aria-label={`ゲージの向き: 左 ${endWords(ends.left)}、右 ${endWords(ends.right)}`}>
-      <span className="gauge-end start" aria-hidden="true">
-        <span className="gauge-end-name">{ends.left.label}</span>
-        {ends.left.role && <span className="gauge-end-role">{ends.left.role}</span>}
+    <div className="nibi-rowlist__row answer-row" role="row">
+      <span role="rowheader" className="nibi-rowlist__num nibi-value answer-index">{item.sequence_index + 1}</span>
+      <span role="cell" className="nibi-body answer-material" title={item.clip_id ?? undefined}>{item.material_name ?? "—"}</span>
+      <span role="cell" className="answer-gauge-cell">
+        <RowGaugeView gauge={gauge} label={words} />
+        {showSlots && <span className="nibi-label answer-slots">{slotWords(item, ends)}</span>}
       </span>
-      <span className="answer-gauge" aria-hidden="true">{[1, 2, 3, 4, 5].map((value) => <span key={value} />)}</span>
-      <span className="gauge-end end" aria-hidden="true">
-        <span className="gauge-end-name">{ends.right.label}</span>
-        {ends.right.role && <span className="gauge-end-role">{ends.right.role}</span>}
-      </span>
-    </p>
-  );
-}
-
-function endWords(end: GaugeEnds["left"]): string {
-  return end.role ? `${end.label}（${end.role}）` : end.label;
-}
-
-/* 支持の数: ゲージと同じ並び(左の候補 · 互角 · 右の候補)。Plan付きでは現在最良と提案を名前の下に言う。 */
-function Tally({ result, ends }: { result: SessionResultView; ends: GaugeEnds }) {
-  const side = (end: GaugeEnds["left"]) => ({
-    key: end.key,
-    label: end.label,
-    role: end.role,
-    value: result.evidence_direction_counts[end.key] ?? 0,
-    strong: end.key === result.favored_variant_id,
-  });
-  const entries = ends.bySlot
-    ? Object.entries(result.variant_labels).map(([key, label]) => side({ key, label, role: null }))
-    : [side(ends.left), { key: "tie", label: "互角", role: null, value: result.evidence_direction_counts.tie ?? 0, strong: false }, side(ends.right)];
-  if (ends.bySlot) entries.push({ key: "tie", label: "互角", role: null, value: result.evidence_direction_counts.tie ?? 0, strong: false });
-  const answered = Object.values(result.evidence_direction_counts).reduce((total, count) => total + count, 0);
-  if (answered < result.evidence_count) entries.push({ key: "missing", label: "未回答", role: null, value: result.evidence_count - answered, strong: false });
-  return (
-    <div className="verdict-tally" aria-label="支持の数">
-      {entries.map((entry) => (
-        <span key={entry.key} className="tally-item">
-          <span className={entry.strong ? "nibi-display tally-value strong" : "nibi-display tally-value"}>{entry.value}</span>
-          <span className="nibi-label tally-label">{entry.label}</span>
-          {entry.role && <span className="nibi-label tally-role">{entry.role}</span>}
-        </span>
-      ))}
+      <span role="cell" className={note ? "nibi-body answer-comment" : "nibi-body answer-comment empty"}>{note || "—"}</span>
     </div>
   );
 }
 
-function AnswerRow({ item, result, ends }: { item: RelistenItemView; result: SessionResultView | null; ends: GaugeEnds }) {
-  const preference = item.skipped ? null : item.judgment?.preference ?? null;
-  const note = answerNote(item);
-  const judgment = rowJudgment(item, preference, result);
-  const muted = preference === null || preference === 3;
-  const oriented = orientAnswer(item, ends, preference);
-  const active = activeCells(oriented);
+/* 比較ごとのゲージ(handoff 3.2)。図の下に言葉を必ず添える。読み上げは「Depth 60 をわずかに支持」のような一文。 */
+function RowGaugeView({ gauge, label }: { gauge: RowGauge; label: string }) {
   return (
-    <div className="nibi-rowlist__row answer-table-row" role="row">
-      <span role="rowheader" className="nibi-value answer-index">{item.sequence_index + 1}</span>
-      <span role="cell" className="answer-gauge" data-orientation={oriented.kind} aria-label={answerWords(oriented, ends)}>
-        {[0, 1, 2, 3, 4].map((cell) => <span key={cell} className={active.includes(cell) ? "active" : ""} />)}
-      </span>
-      <span role="cell" className="nibi-rowlist__title nibi-rowlist__title--plain nibi-body answer-main">
-        <span className={muted ? "nibi-rowlist__name answer-judgment neutral" : "nibi-rowlist__name answer-judgment"}>{judgment}</span>
-        <span className="nibi-rowlist__sub result-pair" title={item.clip_id ?? undefined}>
-          <span className={`result-role ${item.role}`}>{roleLabel(item.role)}</span>
-          {item.material_name && <span> · {item.material_name}</span>}
-          {item.role === "evidence" && <> · <strong>A</strong> <span>{slotLabel(item, "A")}</span> · <strong>B</strong> <span>{slotLabel(item, "B")}</span></>}
+    <span className="row-gauge" role="img" aria-label={label} data-side={gauge.side ?? "none"}>
+      <span className="row-gauge__track" aria-hidden="true">
+        <span className="row-gauge__rail" />
+        <span className="row-gauge__half start">
+          {gauge.side === "left" && gauge.blocks.map((strength, index) => <span key={index} className="row-gauge__block" data-strength={strength} />)}
         </span>
-        {note && <span className="nibi-rowlist__sub answer-note">{note}</span>}
+        <span className="row-gauge__half end">
+          {gauge.side === "right" && gauge.blocks.map((strength, index) => <span key={index} className="row-gauge__block" data-strength={strength} />)}
+        </span>
+        <span className="row-gauge__center" />
+        {gauge.side === "center" && <span className="row-gauge__dot" />}
       </span>
-    </div>
+      <span className="nibi-label row-gauge__word" aria-hidden="true">{gauge.word}</span>
+    </span>
   );
 }
 
-function normalizedPreferenceText(item: RelistenItemView, preference: 1 | 2 | 3 | 4 | 5): string {
-  if (preference === 3) return "互角";
-  const slot = preference < 3 ? "A" : "B";
-  const strength = preference === 1 || preference === 5 ? "明確に" : "わずかに";
-  return `${slotLabel(item, slot)}を${strength}支持`;
+// A/B の割り当て(終了後だけ、既定は隠す)。A と B がそれぞれどちらの軸だったか。
+function slotWords(item: RelistenItemView, ends: GaugeEnds): string {
+  if (ends.bySlot) return "";
+  const side = (slot: "A" | "B") => {
+    const key = identityKey(item.identity_by_slot[slot]);
+    return key === ends.left.key ? ends.left.label : key === ends.right.key ? ends.right.label : "—";
+  };
+  return `A = ${side("A")} · B = ${side("B")}`;
 }
 
-function rowJudgment(
-  item: RelistenItemView,
-  preference: 1 | 2 | 3 | 4 | 5 | null,
-  result: SessionResultView | null,
-): string {
-  if (preference === null) {
-    const missing = item.skipped ? "飛ばした" : "未回答";
-    if (item.role === "same") return `同一音: ${missing}`;
-    if (item.role === "repeat") return `再現性: ${missing}`;
-    return item.skipped ? "飛ばした" : "回答なし";
-  }
-  if (item.role === "same") {
-    const strength = preference === 1 || preference === 5 ? "明確" : "わずか";
-    return result?.same_result === "tie" ? "同一音: 一致" : `同一音: 差を報告（${strength}）`;
-  }
-  if (item.role === "repeat") {
-    const current = normalizedPreferenceText(item, preference);
-    return `再現性: ${repeatResultLabel(result?.repeat_result)}（今回: ${current}）`;
-  }
-  return normalizedPreferenceText(item, preference);
-}
-
-function answerNote(item: RelistenItemView): string {
+function answerNote(item: RelistenItemView, ends: GaugeEnds): string {
   if (item.skipped || !item.judgment) return "";
   const notes: string[] = [];
   for (const slot of ["a", "b"] as const) {
     const blocker = item.judgment.blockers[slot];
     if (!blocker?.selected) continue;
-    const name = slotLabel(item, slot === "a" ? "A" : "B");
-    notes.push(`${name}に問題${blocker.note ? `（${blocker.note}）` : ""}`);
+    const upper = slot === "a" ? "A" : "B";
+    const key = identityKey(item.identity_by_slot[upper]);
+    const name = ends.bySlot ? upper : key === ends.left.key ? ends.left.label : key === ends.right.key ? ends.right.label : upper;
+    notes.push(`${name} に問題${blocker.note ? `（${blocker.note}）` : ""}`);
   }
   if (item.judgment.comment) notes.push(item.judgment.comment);
   return notes.join(" · ");
 }
 
-function verdictCopy(data: SessionCompletion): { title: string; detail: string } {
-  const result = data.result;
-  if (!result) return { title: "比較を記録しました", detail: "この試聴はProjectに属さないため、現在最良は変わりません。" };
-  if (data.current_best_check) {
-    if (result.current_best_updated) return { title: `現在最良を ${result.favored_variant_label ?? "提案版"} に更新`, detail: "" };
-    return { title: "現在最良を維持", detail: keepReason(result) ?? "" };
+function checkResult(item: RelistenItemView, result: SessionResultView | null): { kind: MarkKind; words: string } {
+  const preference = preferenceOf(item);
+  if (preference === null) return { kind: "unknown", words: item.skipped ? "飛ばした" : "未回答" };
+  if (item.role === "same") {
+    if (preference === 3) return { kind: "pass", words: "一致" };
+    return { kind: "fail", words: `差を報告（${preference === 1 || preference === 5 ? "明確" : "わずか"}）` };
   }
-  const directional = Object.keys(result.variant_labels).map((variantId) => result.evidence_direction_counts[variantId] ?? 0);
-  const tieCount = result.evidence_direction_counts.tie ?? 0;
-  let conclusion: string;
-  if (result.favored_variant_label) conclusion = `${result.favored_variant_label} が優勢`;
-  else if (tieCount === result.evidence_count) conclusion = "全比較で互角";
-  else if (directional.every((count) => count === 0)) conclusion = "判定できる回答が不足しています";
-  else if (directional.length === 2 && directional[0] === directional[1]) conclusion = "判断が素材によって分かれました";
-  else conclusion = "支持が多い方向はありますが、優勢条件には届きませんでした";
-  return { title: conclusion, detail: "観察として記録しました（現在最良は変わりません）" };
-}
-
-// 更新しなかった理由を、サーバーの判定順(未回答 → blocker → 優勢条件)に合わせて一つだけ示す。
-function keepReason(result: SessionResultView): string | null {
-  const evidence = result.best_update_evidence;
-  if (!evidence) return null;
-  if (evidence.answered_count < evidence.evidence_count) return "飛ばした比較があるため、更新条件を満たしませんでした";
-  if (evidence.blocker_count > 0) return "提案版に残せない問題が報告されたため、更新しませんでした";
-  if (evidence.favorable_count < result.favored_required_count) {
-    return `提案版を支持した比較は${evidence.evidence_count}件中${evidence.favorable_count}件で、必要な${result.favored_required_count}件に届きませんでした`;
-  }
-  if (evidence.score_sum <= 0) return "提案版への支持が反対の回答を上回らず、優勢条件を満たしませんでした";
-  return null;
-}
-
-// 根拠の行: 優勢条件 / 同一音の確認 / 再現性の確認。1つでも不合格なら、どこで止まったかがここで読める。
-function reasons(data: SessionCompletion, result: SessionResultView): Array<{ kind: MarkKind; text: string }> {
-  // 条件に届かないこと・問題の報告は現在最良を維持する普通の理由なので、失敗(fail)の印にしない。
-  const rows: Array<{ kind: MarkKind; text: string }> = [conditionReason(result)];
-  const evidence = result.best_update_evidence;
-  if (evidence && evidence.blocker_count > 0) rows.push({ kind: "unknown", text: "提案に残せない問題の報告あり" });
-  if (data.items.some((item) => item.role === "same")) {
-    const kind: MarkKind = result.same_result === "tie" ? "pass" : result.same_result === "difference_reported" ? "fail" : "unknown";
-    rows.push({ kind, text: `同一音の確認: ${sameResultLabel(result.same_result)}` });
-  }
-  if (data.items.some((item) => item.role === "repeat")) {
-    const value = result.repeat_result;
-    const kind: MarkKind = value === "same_category" || value === "same_direction" ? "pass" : value === "reversed" ? "fail" : "unknown";
-    rows.push({ kind, text: `再現性の確認: ${repeatResultLabel(value)}` });
-  }
-  return rows;
-}
-
-function sameResultLabel(value: string | undefined): string {
-  return { tie: "一致", difference_reported: "差を報告", missing: "未回答" }[value ?? "missing"] ?? value ?? "未回答";
+  const value = result?.repeat_result;
+  const kind: MarkKind = value === "same_category" || value === "same_direction" ? "pass" : value === "reversed" ? "fail" : "unknown";
+  return { kind, words: repeatResultLabel(value) };
 }
 
 function repeatResultLabel(value: string | undefined): string {
   return {
-    same_category: "同一強度",
-    same_direction: "同方向",
-    near: "片方tie",
+    same_category: "同じ強さで一致",
+    same_direction: "同じ向き",
+    near: "片方が互角",
     reversed: "反転",
     missing: "未回答",
   }[value ?? "missing"] ?? value ?? "未回答";
-}
-
-function roleLabel(role: RelistenItemView["role"]): string {
-  return { evidence: "素材", same: "同一音の確認", repeat: "再現性の確認", other: "比較" }[role];
-}
-
-function slotLabel(item: RelistenItemView, slot: "A" | "B"): string {
-  if (item.role === "same") return "同一音";
-  return identityLabel(item.identity_by_slot[slot]);
 }

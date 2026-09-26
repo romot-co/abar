@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 
-from scripts.dev_seed import seed_all_done, seed_blocked, seed_simplification
+from scripts.dev_seed import seed_all_done, seed_blocked, seed_fresh, seed_simplification
 from tests.e2e.test_project_ui_v2 import live_server
 
 
@@ -69,4 +69,31 @@ def test_all_judged_only_when_nothing_waits(tmp_path: Path, free_tcp_port: int) 
         project.select_option(label="完了済み: Quiet")
         page.get_by_text("全て判定済みです。", exact=False).wait_for()
         assert page.get_by_role("heading", name="開始できない", exact=False).count() == 0
+        browser.close()
+
+
+@pytest.mark.browser
+def test_first_ready_session_leads_and_the_rest_keep_their_own_start(
+    tmp_path: Path, free_tcp_port: int
+) -> None:
+    """進行中がなければ最初の準備済みが次の一手の面に載り、残りの行はそれぞれ控えめな「開始」を持つ(§8.2)。"""
+    root = tmp_path / "fresh"
+    seed_fresh(root)
+    with (
+        live_server(root, tmp_path / "other", free_tcp_port) as url,
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.goto(url)
+        lead = page.locator(".lead-panel")
+        lead.get_by_role("heading", name="次に聴く", exact=True).wait_for()
+        expect(lead.get_by_role("button", name="聴きはじめる", exact=True)).to_be_visible()
+        assert page.locator(".nibi-button--primary").count() == 1
+        rows = page.get_by_role("list", name="このあとのセッション").get_by_role("listitem")
+        starts = page.get_by_role("list", name="このあとのセッション").get_by_role(
+            "button", name="開始", exact=True
+        )
+        expect(starts).to_have_count(rows.count())
+        assert starts.first.evaluate("el => !el.classList.contains('nibi-button--primary')")
         browser.close()

@@ -25,7 +25,7 @@ def test_position_slider_follows_the_nibi_contract(tmp_path: Path, free_tcp_port
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": 1024, "height": 800})
         page.goto(url)
-        page.get_by_role("button", name="続ける", exact=True).click()
+        page.get_by_role("button", name="続きから", exact=False).click()
         slider = page.get_by_role("slider", name="再生位置")
         slider.wait_for()
         assert page.locator('input[type="range"]').count() == 0
