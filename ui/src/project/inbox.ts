@@ -95,3 +95,12 @@ export function blockedReason(outcome: string | null | undefined): string {
   if (!outcome) return "理由は記録されていません";
   return BLOCKED_REASONS[outcome] ?? outcome;
 }
+
+/** これまでの欄で開いたまま見せる件数。それより古い回は「残り N 件を見る」に畳む(100件を超える台帳を1画面に並べない)。 */
+export const HISTORY_VISIBLE = 3;
+
+/** 新しい順の完了を、常に見せる分と畳む分に分ける。 */
+export function splitHistory<T>(completed: readonly T[], visible = HISTORY_VISIBLE): { shown: T[]; folded: T[] } {
+  return { shown: completed.slice(0, visible), folded: completed.slice(visible) };
+}
+

@@ -1,12 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, type Action, type Project, type WorkspaceCatalog } from "../api";
 import { ClampedText } from "../ClampedText";
 import { humanError } from "../errors";
 import type { IndicatorSummaryView, SessionCardView, SimplificationPromptView } from "../generated";
 import { Icon } from "../Icon";
 import { Mark } from "../Mark";
-import { blockedReason, classifySessions, leadCopy, queueMessage, selectLead, type Lead, type OtherSession } from "./inbox";
+import { blockedReason, classifySessions, leadCopy, queueMessage, selectLead, splitHistory, type Lead, type OtherSession } from "./inbox";
 import { decimalsByUnit, displayUnit, formatIndicatorValue } from "./indicators";
 import { InlineError } from "../InlineError";
 
@@ -201,29 +201,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
             </section>
           )}
 
-          {completed.length > 0 && (
-            <section className="inbox-section history-section" aria-labelledby="history-heading">
-              <h2 id="history-heading" className="nibi-heading section-title">これまで</h2>
-              <div className="nibi-rowlist nibi-rowlist--bare nibi-rowlist--prose nibi-rowlist--ruled history-list" role="group" aria-label="完了したセッション">
-                {completed.map((item) => (
-                  <button
-                    type="button"
-                    className="nibi-rowlist__row history-row"
-                    key={item.project_session_id}
-                    aria-label={`結果を見る: ${item.focus}`}
-                    onClick={() => onOpenCompletion(item.project_session_id)}
-                  >
-                    <span className="nibi-rowlist__num nibi-value history-date">{formatDate(item.completed_at)}</span>
-                    <span className="nibi-body history-focus" title={item.focus}>{item.focus}</span>
-                    <span className={item.current_best_updated ? "nibi-body history-outcome updated" : "nibi-body history-outcome"}>
-                      <span className="history-mark">{item.current_best_updated && <Mark kind="pass" />}</span>
-                      <span className="history-words">{item.outcome ?? "完了"}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
+          {completed.length > 0 && <History completed={completed} onOpen={onOpenCompletion} />}
         </div>
 
         <aside className="nibi-panel inbox-side" aria-labelledby="current-best-heading">
@@ -360,3 +338,48 @@ function formatDate(value: string | null): string {
   if (Number.isNaN(date.getTime())) return "—";
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
+
+/* これまで(§8.2): 新しい順。最初の HISTORY_VISIBLE 件は開いたまま、それより古い回は「残り N 件を見る」の開閉の中
+   (nibi の開閉は重要でない履歴に使う、SPEC §6.7)。開くとその場で下に続く。 */
+function History({ completed, onOpen }: { completed: SessionCardView[]; onOpen: (sessionId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const { shown, folded } = splitHistory(completed);
+  const rows = (items: SessionCardView[], label: string) => (
+    <div className="nibi-rowlist nibi-rowlist--bare nibi-rowlist--prose nibi-rowlist--ruled history-list" role="group" aria-label={label}>
+      {items.map((item) => (
+        <button
+          type="button"
+          className="nibi-rowlist__row history-row"
+          key={item.project_session_id}
+          aria-label={`結果を見る: ${item.focus}`}
+          onClick={() => onOpen(item.project_session_id)}
+        >
+          <span className="nibi-rowlist__num nibi-value history-date">{formatDate(item.completed_at)}</span>
+          <span className="nibi-body history-focus" title={item.focus}>{item.focus}</span>
+          <span className={item.current_best_updated ? "nibi-body history-outcome updated" : "nibi-body history-outcome"}>
+            <span className="history-mark">{item.current_best_updated && <Mark kind="pass" />}</span>
+            <span className="history-words">{item.outcome ?? "完了"}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+  return (
+    <section className="inbox-section history-section" aria-labelledby="history-heading">
+      <h2 id="history-heading" className="nibi-heading section-title">これまで</h2>
+      {rows(shown, "完了したセッション")}
+      {folded.length > 0 && (
+        <div className="nibi-disclosure nibi-disclosure--link history-more">
+          <button type="button" className="nibi-disclosure__header" aria-expanded={open} aria-controls="history-older" onClick={() => setOpen((value) => !value)}>
+            <Icon name="chevron_right" className="nibi-disclosure__chevron" />
+            残り {folded.length} 件を見る
+          </button>
+          <div id="history-older" className="nibi-disclosure__region" hidden={!open}>
+            {open && rows(folded, "それより前の完了したセッション")}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
