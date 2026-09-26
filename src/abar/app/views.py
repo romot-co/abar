@@ -58,6 +58,8 @@ class SessionCardView(PublicView):
     current_best_check: bool
     completed_at: str | None
     outcome: str | None
+    # 終了したPlan付きSessionで現在最良が更新されたか。それ以外はNone(受信箱の履歴の印、§8.2)。
+    current_best_updated: bool | None = None
 
 
 class SimplificationPromptView(PublicView):

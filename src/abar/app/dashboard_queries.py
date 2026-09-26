@@ -136,6 +136,11 @@ def session_cards(
                     if runtime.status == "blocked"
                     else None
                 ),
+                current_best_updated=(
+                    session_result_from_state(state, item.id).current_best_updated
+                    if runtime.status == "ended" and item.core_session_id in plans
+                    else None
+                ),
             )
         )
     return tuple(output)

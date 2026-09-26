@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from abar.app import commands, queries
+from abar.app.dashboard_queries import project_dashboard
 from abar.app.repository import WorkspaceRepository
 from tests.conftest import persist_finite_variant
 
@@ -85,6 +86,14 @@ def test_standard_plan_updates_current_best_only_after_three_evidence_answers(
     )
     project_view = queries.project_view(repository)
     assert project_view.current_best_evidence == result.best_update_evidence
+    # 受信箱の履歴は、更新したPlan付きSessionを印で示す(§8.2)
+    card = next(
+        item
+        for item in project_dashboard(repository).sessions
+        if item.project_session_id == project_session_id
+    )
+    assert card.status == "done"
+    assert card.current_best_updated is True
 
 
 def test_skipped_item_is_final_and_session_ends_incomplete(
