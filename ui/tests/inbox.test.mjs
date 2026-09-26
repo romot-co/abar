@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { blockedReason, classifySessions, leadCopy, queueMessage, selectLead } from '../src/project/inbox.ts';
+import { HISTORY_VISIBLE, blockedReason, classifySessions, leadCopy, queueMessage, selectLead, splitHistory } from '../src/project/inbox.ts';
 
 const card = (id, status, extra = {}) => ({
   project_session_id: id, focus: id, recipe: 'matched-v1', comparison_count: 1, answered_count: 0,
@@ -72,3 +72,14 @@ test('lead words: continue from the next comparison, or start listening', () => 
   assert.deepEqual(leadCopy({ kind: 'project', session: card('r', 'ready') }), { heading: '次に聴く', action: '聴きはじめる', step: null });
   assert.equal(leadCopy({ kind: 'other', session: { sessionId: 's', status: 'active' } }).heading, '途中の試聴');
 });
+
+test('history shows the newest three and folds the rest', () => {
+  assert.equal(HISTORY_VISIBLE, 3);
+  const items = Array.from({ length: 120 }, (_, i) => `s${i}`);
+  const { shown, folded } = splitHistory(items);
+  assert.deepEqual(shown, ['s0', 's1', 's2']);
+  assert.equal(folded.length, 117);
+  assert.equal(folded[0], 's3');
+  assert.deepEqual(splitHistory(['a', 'b']), { shown: ['a', 'b'], folded: [] });
+});
+
