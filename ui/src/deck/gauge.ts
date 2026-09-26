@@ -1,7 +1,7 @@
 import type { RelistenItemView, SessionResultView } from "../generated";
 
 /*
- * 結果の5段ゲージの向き(§8.3)。A/Bの割り付けは比較ごとに違うので、A/Bの位置で描くと同じ形が逆の支持を表してしまう。
+ * 結果のゲージと支持の図の向き(§8.3)。A/Bの割り付けは比較ごとに違うので、A/Bの位置で描くと同じ形が逆の支持を表してしまう。
  * 終了したSessionの結果画面だけで(A/Bと候補の対応はここで初めて公開できる、§7.9)、両端を候補に固定する。
  *   Plan付き: 左 = 開始時の現在最良(incumbent)、右 = 提案(proposed)
  *   一般:     左 / 右 = Sessionの組(pair)の順
@@ -81,11 +81,63 @@ export function orientAnswer(item: RelistenItemView, ends: GaugeEnds, preference
   return { kind: "symmetric", distance: Math.abs(preference - 3) as 0 | 1 | 2 };
 }
 
-/** ゲージの5つの段のうち濃くする段(0始まり)。 */
-export function activeCells(answer: OrientedAnswer): number[] {
-  if (answer.kind === "missing") return [];
-  if (answer.kind === "directed") return [answer.position - 1];
-  return answer.distance === 0 ? [2] : [2 - answer.distance, 2 + answer.distance];
+export type Strength = "clear" | "slight";
+
+/*
+ * 比較ごとのゲージ(handoff PROPOSAL 3.2)。支持の図(3.1)を比較1つ分で描く: 中央の縦線から支持した側へ、
+ * わずか = ブロック1つ(薄く低い)、明確 = ブロック2つ(濃く高い)。互角は中央の点、飛ばした・未回答は何も描かない。
+ * 図の下に必ず言葉を添える(色と形だけにしない)。
+ */
+export type RowGauge = {
+  side: "left" | "right" | "center" | null;
+  blocks: Strength[];
+  word: "明確" | "わずか" | "互角" | "差を報告" | "飛ばした" | "未回答";
+};
+
+export function rowGauge(answer: OrientedAnswer, skipped = false): RowGauge {
+  if (answer.kind === "missing") return { side: null, blocks: [], word: skipped ? "飛ばした" : "未回答" };
+  if (answer.kind === "symmetric") {
+    if (answer.distance === 0) return { side: "center", blocks: [], word: "互角" };
+    return { side: "center", blocks: [], word: "差を報告" };
+  }
+  if (answer.position === 3) return { side: "center", blocks: [], word: "互角" };
+  const clear = answer.position === 1 || answer.position === 5;
+  return {
+    side: answer.position < 3 ? "left" : "right",
+    blocks: clear ? ["clear", "clear"] : ["slight"],
+    word: clear ? "明確" : "わずか",
+  };
+}
+
+/*
+ * 支持の図(handoff PROPOSAL 3.1)の形。中央から左右へ、支持した比較1件ごとにブロックを1つ置く(中央に近い方から明確、わずか)。
+ * ブロックの幅は片側の幅を比較の数(slots)で割った大きさ。優勢に必要な件数の位置に、中央から左右同じ距離で縦線を引く
+ * (位置は全体の幅に対する割合: 左 0.5 − threshold × 0.5、右 0.5 + threshold × 0.5)。互角と未回答はブロックにしない。
+ */
+export type SupportChart = {
+  left: Strength[];
+  right: Strength[];
+  /** 片側に並べられるブロックの数(= 比較の数)。 */
+  slots: number;
+  /** 必要な件数 ÷ 比較の数(0〜1)。 */
+  threshold: number;
+  /** 必要な件数の縦線の位置(全体の幅に対する割合)。 */
+  tickLeft: number;
+  tickRight: number;
+};
+
+export function supportChart(answers: readonly OrientedAnswer[], required: number, evidenceCount: number): SupportChart {
+  const left: Strength[] = [];
+  const right: Strength[] = [];
+  for (const answer of answers) {
+    if (answer.kind !== "directed" || answer.position === 3) continue;
+    const strength: Strength = answer.position === 1 || answer.position === 5 ? "clear" : "slight";
+    (answer.position < 3 ? left : right).push(strength);
+  }
+  const order = (items: Strength[]) => [...items.filter((item) => item === "clear"), ...items.filter((item) => item === "slight")];
+  const slots = Math.max(1, evidenceCount, left.length, right.length);
+  const threshold = Math.min(1, Math.max(0, required / slots));
+  return { left: order(left), right: order(right), slots, threshold, tickLeft: 0.5 - threshold * 0.5, tickRight: 0.5 + threshold * 0.5 };
 }
 
 /** ゲージの読み上げ(と見た目の意味): 端の名前へ正規化した支持。 */
@@ -95,5 +147,5 @@ export function answerWords(answer: OrientedAnswer, ends: GaugeEnds): string {
   if (answer.position === 3) return "互角";
   const end = answer.position < 3 ? ends.left : ends.right;
   const strength = answer.position === 1 || answer.position === 5 ? "明確に" : "わずかに";
-  return `${end.label}を${strength}支持`;
+  return `${end.label} を${strength}支持`;
 }

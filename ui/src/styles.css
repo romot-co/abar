@@ -13,88 +13,139 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 /* 入力欄はnibiの .nibi-field / .nibi-field__input だけが形を持つ(C-3: 枠 = 入力できる。無効でも枠は line で残す、0006)。 */
 
-/* ---- 画面の枠: 1列。列が入れ物(container)なので、nibi の --stack と段階の狭い形は列の幅で切り替わる */
+
+/* ---- 画面の枠。幅の切り替えは画面の幅で: 結果 680px、受信箱 900px、どの画面も 480px 未満で小さい画面の余白とボタン幅 */
 .app-shell { min-height: 100vh; }
 .screen {
+  --screen-max: 46rem;
   display: grid; align-content: start; gap: calc(var(--nibi-size-inset) * 1.25);
-  width: min(calc(100% - 2 * var(--nibi-size-inset-x)), 46rem); margin-inline: auto;
+  width: min(calc(100% - 2 * var(--nibi-size-inset-x)), var(--screen-max)); margin-inline: auto;
   padding: calc(var(--nibi-size-inset) * 1.5) 0 calc(var(--nibi-size-inset) * 2);
   container-type: inline-size;
 }
-.docked-screen { display: grid; grid-template-rows: minmax(0, 1fr) auto; width: min(calc(100% - 2 * var(--nibi-size-inset-x)), 38rem); min-height: 100dvh; margin-inline: auto; }
-.docked-screen.summary-page { width: min(calc(100% - 2 * var(--nibi-size-inset-x)), 40rem); }
-.docked-screen > .screen { width: 100%; }
-.docked-screen > .nibi-dock { z-index: 2; padding-inline: 0; padding-bottom: var(--nibi-size-inset); }
+/* 下に固定した操作欄のある画面: 本文と操作欄の2段。操作欄は画面の幅いっぱいの面、中身は本文と同じ幅 */
+.docked-screen { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 100dvh; }
+.docked-screen > .screen { width: min(calc(100% - 2 * var(--nibi-size-inset-x)), var(--screen-max)); }
+.screen-dock { z-index: 2; padding: var(--nibi-size-gap) var(--nibi-size-inset-x); background: var(--nibi-color-surface); box-shadow: var(--nibi-shadow-overlay); }
+.screen-dock__inner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nibi-grid-y) var(--nibi-size-inset-x); width: min(100%, var(--dock-max, 46rem)); margin-inline: auto; }
 .centered { display: grid; min-height: 100dvh; place-content: center; justify-items: center; gap: var(--nibi-grid-y); padding: var(--nibi-size-inset) var(--nibi-size-inset-x); text-align: center; }
 .centered p { color: var(--nibi-color-text-muted); }
 .centered-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--nibi-size-gap-x); margin-top: var(--nibi-grid-y); }
 .pair-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--nibi-size-gap-x); }
 .pair-actions .nibi-button { width: 100%; }
 .empty-state code { display: block; padding: var(--nibi-grid-y) var(--nibi-size-gap-x); border-radius: var(--nibi-radius-field); color: var(--nibi-color-text-muted); background: var(--nibi-color-control); font-size: var(--nibi-type-value-size); }
+.heading-count { color: var(--nibi-color-text-muted); font-weight: 400; }
 
-/* ---- 受信箱(§8.2): 題名の選択と目的 → 現在最良 → 未回答(セッション、単純化の確認)→ 開始できない N 件 → 完了 N 件 */
-.inbox { gap: calc(var(--nibi-size-inset) * 2.5); }
+/* 長い問いを行数で止める(`ui/src/ClampedText.tsx`)。行数は置き場所ごとに --clamp-lines */
+.clamped-text { margin: 0; overflow-wrap: anywhere; text-wrap: pretty; }
+.clamped-text:not([data-expanded]) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--clamp-lines, 3); line-clamp: var(--clamp-lines, 3); overflow: hidden; }
+.clamp-controls { display: flex; margin: 0; }
+
+/* ---- 受信箱(§8.2): 題名の選択と目的 → 次の一手の面 → 確認 → このあと → 開始できない → これまで。横の欄に現在最良 */
+.inbox { --screen-max: 76rem; gap: calc(var(--nibi-size-inset) * 1.5); padding-top: calc(var(--nibi-size-inset) * 1.75); }
 .inbox-header { display: grid; gap: var(--nibi-grid-y); }
-.brief { max-width: 40em; overflow-wrap: anywhere; }
-.inbox-section { display: grid; gap: var(--nibi-size-gap); }
-.current-best-section { gap: var(--nibi-size-inset); }
-/* 見出しの段: 頁の題名(h1、title)> 欄の見出し(h2、heading)。現在最良のIDは見出しでなく、見出しの下の値(body) */
 .project-title { display: flex; min-width: 0; }
-.best-heading { display: grid; gap: calc(var(--nibi-grid-y) / 2); }
-.best-id { display: block; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: normal; }
+.brief { max-width: 46rem; color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
+.inbox-layout { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; align-items: start; gap: calc(var(--nibi-size-inset) * 1.5); }
+.inbox-main { display: grid; align-content: start; gap: calc(var(--nibi-size-inset) * 1.5); min-width: 0; }
+.inbox-lead, .inbox-notices { display: grid; gap: var(--nibi-size-gap); }
+.inbox-section { display: grid; gap: var(--nibi-size-gap); min-width: 0; }
 .empty-queue { color: var(--nibi-color-text-muted); }
-/* 指標: 群の見出しは面なし・小さく薄く、上に余白。値は本文の大きさ */
-.indicator-table > .nibi-rowlist__group { min-height: 0; padding-top: var(--nibi-size-gap); padding-bottom: calc(var(--nibi-grid-y) / 2); }
-.indicator-table > .nibi-rowlist__group:first-child { padding-top: var(--nibi-grid-y); }
-.group-label { color: var(--nibi-color-text-muted); }
-.indicator-value { display: inline-flex; align-items: baseline; }
-.indicator-number { font-variant-numeric: tabular-nums; }
-.indicator-row > .indicator-status:empty { display: none; }
-.guard-badge { display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) * .75); }
-.guard-fail-word { color: var(--nibi-color-error-text); }
-/* 未回答: 操作は右端。狭い列では題名の下へ */
-.queue-list .nibi-rowlist__end { justify-self: end; justify-content: flex-end; }
-.queue-focus { display: block; overflow-wrap: anywhere; white-space: normal; }
-.blocked-note { margin: 0; }
-@container (max-width: 34rem) {
-  .queue-list > .nibi-rowlist__row { grid-template-columns: minmax(0, 1fr); }
-  .queue-list > .nibi-rowlist__row > * { grid-column: 1 / -1; }
-  .queue-list .nibi-rowlist__end { justify-self: start; justify-content: flex-start; }
+/* 900px 未満は1列。現在最良は「このあと」の次 */
+@media (max-width: 899.98px) {
+  .inbox-layout { display: flex; flex-direction: column; align-items: stretch; }
+  .inbox-main { display: contents; }
+  .inbox-lead { order: 1; }
+  .inbox-notices { order: 2; }
+  .queue-section { order: 3; }
+  .inbox-side { order: 4; }
+  .blocked-section { order: 5; }
+  .history-section { order: 6; }
 }
-/* 開始できない: 完了に混ぜず、理由を文で(印と語、色だけにしない)。狭い列では状態を題名の下へ */
+
+/* 次の一手の面(nibi 0014 D-2): 見出しと種類 → 問い(4行で止める)→ 進みと主ボタン */
+.lead-panel { gap: var(--nibi-size-gap); padding: calc(var(--nibi-size-inset) * 1.25) calc(var(--nibi-size-inset-x) * 1.25); }
+.lead-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: calc(var(--nibi-grid-y) / 2) var(--nibi-size-gap-x); }
+.lead-top > h2 { margin: 0; }
+.lead-question { display: grid; justify-items: start; gap: calc(var(--nibi-grid-y) / 2); }
+.lead-focus { --clamp-lines: 4; }
+.lead-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nibi-grid-y) var(--nibi-size-inset-x); }
+.lead-progress { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nibi-size-gap-x); min-width: 0; }
+.lead-count { white-space: nowrap; }
+.lead-action { margin-inline-start: auto; }
+@media (max-width: 479.98px) {
+  .lead-action { width: 100%; margin-inline-start: 0; }
+}
+
+/* 確認(単純化): 見出しなしの1文 + 理由 */
+.notice-title { display: block; font-weight: 500; }
+.notice-reason { display: block; margin-top: calc(var(--nibi-grid-y) / 4); color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
+
+/* このあと: # | 問い(2行まで)| 種類と操作。480px 未満は種類と操作を問いの下へ */
+.queue-list { --nibi-rowlist-cols: 3rem minmax(0, 1fr) auto; }
+.queue-index { justify-self: start; color: var(--nibi-color-text-muted); }
+.queue-focus { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.queue-end { justify-self: end; gap: var(--nibi-size-gap-x); }
+.queue-kind { color: var(--nibi-color-text-muted); white-space: nowrap; }
+.blocked-note { margin: 0; }
+@media (max-width: 479.98px) {
+  .queue-list { --nibi-rowlist-cols: 2rem minmax(0, 1fr); }
+  .queue-list .queue-end { grid-column: 2; justify-self: start; flex-wrap: wrap; white-space: normal; }
+}
+
+/* 開始できない: 完了に混ぜず、理由を文で(印と語、色だけにしない)。狭い画面では状態を題名の下へ */
 .blocked-reason { overflow-wrap: anywhere; white-space: normal; }
 .blocked-status { justify-self: end; }
 .blocked-word { color: var(--nibi-color-error-text); }
-@container (max-width: 34rem) {
-  .blocked-list > .nibi-rowlist__row { grid-template-columns: minmax(0, 1fr); }
-  .blocked-list > .nibi-rowlist__row > * { grid-column: 1 / -1; }
-  .blocked-list .blocked-status { justify-self: start; }
-}
-.notice-title { display: block; font-weight: 500; }
-.notice-reason { display: block; margin-top: calc(var(--nibi-grid-y) / 4); color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
-.completed-sessions { gap: var(--nibi-size-gap); }
-.completed-date { color: var(--nibi-color-text-muted); font-variant-numeric: tabular-nums; }
-.completed-outcome { justify-self: end; max-width: 22rem; color: var(--nibi-color-text); white-space: normal; overflow-wrap: anywhere; text-align: end; }
-/* 狭い列: 結果は題名の下へ(日付の列はそのまま) */
-@container (max-width: 34rem) {
-  .completed-list > .nibi-rowlist__row { grid-template-columns: 3rem minmax(0, 1fr); padding-block: var(--nibi-grid-y); }
-  .completed-list > .nibi-rowlist__row > .completed-outcome { grid-column: 2 / -1; justify-self: start; justify-content: flex-start; max-width: none; text-align: start; }
+@media (max-width: 479.98px) {
+  .blocked-list > .nibi-rowlist__row > .blocked-status { grid-column: 1 / -1; justify-self: start; }
 }
 
-/* ---- Deck(§2.13) */
-.deck-shell { gap: calc(var(--nibi-size-inset) * 1.25); padding-top: var(--nibi-grid-y); }
+/* これまで: 日付 | 問い(1行で省略、title に全文)| 結果の文(前に印の欄)。行全体が押せる */
+.history-list { --nibi-rowlist-cols: 3rem minmax(0, 1fr) minmax(0, 17rem); }
+.history-date { justify-self: start; color: var(--nibi-color-text-muted); }
+.history-focus { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-outcome { display: grid; grid-template-columns: 1em minmax(0, 1fr); column-gap: var(--nibi-grid-y); min-width: 0; color: var(--nibi-color-text); overflow-wrap: anywhere; }
+.history-mark { display: inline-grid; place-items: center; height: var(--nibi-type-body-line); }
+.history-outcome.updated .history-words { font-weight: 500; }
+@media (max-width: 479.98px) {
+  .history-list { --nibi-rowlist-cols: 3rem minmax(0, 1fr); }
+  .history-list .history-outcome { grid-column: 2; }
+}
+
+/* 横の欄: 現在最良(名前は値、見出しでない)→ 指標(目標 / 守る性質)。名前は折り返し、値は右寄せ */
+.inbox-side { gap: var(--nibi-size-gap); padding: calc(var(--nibi-size-inset) * 1.25) calc(var(--nibi-size-inset-x) * 1.25); }
+.best-heading { display: grid; gap: calc(var(--nibi-grid-y) / 2); }
+.best-heading > h2 { margin: 0; }
+.best-id { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.indicators-empty { color: var(--nibi-color-text-muted); }
+.indicator-table > .nibi-rowlist__group { min-height: 0; padding-block: 0; }
+.group-label { color: var(--nibi-color-text-muted); }
+.indicator-label { display: grid; gap: calc(var(--nibi-grid-y) / 4); }
+.indicator-value { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: .25em; font-weight: 500; }
+.indicator-number { font-variant-numeric: tabular-nums; }
+.indicator-unit { font-weight: 400; }
+.guard-badge { display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) * .75); }
+.guard-fail-word { color: var(--nibi-color-error-text); }
+
+/* ---- Deck(§2.13): 本文は 44rem で中央。記録と skip は画面下の操作欄 */
+.deck-shell { --screen-max: 44rem; gap: calc(var(--nibi-size-inset) * 1.25); padding-top: var(--nibi-grid-y); }
+.answer-dock { --dock-max: 44rem; }
 .deck-top { display: grid; gap: var(--nibi-size-gap); }
 .deck-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: var(--nibi-size-gap-x); min-height: calc(var(--nibi-size-row) * 1.25); }
 .back-action { justify-self: start; }
 .deck-progress { color: var(--nibi-color-text-muted); font-variant-numeric: tabular-nums; }
-.deck-criterion { overflow-wrap: anywhere; text-wrap: pretty; }
+.deck-question { display: grid; justify-items: start; gap: calc(var(--nibi-grid-y) / 2); }
+.deck-criterion { --clamp-lines: 2; }
+@media (max-width: 479.98px) { .deck-criterion { --clamp-lines: 3; } }
 .shortcut-help { color: var(--nibi-color-text-muted); font-size: var(--nibi-type-value-size); line-height: var(--nibi-type-value-line); }
 
 .listen-panel { display: grid; gap: var(--nibi-grid-y); }
 .slot-switcher { display: grid; grid-template-columns: 1fr 1fr; gap: var(--nibi-size-gap-x); }
-.slot-switcher .nibi-segmented__option { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: calc(var(--nibi-size-row) * 2.5); gap: var(--nibi-grid-y); }
+.slot-switcher .nibi-segmented__option { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: calc(var(--nibi-size-row) * 2.5); gap: var(--nibi-grid-y); padding-block: calc(var(--nibi-grid-y) + var(--nibi-type-label-line)); }
 .slot-name { font-size: var(--nibi-type-display-size); line-height: 1; font-weight: 500; }
-.slot-identity { max-width: 100%; color: inherit; font-size: var(--nibi-type-value-size); line-height: var(--nibi-type-value-line); overflow-wrap: anywhere; }
+/* 中身を表示したときの短縮名: 3行まで(正式名は title) */
+.slot-identity { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; max-width: 100%; color: inherit; font-size: var(--nibi-type-value-size); line-height: var(--nibi-type-value-line); overflow-wrap: anywhere; }
 .slot-state { display: inline-flex; align-items: center; justify-content: center; gap: calc(var(--nibi-grid-y) * .75); height: var(--nibi-type-label-line); color: inherit; font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); }
 .slot-state .ui-icon, .slot-heard .ui-icon { width: var(--nibi-type-label-size); height: var(--nibi-type-label-size); }
 /* 聴いたかどうかは再生の操作と別の場所(カードの右上)に小さく。未聴取は何も出さない */
@@ -104,65 +155,147 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .reveal-action { text-align: center; }
 
 .deck-answer { min-width: 0; }
-.answer-panel { display: grid; gap: var(--nibi-size-gap); }
+.answer-panel { display: grid; gap: calc(var(--nibi-size-inset) * 1.25); }
+.answer-choice { display: grid; gap: var(--nibi-size-gap); }
+.answer-choice > h2 { margin: 0; }
 .preference-scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--nibi-grid-x); }
 .preference-scale .nibi-segmented__option { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: calc(var(--nibi-grid-y) * 9); gap: 0; padding-inline: 0; }
 .preference-side { font-size: var(--nibi-type-heading-size); line-height: 1.2; font-weight: 500; }
 .preference-strength { font-size: var(--nibi-type-label-size); line-height: var(--nibi-type-label-line); white-space: nowrap; }
 /* 理由の文は空になったら場所を取らない(読み上げの live region としては残す) */
+.answer-notes { display: grid; gap: calc(var(--nibi-grid-y) / 4); }
 .submit-hint { margin: 0; }
 .submit-hint:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .key-hint { margin: 0; }
 /* キーのない指の端末ではキーの案内を出さない */
-@media (pointer: coarse) { .key-hint { display: none; } }
-.answer-details { display: grid; gap: var(--nibi-size-inset); }
-.blocker-question { display: grid; gap: var(--nibi-grid-y); min-width: 0; margin: 0; padding: 0; border: 0; }
-.blocker-question > legend { margin: 0 0 var(--nibi-grid-y); padding: 0; color: var(--nibi-color-text-muted); }
+@media (pointer: coarse) {
+  .key-hint { display: none; }
+  /* 案内が何も見えないときは場所を取らない(空の理由の文は live region として残す) */
+  .answer-notes:has(> .submit-hint:empty) { position: absolute; }
+}
+/* 残せない問題: 見出しの下に A / B のトグル(読む順に左揃え、両方オンにできる)。押した側だけその下に1行の欄 */
+.blocker-question { display: grid; gap: var(--nibi-size-gap); min-width: 0; }
+.blocker-question > h2 { margin: 0; }
 .blocker-toggles { display: flex; flex-wrap: wrap; gap: var(--nibi-grid-y) var(--nibi-size-gap-x); }
-.submit-answer { width: 100%; height: var(--nibi-size-row); }
-
-/* 回答カードの末尾: dock には弱い skip のリンク、または skip の確認 */
-.answer-dock .skip-action { display: flex; justify-content: center; min-height: var(--nibi-size-control); margin: 0; }
-.confirm-bar { gap: var(--nibi-size-gap); }
+/* メモ: 3行の欄、縦方向だけ大きさを変えられる */
+.memo-section { display: grid; gap: var(--nibi-size-gap); }
+.memo-section > h2 { margin: 0; }
+.memo-input { height: auto; min-height: calc(var(--nibi-type-body-line) * 3 + var(--nibi-grid-y) * 2); padding-block: var(--nibi-grid-y); resize: vertical; }
+/* 操作欄: 左に弱い「飛ばす」、右に主ボタン。480px 未満はボタンを横幅いっぱいにし、「飛ばす」はその下 */
+.answer-dock__inner { justify-content: space-between; min-height: var(--nibi-size-control); }
+.answer-dock__inner > .submit-answer { margin-inline-start: auto; }
+@media (max-width: 479.98px) {
+  .answer-dock__inner { flex-direction: column-reverse; align-items: stretch; }
+  .answer-dock__inner > .submit-answer { width: 100%; margin-inline-start: 0; }
+  .answer-dock__inner > .skip-action { align-self: flex-start; }
+}
+.confirm-bar { gap: var(--nibi-size-gap); width: min(100%, 44rem); margin-inline: auto; }
 .confirm-bar > p { overflow-wrap: anywhere; }
 
-/* ---- 完了画面(§8.3) */
-.summary-heading { display: grid; gap: var(--nibi-grid-y); }
-.result-eyebrow { color: var(--nibi-color-text-muted); }
-.result-eyebrow span { white-space: nowrap; }
-.summary-shell h1 { overflow-wrap: anywhere; text-wrap: pretty; }
-.verdict-card { gap: var(--nibi-size-gap); }
-.verdict-detail, .verdict-next { color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
-.verdict-tally { display: flex; flex-wrap: wrap; align-items: start; gap: var(--nibi-grid-y) calc(var(--nibi-size-gap-x) * 2); }
-.tally-item { display: grid; gap: calc(var(--nibi-grid-y) / 4); min-width: 0; overflow-wrap: anywhere; }
-.tally-value { color: var(--nibi-color-text-muted); line-height: 1; font-variant-numeric: tabular-nums; }
-.tally-value.strong { color: var(--nibi-color-text-strong); }
-.tally-label { color: var(--nibi-color-text); }
-.verdict-reasons { display: grid; gap: calc(var(--nibi-grid-y) / 2); margin: 0; padding: 0; list-style: none; }
-.verdict-reasons > li { display: flex; align-items: center; gap: calc(var(--nibi-grid-y) * .75); }
-.reason-fail { color: var(--nibi-color-error-text); }
-.answer-section { display: grid; gap: var(--nibi-size-gap); }
-.answer-record > .nibi-rowlist__row { align-items: start; }
-.answer-index { color: var(--nibi-color-text-muted); line-height: var(--nibi-type-body-line); font-variant-numeric: tabular-nums; }
-/* ゲージの向き: 両端の候補の名前(Plan付きは役割も)。狭い列でも省かず、名前を折り返す */
-.gauge-legend { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; column-gap: var(--nibi-size-gap-x); margin: 0; }
-.gauge-legend > .answer-gauge { height: var(--nibi-type-label-line); }
-.gauge-end { display: grid; min-width: 0; overflow-wrap: anywhere; }
-.gauge-end.end { text-align: end; }
-.gauge-end-name { color: var(--nibi-color-text); }
-.gauge-end-role, .tally-role { color: var(--nibi-color-text-muted); }
-.answer-gauge { display: inline-flex; align-items: center; gap: calc(var(--nibi-grid-y) / 4); height: var(--nibi-type-body-line); }
-/* 列の見出しはゲージと同じ幅(狭い列で見出しと中身の列がずれないように) */
-.answer-record .gauge-head { min-width: calc(var(--nibi-grid-x) * 12 + var(--nibi-grid-y)); }
-.answer-gauge > span { width: calc(var(--nibi-grid-x) * 2.4); height: calc(var(--nibi-grid-y) * .75); border-radius: var(--nibi-radius-pill); background: var(--nibi-color-rail); }
-.answer-gauge > span.active { background: var(--nibi-color-text-strong); }
-.answer-main { display: grid; gap: calc(var(--nibi-grid-y) / 4); min-width: 0; }
-.answer-judgment { overflow-wrap: anywhere; }
-.answer-judgment.neutral { color: var(--nibi-color-text-muted); }
-.result-pair, .answer-note { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
-.result-pair > span { overflow-wrap: anywhere; }
-.summary-actions > .primary-action { width: 100%; height: var(--nibi-size-row); }
-.summary-back { display: flex; justify-content: center; min-height: var(--nibi-size-control); margin: 0; }
+/* ---- 結果(§8.3) */
+.summary-shell { --screen-max: 72rem; gap: calc(var(--nibi-size-inset) * 1.5); padding-top: calc(var(--nibi-size-inset) * 1.25); }
+.summary-dock { --dock-max: 72rem; }
+.summary-lead { display: grid; gap: var(--nibi-size-gap); }
+.summary-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--nibi-grid-y) / 2) var(--nibi-size-gap-x); min-height: var(--nibi-size-control); }
+.summary-kind { color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
+.summary-conclusion { display: grid; gap: var(--nibi-grid-y); max-width: 46rem; }
+.verdict-title { overflow-wrap: anywhere; text-wrap: pretty; }
+.verdict-detail { overflow-wrap: anywhere; text-wrap: pretty; }
+.summary-section { display: grid; gap: var(--nibi-size-gap); min-width: 0; }
+.summary-section h2 { margin: 0; }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: calc(var(--nibi-grid-y) / 2) var(--nibi-size-gap-x); }
+.summary-question { display: grid; justify-items: start; gap: calc(var(--nibi-grid-y) / 2); max-width: 46rem; }
+.result-question { --clamp-lines: 3; }
+
+/* 集計の面: 左右の軸 | 互角・未回答 | 右の軸。件数は display */
+.tally-panel { gap: var(--nibi-size-inset); padding: calc(var(--nibi-size-inset) * 1.25) calc(var(--nibi-size-inset-x) * 1.25); }
+.tally-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: calc(var(--nibi-grid-y) / 2) var(--nibi-size-gap-x); }
+.tally-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; min-width: 0; align-self: start; color: var(--nibi-color-text-strong); font-weight: 500; overflow-wrap: anywhere; }
+.tally-role { color: var(--nibi-color-text-muted); }
+.tally-name.end, .tally-role.end, .tally-count.end { text-align: end; }
+.tally-count { color: var(--nibi-color-text-strong); font-variant-numeric: tabular-nums; }
+.tally-middle { display: grid; justify-items: center; color: var(--nibi-color-text-muted); white-space: nowrap; }
+
+/* 支持の図(handoff 3.1): 線は測りの線だけ(中央の縦線、横の線、必要数の縦線)。寸法は格子から */
+.support-chart {
+  --chart-line: calc(var(--nibi-grid-y) / 4);
+  --chart-gap: calc(var(--nibi-grid-y) * .375);
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; height: calc(var(--nibi-grid-y) * 3.5);
+}
+.support-chart__rail { position: absolute; inset-inline: 0; top: calc(50% - var(--chart-line) / 2); height: var(--chart-line); border-radius: var(--chart-line); background: var(--nibi-color-rail); }
+.support-chart__half { position: relative; display: flex; align-items: center; gap: var(--chart-gap); height: 100%; min-width: 0; }
+.support-chart__half.start { flex-direction: row-reverse; padding-inline-end: calc(var(--chart-gap) + var(--chart-line) / 2); }
+.support-chart__half.end { padding-inline-start: calc(var(--chart-gap) + var(--chart-line) / 2); }
+.support-chart__block { flex: none; width: calc((100% - var(--chart-gap) - var(--chart-line) / 2 - (var(--slots) - 1) * var(--chart-gap)) / var(--slots)); height: 100%; border-radius: var(--chart-gap); background: var(--nibi-color-text-strong); }
+.support-chart__block[data-strength="slight"] { height: 56%; background: var(--nibi-color-text-muted); }
+.support-chart__center { position: absolute; left: calc(50% - var(--chart-line) / 2); top: 0; bottom: 0; width: var(--chart-line); background: var(--nibi-color-line-control); }
+.support-chart__tick { position: absolute; top: calc(var(--nibi-grid-y) / -2); bottom: calc(var(--nibi-grid-y) / -2); width: var(--chart-line); border-radius: var(--chart-line); background: var(--nibi-color-text-strong); }
+.support-chart__tick.start { left: calc(var(--tick-left) * 100% - var(--chart-line) / 2); }
+.support-chart__tick.end { left: calc(var(--tick-right) * 100% - var(--chart-line) / 2); }
+
+/* 候補の正式名: 違う語を 500 / text-strong、それ以外は 400 / text-muted */
+.names-disclosure { gap: 0; }
+.candidate-names { display: grid; gap: calc(var(--nibi-grid-y) / 2); padding-top: var(--nibi-grid-y); }
+.candidate-name { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); margin: 0; overflow-wrap: anywhere; }
+.candidate-side { color: var(--nibi-color-text-muted); }
+.candidate-token { color: var(--nibi-color-text-muted); }
+.candidate-token.differs { color: var(--nibi-color-text-strong); font-weight: 500; }
+
+/* 回答: # | 素材 | ゲージと言葉 | コメント。680px 未満は1比較ずつ縦に(素材 → ゲージ → コメント、番号の列だけ字下げ) */
+.answer-list { --nibi-rowlist-cols: 2.5rem minmax(0, 12rem) 13rem minmax(0, 1fr); }
+.answer-index { justify-self: start; color: var(--nibi-color-text-muted); }
+.answer-material, .answer-comment { min-width: 0; overflow-wrap: anywhere; text-wrap: pretty; }
+.answer-comment { color: var(--nibi-color-text-strong); }
+.answer-comment.empty { color: var(--nibi-color-text-muted); }
+.gauge-head { display: flex; justify-content: space-between; gap: var(--nibi-grid-y); min-width: 0; white-space: nowrap; }
+.gauge-head-end { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.answer-gauge-cell { display: grid; gap: calc(var(--nibi-grid-y) / 4); min-width: 0; }
+.answer-slots { color: var(--nibi-color-text-muted); text-align: center; }
+@media (max-width: 679.98px) {
+  .answer-list { --nibi-rowlist-cols: 1.75rem minmax(0, 1fr); }
+  .answer-list > .nibi-rowlist__head > :not(.gauge-head) { display: none; }
+  .answer-list > .nibi-rowlist__head > .gauge-head { grid-column: 2; }
+  .answer-list > .nibi-rowlist__row > :nth-child(n + 3) { grid-column: 2; }
+  .answer-list .answer-material { color: var(--nibi-color-text-muted); }
+}
+
+/* 比較ごとのゲージ(handoff 3.2): 本文1行の高さ。わずか = 1つ(薄く低い)、明確 = 2つ(濃く高い)、互角 = 中央の点 */
+.row-gauge {
+  --chart-line: calc(var(--nibi-grid-y) / 4);
+  --chart-gap: calc(var(--nibi-grid-y) / 4);
+  display: grid; gap: calc(var(--nibi-grid-y) / 4); min-width: 0;
+}
+.row-gauge__track { position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; height: var(--nibi-type-body-line); }
+.row-gauge__rail { position: absolute; inset-inline: 0; top: calc(50% - var(--chart-line) / 2); height: var(--chart-line); border-radius: var(--chart-line); background: var(--nibi-color-rail); }
+.row-gauge__half { position: relative; display: flex; align-items: center; gap: var(--chart-gap); height: calc(var(--nibi-grid-y) * 2); min-width: 0; }
+.row-gauge__half.start { flex-direction: row-reverse; padding-inline-end: calc(var(--chart-gap) + var(--chart-line)); }
+.row-gauge__half.end { padding-inline-start: calc(var(--chart-gap) + var(--chart-line)); }
+.row-gauge__block { flex: 1 1 0; max-width: calc(50% - var(--chart-gap) / 2); height: 100%; border-radius: calc(var(--nibi-grid-y) * .375); background: var(--nibi-color-text-strong); }
+.row-gauge__block[data-strength="slight"] { height: 56%; background: var(--nibi-color-text-muted); }
+.row-gauge__center { position: absolute; left: calc(50% - var(--chart-line) / 2); top: var(--chart-line); bottom: var(--chart-line); width: var(--chart-line); background: var(--nibi-color-line-control); }
+.row-gauge__dot { position: absolute; left: calc(50% - var(--nibi-grid-y) * .625); top: calc(50% - var(--nibi-grid-y) * .625); width: calc(var(--nibi-grid-y) * 1.25); height: calc(var(--nibi-grid-y) * 1.25); border-radius: 50%; background: var(--nibi-color-text-muted); }
+.row-gauge__word { color: var(--nibi-color-text); text-align: center; }
+.row-gauge[data-side="left"] .row-gauge__word { text-align: start; }
+.row-gauge[data-side="right"] .row-gauge__word { text-align: end; }
+.row-gauge[data-side="none"] .row-gauge__word { color: var(--nibi-color-text-muted); }
+
+/* 回答の確かさ: 名前と素材 | 印と言葉 */
+.check-name { color: var(--nibi-color-text-strong); }
+.check-material { display: block; color: var(--nibi-color-text-muted); overflow-wrap: anywhere; }
+.check-status { justify-self: end; gap: calc(var(--nibi-grid-y) * .75); }
+.check-status.fail { color: var(--nibi-color-error-text); }
+.check-status.unknown { color: var(--nibi-color-text-muted); }
+
+/* 下の操作欄: 次の問い(1行で省略)と主ボタン。480px 未満はボタンを横幅いっぱい */
+.next-focus { flex: 1 1 16rem; min-width: 0; overflow: hidden; color: var(--nibi-color-text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.next-action { flex: none; }
+@media (max-width: 479.98px) {
+  .next-action { flex: 1 1 100%; }
+}
+
+@media (max-width: 479.98px) {
+  .screen { padding-top: calc(var(--nibi-size-inset) * .75); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; transition-duration: .001ms !important; }

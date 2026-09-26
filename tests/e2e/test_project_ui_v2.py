@@ -1,5 +1,6 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
 
+import re
 import threading
 import time
 from collections.abc import Generator
@@ -80,80 +81,78 @@ def _exercise_project_deck(page: Page, url: str) -> None:
     page.get_by_text("Tighter low end, keep the vocal forward", exact=True).wait_for()
     project.select_option(label="Xifa")
     page.get_by_text("Increase density without losing attack or air", exact=True).wait_for()
-    page.get_by_role("heading", name="未回答", exact=True).wait_for()
-    # 見出しの段: 題名(h1)= Project名、欄(h2)= 現在最良 / 未回答 / 完了。IDは見出しでない値
+    page.get_by_role("heading", name="途中の試聴", exact=True).wait_for()
+    # 見出しの段: 題名(h1、display)= Project名、欄(h2、heading)。IDは見出しでない値(§8.2)
     expect(page.get_by_role("heading", level=1)).to_have_count(1)
     expect(page.get_by_role("heading", level=1, name="Xifa", exact=True)).to_have_count(1)
-    assert page.get_by_role("heading", level=2).all_inner_texts() == ["現在最良", "未回答", "完了"]
+    assert page.get_by_role("heading", level=2).all_inner_texts() == [
+        "途中の試聴",
+        "このあと 1 件",
+        "これまで",
+        "現在最良",
+    ]
     assert page.get_by_role("heading", name="dense-chorus-v2").count() == 0
     sizes = page.evaluate(
         """() => [
           parseFloat(getComputedStyle(
-            document.querySelector('.project-title .nibi-title')).fontSize),
+            document.querySelector('.project-title .nibi-display')).fontSize),
           parseFloat(getComputedStyle(document.querySelector('#queue-heading')).fontSize),
-          parseFloat(getComputedStyle(document.querySelector('.best-id')).fontWeight),
+          parseFloat(getComputedStyle(document.querySelector('#queue-heading')).fontWeight),
         ]"""
     )
     assert sizes[0] > sizes[1]
-    assert sizes[2] == 400
+    assert sizes[2] == 500
     assert page.get_by_role("button", name="Projectを作らず比較する").count() == 0
-    # §8.2: 目的 → 現在最良(指標)→ 未回答 → 完了 N 件
-    queue_box = page.locator(".queue-section").bounding_box()
-    state_box = page.locator(".state-card").bounding_box()
-    assert queue_box is not None and state_box is not None
-    assert state_box["y"] < queue_box["y"]
-    completed_sessions = page.get_by_role("button", name="3 件を見る", exact=True)
-    current_best_heading = page.get_by_role("heading", name="現在最良", exact=True)
-    completed_sessions.wait_for()
-    current_best_heading.wait_for()
-    completed_box = completed_sessions.bounding_box()
-    current_best_box = current_best_heading.bounding_box()
-    assert completed_box is not None and current_best_box is not None
-    assert current_best_box["y"] < completed_box["y"]
-    assert page.get_by_text("完了した判定", exact=False).count() == 0
+    # 次の一手の面は画面に1つで反転、主ボタンは画面に1つ(nibi 0014 D-2)
+    lead = page.locator(".lead-panel")
+    expect(lead).to_have_count(1)
+    expect(lead).to_have_class(re.compile(r"nibi-panel--lead"))
+    assert page.locator(".nibi-button--primary").count() == 1
+    expect(lead.get_by_role("button", name="続きから（2 / 3）", exact=True)).to_be_visible()  # noqa: RUF001
+    # このあと: 残りの行は自分の操作(進行中がある間は押せない理由を語で)
+    queue = page.get_by_role("list", name="このあとのセッション")
+    expect(queue.get_by_role("listitem")).to_have_count(1)
+    expect(queue.get_by_text("進行中の完了後", exact=True)).to_have_count(1)
+    # 横の欄: 900px 以上は2列(現在最良は右)
+    side = page.locator(".inbox-side").bounding_box()
+    main = page.locator(".queue-section").bounding_box()
+    assert side is not None and main is not None
+    assert side["x"] > main["x"] + main["width"]
+    # これまで: 新しい順に開いたまま並び、行を押すと結果
+    history = page.get_by_role("group", name="完了したセッション")
+    expect(history.get_by_role("button")).to_have_count(3)
+    assert page.get_by_text("件を見る", exact=False).count() == 0
     assert page.get_by_text("支持", exact=True).count() == 0
     assert page.get_by_text("score", exact=True).count() == 0
-    assert page.get_by_text("blocker", exact=True).count() == 0
     page.get_by_text("DENSITY", exact=True).wait_for()
     page.get_by_text("ATTACK LOSS", exact=True).wait_for()
     page.get_by_text("目標", exact=True).wait_for()
-    page.get_by_text("制約", exact=True).wait_for()
-    # 説明文・列見出し・前回からの変化は出さない(§8.2)
+    page.get_by_text("守る性質", exact=True).wait_for()
+    # 説明文・前回からの変化は出さない(§8.2)
     assert page.get_by_text("音像を潰さず、知覚上の密度を高める", exact=True).count() == 0
-    assert page.get_by_text("トランジェントの輪郭を失っていないか", exact=True).count() == 0
     assert page.locator(".indicator-track").count() == 0
     assert page.get_by_text("合格", exact=True).count() == 2
-    assert page.locator(".guard-badge").count() == 2
     assert page.locator(".guard-badge .nibi-mark").count() == 2
     indicator_rows = page.locator(".indicator-row")
     assert indicator_rows.count() >= 4
-    for selector in (
-        ".indicator-label",
-        ".indicator-value",
-        ".indicator-status",
-    ):
-        column_left_edges = [
-            round(box["x"])
-            for index in range(indicator_rows.count())
-            if (box := indicator_rows.nth(index).locator(selector).bounding_box()) is not None
-        ]
-        assert len(set(column_left_edges)) == 1
-    # 値は名前の直後(--tight)、小数の桁を揃える。2行までの群に縞は付けない(rowlist.md)
+    # 名前は左、値は右寄せ(右端が揃う)、同じ単位は小数の桁を揃える
+    right_edges = {
+        round(box["x"] + box["width"])
+        for index in range(indicator_rows.count())
+        if (box := indicator_rows.nth(index).locator(".indicator-value").bounding_box()) is not None
+    }
+    assert len(right_edges) == 1
     values = page.locator(".indicator-row .indicator-number").all_inner_texts()
     assert "0.90" in values and "0.97" in values
-    assert page.locator(".indicator-table.nibi-rowlist--striped").count() == 0
-    label_box = indicator_rows.first.locator(".indicator-label").bounding_box()
-    value_box = indicator_rows.first.locator(".indicator-value").bounding_box()
-    assert label_box is not None and value_box is not None
-    assert value_box["x"] + value_box["width"] - label_box["x"] < 320
 
-    page.get_by_role("button", name="続ける", exact=True).click()
+    lead.get_by_role("button", name="続きから", exact=False).click()
     page.locator(".slot-switcher").wait_for()
     assert page.get_by_text("BLIND", exact=True).count() == 0
     assert page.locator(".preference-scale button:disabled").count() == 5
+    page.get_by_text("両方を聴くと選べます", exact=False).wait_for()
     assert page.locator(".progress-track").count() == 0
-    assert page.locator(".deck-header").get_by_text("この比較を飛ばす", exact=True).count() == 0
-    page.get_by_role("button", name="回答せずにこの比較を飛ばす", exact=True).wait_for()
+    dock = page.locator(".answer-dock")
+    dock.get_by_role("button", name="回答せずにこの比較を飛ばす", exact=True).wait_for()
     # ヘッダーは戻る操作と n / N だけ(Recipe は出さない、§2.13)
     assert page.get_by_text("Recipe matched-v1", exact=True).count() == 0
     assert page.get_by_role("button", name="再生", exact=True).count() == 0
@@ -162,61 +161,64 @@ def _exercise_project_deck(page: Page, url: str) -> None:
         page.locator(".slot-switcher button").nth(0).click()
         page.locator(".slot-switcher button").nth(1).click()
         page.locator(".preference-scale button:not(:disabled)").first.wait_for()
-        assert page.get_by_text("補足（任意）· 残せない問題", exact=True).count() == 0  # noqa: RUF001
+        # 選ぶまでは残せない問題・メモ・記録を出さない(段階的な開示、§2.13)
+        assert page.get_by_role("heading", name="残せない問題がありますか").count() == 0
+        assert page.get_by_role("button", name="記録して次へ", exact=True).count() == 0
         page.locator(".preference-scale button").nth(3).click()
-        page.get_by_text("補足（任意）· 残せない問題", exact=True).wait_for()  # noqa: RUF001
+        page.get_by_role("heading", name="残せない問題がありますか").wait_for()
         page.get_by_role("button", name="A に問題", exact=True).wait_for()
         page.get_by_role("button", name="B に問題", exact=True).wait_for()
-        page.get_by_role("button", name="記録して次へ", exact=True).click()
+        memo = page.get_by_role("textbox", name="メモ")
+        expect(memo).to_have_attribute("maxlength", "500")
+        expect(memo).to_have_attribute("rows", "3")
+        dock.get_by_role("button", name="記録して次へ", exact=True).click()
         if remaining > 1:
             page.locator(".slot-switcher").wait_for()
 
     page.locator("#verdict-title").wait_for()
     assert page.locator("#verdict-title").text_content() in {
-        "現在最良を維持",
-        "現在最良を dense-chorus-v2 に更新",
+        "現在最良を維持しました",
+        "現在最良を提案に更新しました",
     }
-    assert page.locator(".result-identity").count() == 0
-    assert page.locator(".answer-table-row").count() == 3
-    assert page.locator(".result-pair").count() == 3
-    assert page.get_by_text("素材", exact=True).count() == 3
-    assert page.locator(".answer-table-row .answer-gauge").count() == 3
-    assert page.locator(".verdict-reasons .nibi-mark").count() >= 1
-    assert page.locator(".verdict-stats").count() == 0
-    assert page.get_by_role("heading", name="聴き直す").count() == 0
+    # 結論は見出しと支える文1つ。Recipe と「観察として記録しました」は出さない
+    assert page.locator(".verdict-detail").count() == 1
+    assert page.get_by_text("Recipe", exact=False).count() == 0
+    assert page.locator(".answer-row").count() == 3
+    assert page.locator(".answer-row .row-gauge").count() == 3
+    assert page.locator(".support-chart").count() == 1
     assert page.get_by_role("textbox").count() == 0
     page.get_by_role("button", name="受信箱へ", exact=True).click()
 
-    page.locator(".completed-sessions .nibi-disclosure__header").click()
     page.get_by_role("button", name="結果を見る: リバーブテイルの濁り").click()
-    page.get_by_text(
-        "支持が多い方向はありますが、優勢条件には届きませんでした",
-        exact=False,
-    ).wait_for()
-    # 件数と必要数を言葉で(「2 / 3」のような読めない形にしない)。届かないのは失敗の印にしない
-    page.get_by_text(
-        "どちらも優勢に届かない: 3件中、最多はdense-chorus-v2の1件（必要 2件）",  # noqa: RUF001
-        exact=True,
-    ).wait_for()
-    assert page.locator(".verdict-reasons li").first.locator(".nibi-mark--fail").count() == 0
-    # ゲージは候補の向きに固定する(左 = 組の1つ目、右 = 2つ目)。A/Bの位置では描かない
-    legend = page.locator(".gauge-legend")
-    assert legend.locator(".gauge-end.start").inner_text() == "原音"
-    assert legend.locator(".gauge-end.end").inner_text() == "dense-chorus-v2"
-    gauges = page.locator(".answer-table-row .answer-gauge")
-    orientation = gauges.evaluate_all(
-        """els => els.map(el => [el.getAttribute('aria-label'), el.dataset.orientation,
-          [...el.children].findIndex(cell => cell.classList.contains('active'))])"""
+    # 候補名が長い(12字超)ので軸は「候補 1 / 2」、対応は集計の欄に一度だけ
+    expect(page.locator("#verdict-title")).to_have_text(
+        "候補 2 の支持が多いが、優勢には届きませんでした"
     )
-    assert orientation[0] == ["dense-chorus-v2を明確に支持", "directed", 4]
-    assert orientation[2][1] == "symmetric"
-    page.get_by_text("同一音の確認: 差を報告", exact=True).wait_for()
-    page.get_by_text("再現性の確認: 片方tie", exact=True).wait_for()
-    page.get_by_text("同一音: 差を報告（明確）", exact=True).wait_for()  # noqa: RUF001
-    page.get_by_text("再現性: 片方tie（今回: 互角）", exact=True).wait_for()  # noqa: RUF001
-    page.get_by_text("原音", exact=True).first.wait_for()
-    page.get_by_text("Recipe matched-v1", exact=True).wait_for()
-    assert page.locator(".result-pair").count() == 5
+    expect(page.locator(".verdict-detail")).to_have_text(
+        "優勢には 3 件中 2 件が必要です。現在最良は変わりません。"
+    )
+    expect(page.locator(".tally-name.start")).to_have_text("← 原音")
+    expect(page.locator(".tally-name.end")).to_have_text("dense-chorus-v2 →")
+    expect(page.locator(".tally-role.start")).to_have_text("候補 1")
+    # 問いは「問い」の欄に、比較ごとのゲージは候補の向きに固定する(左 = 組の1つ目)
+    page.get_by_role("heading", name="問い", exact=True).wait_for()
+    gauges = page.locator(".answer-row .row-gauge")
+    orientation = gauges.evaluate_all(
+        "els => els.map(el => [el.getAttribute('aria-label'), el.dataset.side])"
+    )
+    assert orientation[0] == ["候補 2 を明確に支持", "right"]
+    expect(page.locator(".answer-row").first.locator(".row-gauge__word")).to_have_text("明確")
+    # A/B の対応は既定で隠し、押すと出す(終了後だけ、§7.9)
+    assert page.locator(".answer-slots").count() == 0
+    page.get_by_role("button", name="A/B の割り当てを表示").click()
+    expect(page.locator(".answer-slots")).to_have_count(3)
+    # 同一音・再現性の確認は「回答の確かさ」に印と語で
+    checks = page.get_by_role("list", name="回答の確かさ")
+    expect(checks.get_by_text("差を報告（明確）", exact=True)).to_be_visible()  # noqa: RUF001
+    expect(checks.get_by_text("片方が互角", exact=True)).to_be_visible()
+    expect(checks.locator(".nibi-mark")).to_have_count(2)
+    page.locator(".names-disclosure .nibi-disclosure__header").click()
+    expect(page.locator(".candidate-names")).to_be_visible()
     assert page.get_by_role("button", name="次へ", exact=False).count() == 0
 
 
@@ -274,5 +276,5 @@ def test_degraded_workspace_keeps_the_project_picker(
         page.reload()
         page.get_by_role("heading", name="Workspaceを読み込めません").wait_for()
         project.select_option(label="Xifa")
-        page.get_by_role("heading", name="未回答", exact=True).wait_for()
+        page.get_by_role("heading", name="途中の試聴", exact=True).wait_for()
         browser.close()

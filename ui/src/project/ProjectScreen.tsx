@@ -1,16 +1,16 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { api, type Action, type Project, type WorkspaceCatalog } from "../api";
+import { ClampedText } from "../ClampedText";
 import { humanError } from "../errors";
 import type { IndicatorSummaryView, SessionCardView, SimplificationPromptView } from "../generated";
 import { Icon } from "../Icon";
 import { Mark } from "../Mark";
-import { blockedReason, classifySessions, queueMessage } from "./inbox";
+import { blockedReason, classifySessions, leadCopy, queueMessage, selectLead, type Lead, type OtherSession } from "./inbox";
 import { decimalsByUnit, displayUnit, formatIndicatorValue } from "./indicators";
 import { InlineError } from "../InlineError";
 
-/** Projectの受信箱に載らない進行中のSession(`abar listen` のQuick Listen等)。 */
-export type OtherSession = { sessionId: string; status: "active" | "paused" };
+export type { OtherSession } from "./inbox";
 
 type ProjectScreenProps = {
   project: Project;
@@ -25,6 +25,12 @@ type ProjectScreenProps = {
 
 const cols = (value: string) => ({ "--nibi-rowlist-cols": value }) as CSSProperties;
 
+/*
+ * 受信箱(§8.2): 人間が次に聴くものを選ぶ画面。
+ * 題名の選択と目的 → 次の一手の面(進行中・一時停止中、なければ最初の準備済み)→ 確認(単純化)→ このあと N 件(各行に自分の操作)
+ * → 開始できない N 件(理由を文で)→ これまで(新しい順、行を押すと結果)。横の欄に現在最良と指標。900px 未満は1列で、
+ * 現在最良は「このあと」の次。
+ */
 export function ProjectScreen({ project, otherSession, workspaces, switchingWorkspace, onSelectWorkspace, onOpenDeck, onOpenCompletion, onChanged }: ProjectScreenProps) {
   const start = useMutation({
     mutationFn: (sessionId: string) =>
@@ -50,7 +56,6 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
     mutationFn: ({ id, decision }: { id: string; decision: "accept" | "keep" }) => api<Action>(`/api/simplifications/${id}/decision`, { method: "POST", body: JSON.stringify({ decision }) }),
     onSuccess: onChanged,
   });
-  const [completedOpen, setCompletedOpen] = useState(false);
 
   // 題名(頁のh1)がそのままProjectの選択になる。読み込めないWorkspaceやProjectのないWorkspaceからも他へ戻れる。
   // 見出しの名前は題名の文字だけ(中の選択肢の値を重ねて読まない)。
@@ -58,7 +63,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
   const picker = (
     <h1 className="project-title" aria-labelledby="project-title-text">
       <label className="nibi-title-select project-picker">
-        <span id="project-title-text" className="nibi-title nibi-title-select__value">{selectedName}</span>
+        <span id="project-title-text" className="nibi-display nibi-title-select__value">{selectedName}</span>
         <span className="nibi-title-select__disc" aria-hidden="true"><Icon name="chevron_down" /></span>
         <select
           aria-label="プロジェクト"
@@ -89,22 +94,19 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
   }
 
   const lifecycleError = start.isError || resume.isError ? <InlineError>{humanError(start.error ?? resume.error)}</InlineError> : null;
-  // Projectに属さない進行中の試聴も「未回答」の先頭に並べる(続けるのが次の一手)。
-  const otherRow = otherSession && (
-    <div className="nibi-rowlist__row queue-row">
-      <span className="nibi-rowlist__title nibi-body">
-        <span className="nibi-rowlist__name">Projectに属さない比較（abar listen）</span>
-        <span className="nibi-rowlist__sub">{otherSession.status === "paused" ? "一時停止中" : "試聴中"}</span>
-      </span>
-      <span className="nibi-rowlist__end">
-        {otherSession.status === "paused" ? (
-          <button type="button" className="nibi-button" disabled={resume.isPending} onClick={() => { start.reset(); resume.mutate(otherSession.sessionId); }}>再開</button>
-        ) : (
-          <button type="button" className="nibi-button nibi-button--primary" onClick={onOpenDeck}>続ける</button>
-        )}
-      </span>
-    </div>
-  );
+  const pendingAction = start.isPending || resume.isPending;
+  const openLead = (lead: Lead) => {
+    const id = lead.kind === "other" ? lead.session.sessionId : lead.session.project_session_id;
+    const status = lead.session.status;
+    if (status === "active") { onOpenDeck(); return; }
+    if (status === "paused") { start.reset(); resume.mutate(id); return; }
+    resume.reset();
+    start.mutate(id);
+  };
+
+  const { pending, blocked: blockedSessions, completed } = classifySessions(project.sessions);
+  const { lead, rest } = selectLead(project.project_id === null ? [] : pending, otherSession);
+  const leadPanel = lead && <LeadPanel lead={lead} pending={pendingAction} onAction={() => openLead(lead)} />;
 
   if (project.project_id === null) {
     return (
@@ -113,12 +115,7 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
           {picker}
           <p className="nibi-body brief">Projectはまだありません。</p>
         </header>
-        {otherRow && (
-          <section className="inbox-section" aria-labelledby="queue-heading">
-            <h2 id="queue-heading" className="nibi-heading section-title">未回答</h2>
-            <div className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack queue-list" role="group" aria-label="未回答のセッション" style={cols("minmax(0, 1fr) auto")}>{otherRow}</div>
-          </section>
-        )}
+        {leadPanel}
         {lifecycleError}
         <section className="nibi-card empty-state" aria-label="はじめかた">
           <code>abar project init --name "製品名" --brief "目的" --material path/to/audio.wav</code>
@@ -127,137 +124,176 @@ export function ProjectScreen({ project, otherSession, workspaces, switchingWork
     );
   }
 
-  const { pending, blocked: blockedSessions, completed } = classifySessions(project.sessions);
-  const emptyQueue = queueMessage({
+  const emptyQueue = lead ? null : queueMessage({
     pendingCount: pending.length,
     otherSession: otherSession !== null,
     blockedCount: blockedSessions.length,
     confirmationCount: project.pending_simplifications.length,
   });
-  // Sessionは同時に一つだけ進行できる。進行中・一時停止中があるあいだ、新しいSessionは開始できない。
-  const blocked = inProgress !== "";
-  const targets = project.indicators.filter((item) => item.role === "target");
-  const guards = project.indicators.filter((item) => item.role === "guard");
-  const decimals = decimalsByUnit([...targets, ...guards]);
-  const hasUnits = [...targets, ...guards].some((item) => displayUnit(item.unit) !== "");
-  // 縞は3行以上の群があるときだけ(rowlist.md: 2行までは余白で分ける)。
-  const striped = targets.length > 2 || guards.length > 2;
-  const sessionAction = (item: SessionCardView): ReactNode => {
-    if (item.status === "active") return <button type="button" className="nibi-button nibi-button--primary" onClick={onOpenDeck}>続ける</button>;
+  // Sessionは同時に一つだけ進行できる。進行中・一時停止中があるあいだ、新しいSessionは開始できない(理由を語で)。
+  const busy = inProgress !== "";
+  const rowAction = (item: SessionCardView): ReactNode => {
     if (item.status === "paused") {
-      return <button type="button" className="nibi-button" disabled={resume.isPending} onClick={() => { start.reset(); resume.mutate(item.project_session_id); }}>再開</button>;
+      return <button type="button" className="nibi-button" disabled={pendingAction} onClick={() => { start.reset(); resume.mutate(item.project_session_id); }}>再開</button>;
     }
-    if (blocked) return <span className="nibi-note-text blocked-note">進行中の完了後</span>;
-    return <button type="button" className="nibi-button" disabled={start.isPending} onClick={() => { resume.reset(); start.mutate(item.project_session_id); }}>開始</button>;
+    if (busy) return <span className="nibi-note-text blocked-note">進行中の完了後</span>;
+    return <button type="button" className="nibi-button" disabled={pendingAction} onClick={() => { resume.reset(); start.mutate(item.project_session_id); }}>開始</button>;
   };
 
   return (
     <main className="screen inbox">
       <header className="inbox-header">
         {picker}
-        <p className="nibi-body brief">{project.brief}</p>
+        <p className={project.brief ? "nibi-body brief" : "nibi-body brief missing"}>{project.brief || "目的はまだ書かれていません。"}</p>
       </header>
 
-      <section className="inbox-section current-best-section" aria-labelledby="current-best-heading">
-        <div className="best-heading">
-          <h2 id="current-best-heading" className="nibi-heading section-title">現在最良</h2>
-          <p className="nibi-body best-id">{project.current_best}</p>
-        </div>
-        {(targets.length > 0 || guards.length > 0) && (
-          <div
-            className={`nibi-rowlist nibi-rowlist--line${striped ? " nibi-rowlist--striped" : ""} nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--tight state-card indicator-table`}
-            role="table"
-            aria-label="現在最良の指標"
-            style={cols("minmax(0, max-content) auto minmax(0, 1fr)")}
-          >
-            {targets.length > 0 && <IndicatorGroup label="目標" role="target" items={targets} decimals={decimals} hasUnits={hasUnits} />}
-            {guards.length > 0 && <IndicatorGroup label="制約" role="guard" items={guards} decimals={decimals} hasUnits={hasUnits} />}
-          </div>
-        )}
-      </section>
+      <div className="inbox-layout">
+        <div className="inbox-main">
+          {leadPanel && <div className="inbox-lead">{leadPanel}{lifecycleError}</div>}
+          {(project.pending_simplifications.length > 0 || decide.isError) && (
+            <div className="inbox-notices">
+              {project.pending_simplifications.map((prompt) => (
+                <SimplificationNotice key={prompt.id} prompt={prompt} pending={decide.isPending} onDecision={(decision) => decide.mutate({ id: prompt.id, decision })} />
+              ))}
+              {decide.isError && <InlineError>{humanError(decide.error)}</InlineError>}
+            </div>
+          )}
 
-      <section className="inbox-section queue-section" aria-labelledby="queue-heading">
-        <h2 id="queue-heading" className="nibi-heading section-title">未回答</h2>
-        {emptyQueue && <p className="nibi-body empty-queue">{emptyQueue}</p>}
-        {(pending.length > 0 || otherRow) && (
-          <div className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack queue-list" role="group" aria-label="未回答のセッション" style={cols("minmax(0, 1fr) auto")}>
-            {otherRow}
-            {pending.map((item) => (
-              <div className="nibi-rowlist__row queue-row" key={item.project_session_id} aria-disabled={item.status === "ready" && blocked ? true : undefined}>
-                <span className="nibi-rowlist__title nibi-body">
-                  <span className="nibi-rowlist__name queue-focus">{item.focus}</span>
-                  <span className="nibi-rowlist__sub">{sessionKind(item)}{item.topic_key ? ` · ${item.topic_key}` : ""}</span>
-                </span>
-                <span className="nibi-rowlist__end">{sessionAction(item)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {lifecycleError}
-        {project.pending_simplifications.map((prompt) => (
-          <SimplificationNotice key={prompt.id} prompt={prompt} pending={decide.isPending} onDecision={(decision) => decide.mutate({ id: prompt.id, decision })} />
-        ))}
-        {decide.isError && <InlineError>{humanError(decide.error)}</InlineError>}
-      </section>
+          {(rest.length > 0 || emptyQueue) && (
+            <section className="inbox-section queue-section" aria-labelledby="queue-heading">
+              <h2 id="queue-heading" className="nibi-heading section-title">
+                このあと{rest.length > 0 && <span className="heading-count"> {rest.length} 件</span>}
+              </h2>
+              {emptyQueue && <p className="nibi-body empty-queue">{emptyQueue}</p>}
+              {!leadPanel && lifecycleError}
+              {rest.length > 0 && (
+                <ol className="nibi-rowlist nibi-rowlist--bare nibi-rowlist--prose nibi-rowlist--ruled queue-list" aria-label="このあとのセッション">
+                  {rest.map((item, index) => (
+                    <li className="nibi-rowlist__row queue-row" key={item.project_session_id} aria-disabled={item.status === "ready" && busy ? true : undefined}>
+                      <span className="nibi-rowlist__num nibi-value queue-index">{index + 1}</span>
+                      <span className="nibi-rowlist__title nibi-rowlist__title--plain nibi-body queue-focus" title={item.focus}>{item.focus}</span>
+                      <span className="nibi-rowlist__end queue-end">
+                        <span className="nibi-body queue-kind">{sessionKind(item)} · {item.comparison_count} 比較</span>
+                        {rowAction(item)}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          )}
 
-      {blockedSessions.length > 0 && (
-        <section className="inbox-section blocked-section" aria-labelledby="blocked-heading">
-          <h2 id="blocked-heading" className="nibi-heading section-title">開始できない {blockedSessions.length} 件</h2>
-          <ul className="nibi-rowlist nibi-rowlist--emph-name nibi-rowlist--start nibi-rowlist--stack blocked-list" aria-label="開始できないセッション" style={cols("minmax(0, 1fr) auto")}>
-            {blockedSessions.map((item) => (
-              <li className="nibi-rowlist__row blocked-row" key={item.project_session_id}>
-                <span className="nibi-rowlist__title nibi-body">
-                  <span className="nibi-rowlist__name queue-focus">{item.focus}</span>
-                  <span className="nibi-rowlist__sub">{sessionKind(item)}{item.completed_at ? ` · ${formatDate(item.completed_at)}` : ""}</span>
-                  <span className="nibi-rowlist__sub blocked-reason">理由: {blockedReason(item.outcome)}</span>
-                </span>
-                <span className="nibi-rowlist__status nibi-body blocked-status"><Mark kind="fail" /><span className="blocked-word">開始できません</span></span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {blockedSessions.length > 0 && (
+            <section className="inbox-section blocked-section" aria-labelledby="blocked-heading">
+              <h2 id="blocked-heading" className="nibi-heading section-title">開始できない {blockedSessions.length} 件</h2>
+              <ul className="nibi-rowlist nibi-rowlist--bare nibi-rowlist--prose nibi-rowlist--ruled blocked-list" aria-label="開始できないセッション" style={cols("minmax(0, 1fr) auto")}>
+                {blockedSessions.map((item) => (
+                  <li className="nibi-rowlist__row blocked-row" key={item.project_session_id}>
+                    <span className="nibi-rowlist__title nibi-rowlist__title--plain nibi-body">
+                      <span className="nibi-rowlist__name blocked-focus">{item.focus}</span>
+                      <span className="nibi-rowlist__sub">{sessionKind(item)}{item.completed_at ? ` · ${formatDate(item.completed_at)}` : ""}</span>
+                      <span className="nibi-rowlist__sub blocked-reason">理由: {blockedReason(item.outcome)}</span>
+                    </span>
+                    <span className="nibi-rowlist__status nibi-body blocked-status"><Mark kind="fail" /><span className="blocked-word">開始できません</span></span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-      {completed.length > 0 && (
-        <section className="inbox-section completed-section" aria-labelledby="completed-heading">
-          <h2 id="completed-heading" className="nibi-heading section-title">完了</h2>
-          <div className="nibi-disclosure nibi-disclosure--link completed-sessions">
-            <button
-              type="button"
-              className="nibi-disclosure__header"
-              aria-expanded={completedOpen}
-              aria-controls="completed-region"
-              onClick={() => setCompletedOpen((open) => !open)}
-            >
-              <Icon name="chevron_right" className="nibi-disclosure__chevron" />{completed.length} 件を見る
-            </button>
-            <div id="completed-region" className="nibi-disclosure__region" hidden={!completedOpen}>
-              <div className="nibi-rowlist nibi-rowlist--line nibi-rowlist--start completed-list" role="group" aria-label="完了したセッション" style={cols("3rem minmax(0, 1fr) auto")}>
+          {completed.length > 0 && (
+            <section className="inbox-section history-section" aria-labelledby="history-heading">
+              <h2 id="history-heading" className="nibi-heading section-title">これまで</h2>
+              <div className="nibi-rowlist nibi-rowlist--bare nibi-rowlist--prose nibi-rowlist--ruled history-list" role="group" aria-label="完了したセッション">
                 {completed.map((item) => (
                   <button
                     type="button"
-                    className="nibi-rowlist__row completed-row"
+                    className="nibi-rowlist__row history-row"
                     key={item.project_session_id}
                     aria-label={`結果を見る: ${item.focus}`}
                     onClick={() => onOpenCompletion(item.project_session_id)}
                   >
-                    <span className="nibi-value completed-date">{formatDate(item.completed_at)}</span>
-                    <span className="nibi-rowlist__title nibi-body" title={item.focus}>
-                      <span className="nibi-rowlist__name">{item.focus}</span>
-                      <span className="nibi-rowlist__sub">{sessionKind(item)}</span>
-                    </span>
-                    <span className="nibi-rowlist__end nibi-body completed-outcome">
-                      {item.outcome ?? "完了"}
-                      <Icon name="chevron_right" />
+                    <span className="nibi-rowlist__num nibi-value history-date">{formatDate(item.completed_at)}</span>
+                    <span className="nibi-body history-focus" title={item.focus}>{item.focus}</span>
+                    <span className={item.current_best_updated ? "nibi-body history-outcome updated" : "nibi-body history-outcome"}>
+                      <span className="history-mark">{item.current_best_updated && <Mark kind="pass" />}</span>
+                      <span className="history-words">{item.outcome ?? "完了"}</span>
                     </span>
                   </button>
                 ))}
               </div>
-            </div>
-          </div>
-        </section>
-      )}
+            </section>
+          )}
+        </div>
+
+        <aside className="nibi-panel inbox-side" aria-labelledby="current-best-heading">
+          <CurrentBest project={project} />
+        </aside>
+      </div>
     </main>
+  );
+}
+
+/* 次の一手の面(nibi 0014 D-2、`.nibi-panel--lead`): 画面に1つ。中身はその一手と主ボタンだけ。 */
+function LeadPanel({ lead, pending, onAction }: { lead: Lead; pending: boolean; onAction: () => void }) {
+  const copy = leadCopy(lead);
+  const session = lead.kind === "project" ? lead.session : null;
+  const step = copy.step;
+  return (
+    <section className="nibi-panel nibi-panel--lead lead-panel" aria-labelledby="lead-heading">
+      <div className="lead-top">
+        <h2 id="lead-heading" className="nibi-heading">{copy.heading}</h2>
+        {session && <span className="nibi-label lead-kind">{sessionKind(session)} · {session.comparison_count} 比較</span>}
+      </div>
+      <div className="lead-question">
+        <ClampedText className="nibi-lead lead-focus">
+          {session ? session.focus : "Projectに属さない比較（abar listen）"}
+        </ClampedText>
+      </div>
+      <div className="lead-bottom">
+        {step && (
+          <span className="lead-progress">
+            {step.total <= 20 && (
+              <span className="nibi-progress" aria-hidden="true">
+                {Array.from({ length: step.total }, (_, index) => (
+                  <span key={index} className="nibi-progress__seg" data-done={index < step.current - 1 ? "" : undefined} data-current={index === step.current - 1 ? "" : undefined} />
+                ))}
+              </span>
+            )}
+            <span className="nibi-value lead-count" aria-label={`回答済み ${step.current - 1} / ${step.total}`}>{step.current - 1} / {step.total}</span>
+          </span>
+        )}
+        <button type="button" className="nibi-button nibi-button--primary lead-action" disabled={pending} onClick={onAction}>{copy.action}</button>
+      </div>
+    </section>
+  );
+}
+
+function CurrentBest({ project }: { project: Project }) {
+  const targets = project.indicators.filter((item) => item.role === "target");
+  const guards = project.indicators.filter((item) => item.role === "guard");
+  const decimals = decimalsByUnit([...targets, ...guards]);
+  const hasUnits = [...targets, ...guards].some((item) => displayUnit(item.unit) !== "");
+  return (
+    <>
+      <div className="best-heading">
+        <h2 id="current-best-heading" className="nibi-heading section-title">現在最良</h2>
+        <p className="nibi-body best-id">{project.current_best ?? "—"}</p>
+      </div>
+      {targets.length === 0 && guards.length === 0 ? (
+        <p className="nibi-body indicators-empty">指標はまだありません。</p>
+      ) : (
+        <div
+          className="nibi-rowlist nibi-rowlist--bare nibi-rowlist--prose nibi-rowlist--ruled indicator-table"
+          role="table"
+          aria-label="現在最良の指標"
+          style={cols("minmax(0, 1fr) auto")}
+        >
+          {targets.length > 0 && <IndicatorGroup label="目標" role="target" items={targets} decimals={decimals} hasUnits={hasUnits} />}
+          {guards.length > 0 && <IndicatorGroup label="守る性質" role="guard" items={guards} decimals={decimals} hasUnits={hasUnits} />}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -269,25 +305,24 @@ function IndicatorGroup({ label, role, items, decimals, hasUnits }: { label: str
       <div className="nibi-rowlist__group indicator-group" role="row">
         <span role="columnheader" className="nibi-rowlist__group-title"><h3 className="nibi-label group-label">{label}</h3></span>
         <span role="columnheader" />
-        <span role="columnheader" />
       </div>
       {items.map((item) => <IndicatorRow key={item.id} item={item} role={role} decimals={decimals} hasUnits={hasUnits} />)}
     </>
   );
 }
 
-// 値は名前の直後(--tight)、同じ単位の値は小数の桁を揃えて右揃え(単位は揃えた数字の外)。
+// 名前は折り返し、値は右寄せ(同じ単位は小数の桁を揃える、単位は揃えた数字の外)。守る性質の判定は名前の下に印と語で。
 function IndicatorRow({ item, role, decimals, hasUnits }: { item: IndicatorSummaryView; role: "target" | "guard" } & ValueFormat) {
   const unit = displayUnit(item.unit);
   return (
     <div className="nibi-rowlist__row indicator-row" role="row">
-      <span role="rowheader" className="nibi-rowlist__title nibi-body indicator-label"><span className="nibi-rowlist__name">{item.label}</span></span>
-      <span role="cell" className="nibi-rowlist__num nibi-rowlist__num--end nibi-body indicator-value">
-        <span className="indicator-number">{formatIndicatorValue(item.value, decimals.get(item.unit) ?? 0)}</span>
-        {hasUnits && <span className="nibi-rowlist__unit">{unit}</span>}
+      <span role="rowheader" className="nibi-rowlist__title nibi-rowlist__title--plain nibi-body indicator-label">
+        <span className="nibi-rowlist__name">{item.label}</span>
+        {role === "guard" && <span className="indicator-status"><GuardStatus result={item.guard_result} /></span>}
       </span>
-      <span role="cell" className="nibi-rowlist__status nibi-body indicator-status">
-        {role === "guard" && <GuardStatus result={item.guard_result} />}
+      <span role="cell" className="nibi-rowlist__num nibi-body indicator-value">
+        <span className="indicator-number">{formatIndicatorValue(item.value, decimals.get(item.unit) ?? 0)}</span>
+        {hasUnits && <span className="nibi-rowlist__unit indicator-unit">{unit}</span>}
       </span>
     </div>
   );
@@ -300,12 +335,12 @@ function GuardStatus({ result }: { result: IndicatorSummaryView["guard_result"] 
 }
 
 function SimplificationNotice({ prompt, pending, onDecision }: { prompt: SimplificationPromptView; pending: boolean; onDecision: (decision: "accept" | "keep") => void }) {
-  // 採用も維持も人間の判断なので、どちらかを主操作にしない。
+  // 採用も維持も人間の判断なので、どちらかを主操作にしない。見出しは付けない(1文 + 理由)。
   return (
     <div className="nibi-notice simplification-prompt" role="group" aria-labelledby={`simplification-${prompt.id}`}>
       <p className="nibi-notice__text nibi-body">
         <strong id={`simplification-${prompt.id}`} className="notice-title">同一の音でした。単純な方へまとめますか。</strong>
-        <span className="nibi-label notice-reason">{prompt.reason}</span>
+        <span className="notice-reason">{prompt.reason}</span>
       </p>
       <div className="nibi-notice__actions">
         <button type="button" className="nibi-button" disabled={pending} onClick={() => onDecision("keep")}>分けたまま</button>

@@ -1159,6 +1159,10 @@ export type SessionCardView = {
      */
     current_best_check: boolean;
     /**
+     * Current Best Updated
+     */
+    current_best_updated?: boolean | null;
+    /**
      * Focus
      */
     focus: string;

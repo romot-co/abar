@@ -68,7 +68,7 @@ def test_pending_autoplay_owns_only_one_source_pair(
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.add_init_script(DEFERRED_AUDIO_CONTEXT)
         page.goto(url)
-        page.get_by_role("button", name="続ける", exact=True).click()
+        page.get_by_role("button", name="続きから", exact=False).click()
         page.locator(".slot-switcher button:not(:disabled)").first.wait_for()
         # Autoplay has requested resume(), but the browser has not granted it yet.
         page.wait_for_function("audioProbe.contexts.some(c => c.resumes.length > 0)")
@@ -78,9 +78,10 @@ def test_pending_autoplay_owns_only_one_source_pair(
         page.locator(".slot-switcher button").nth(1).click()
         if action != "keep":
             page.get_by_role("button", name="受信箱", exact=True).click()
-            page.get_by_role("heading", name="未回答", exact=True).wait_for()
+            page.get_by_role("heading", name="途中の試聴", exact=True).wait_for()
         if action == "replace":
-            page.get_by_role("button", name="再開", exact=True).click()
+            # 一時停止中のSessionは次の一手の面の「続きから」で再開する
+            page.get_by_role("button", name="続きから", exact=False).click()
             page.locator(".slot-switcher button:not(:disabled)").first.wait_for()
         page.evaluate("audioProbe.contexts.forEach(c => c.release())")
         if action != "leave":
