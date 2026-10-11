@@ -60,6 +60,11 @@ def labeled_identity(
             audio_id=cast(str, value["audio_id"]),
             provenance=provenance,
             label=label,
+            kind="baseline"
+            if variant_ref in state.research.baselines
+            else state.compare.variants[variant_ref].kind
+            if isinstance(variant_ref, str) and variant_ref in state.compare.variants
+            else None,
         )
     return output
 

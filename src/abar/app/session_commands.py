@@ -40,11 +40,11 @@ from abar.compare.models import (
     RecipeRef,
     Session,
     Telemetry,
+    TimeRange,
 )
 from abar.compare.operands import parse_file_operand
 from abar.compare.planning import allocate_deliveries, core_session
 from abar.compare.service import PreparedComparison, build_comparison
-from abar.foundation.json_types import JSONValue
 from abar.foundation.time_ids import new_id
 from abar.project.current_best import evaluate_best_update
 from abar.project.models import BestEvidence, BestUpdatePlan
@@ -234,7 +234,9 @@ def record_judgment(
     repository: WorkspaceRepository,
     delivery_id: str,
     *,
-    preference: Literal[1, 2, 3, 4, 5],
+    preference: Literal[1, 2, 3, 4, 5] | None = None,
+    held: bool = False,
+    comment_range: TimeRange | None = None,
     blocker_a: BlockerInput | None = None,
     blocker_b: BlockerInput | None = None,
     comment: str | None = None,
@@ -245,29 +247,23 @@ def record_judgment(
     expected_blocker_a = blocker_a or BlockerInput()
     expected_blocker_b = blocker_b or BlockerInput()
     expected_telemetry = telemetry or Telemetry({"a": 0, "b": 0}, 0, 0)
-    expected_judgment_payload: dict[str, JSONValue] = {
-        "delivery_id": delivery_id,
-        "preference": preference,
-        "blockers": {
-            "a": {
-                "selected": expected_blocker_a.selected,
-                "note": expected_blocker_a.note,
-            },
-            "b": {
-                "selected": expected_blocker_b.selected,
-                "note": expected_blocker_b.note,
-            },
-        },
-        "comment": comment,
-        "telemetry": {
-            "listen_ms": {
-                "a": expected_telemetry.listen_ms["a"],
-                "b": expected_telemetry.listen_ms["b"],
-            },
-            "switches": expected_telemetry.switches,
-            "answer_ms": expected_telemetry.answer_ms,
-        },
-    }
+    try:
+        pending = Judgment(
+            id=new_id("j_"),
+            delivery_id=delivery_id,
+            preference=preference,
+            held=held,
+            comment_range=comment_range,
+            blockers={"a": expected_blocker_a, "b": expected_blocker_b},
+            comment=comment,
+            identity_visible_at_answer=False,
+            telemetry=expected_telemetry,
+        )
+    except ValueError as exc:
+        raise CommandError(str(exc)) from exc
+    expected_judgment_payload = _judgment_payload(pending)
+    expected_judgment_payload.pop("judgment_id")
+    expected_judgment_payload.pop("identity_visible_at_answer")
     request_hash = _request_hash("judgment.record", expected_judgment_payload)
     existing = _existing_operation(
         repository,
@@ -290,15 +286,23 @@ def record_judgment(
     if runtime.status not in {"active", "paused"}:
         raise CommandError("Judgment requires an active Session")
     identity_visible = session.presentation == "open" or runtime.revealed
-    judgment = Judgment(
-        id=new_id("j_"),
-        delivery_id=delivery_id,
-        preference=preference,
-        blockers={"a": expected_blocker_a, "b": expected_blocker_b},
-        comment=comment,
-        identity_visible_at_answer=identity_visible,
-        telemetry=expected_telemetry,
-    )
+    comparison = state.compare.comparisons[delivery.comparison_id]
+    prepared = state.compare.prepared_pairs[comparison.prepared_pair_id]
+    duration_by_slot = {
+        slot.lower(): state.compare.audio[audio_id].frames
+        / state.compare.audio[audio_id].sample_rate
+        for slot, input_key in delivery.slot_assignment.items()
+        for audio_id in (prepared.output_audio_by_input_key[input_key],)
+    }
+    ranges = [(slot, blocker.range) for slot, blocker in pending.blockers.items()]
+    ranges.extend((slot, pending.comment_range) for slot in ("a", "b"))
+    ranges.extend((slot, loop.range) for loop in pending.telemetry.loops for slot in ("a", "b"))
+    if any(
+        value is not None and value.end_seconds > duration_by_slot[slot] + 1e-9
+        for slot, value in ranges
+    ):
+        raise CommandError("range exceeds presented audio duration")
+    judgment = replace(pending, identity_visible_at_answer=identity_visible)
     should_end = runtime.status in {"active", "paused"} and _would_complete(
         state, session.id, delivery_id
     )
@@ -307,6 +311,7 @@ def record_judgment(
             draft(
                 "judgment.recorded",
                 {**_judgment_payload(judgment), "request_hash": request_hash},
+                schema_version=2,
                 idempotency_key=child_key(key, 0),
             )
         )
@@ -603,8 +608,8 @@ def _best_evidence(
         proposed_slot = next(
             slot for slot, key in delivery.slot_assignment.items() if key == proposed_key
         )
-        score_a = 3 - judgment.preference
-        score = score_a if proposed_slot == "A" else -score_a
+        score_a = None if judgment.preference is None else 3 - judgment.preference
+        score = score_a if proposed_slot == "A" or score_a is None else -score_a
         blocker_slot: Literal["a", "b"] = "a" if proposed_slot == "A" else "b"
         blocked = judgment.blockers[blocker_slot].selected
         output.append(BestEvidence(item_id, score, blocked, judgment.identity_visible_at_answer))

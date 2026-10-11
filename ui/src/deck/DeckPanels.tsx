@@ -5,6 +5,8 @@ import { Icon } from "../Icon";
 import type { ComparisonPlayer } from "../useComparisonPlayer";
 import type { AnswerDraft, BlockerDraft } from "./answerDraft";
 import { shortenPair } from "./candidateNames";
+import { rangeText, type LoopRange } from "./loopRange";
+import { canToggleMemoWord, changeComment, hasMemoWord, toggleBlocker, toggleMemoWord } from "./answerDraft";
 import { PositionSlider } from "./PositionSlider";
 import { InlineError } from "../InlineError";
 
@@ -125,7 +127,10 @@ export function ListeningPanel({ player, deck, groupRef, revealing, onReveal }: 
           );
         })}
       </div>
-      <PositionSlider position={player.position} duration={player.duration} disabled={disabled} onSeek={player.seek} />
+      <div className="timeline">
+        <PositionSlider position={player.position} duration={player.duration} disabled={disabled} onSeek={player.seek} loop={player.loop} loopDuration={player.loopDuration} onLoopChange={player.setLoop} />
+        <button type="button" className="nibi-button nibi-button--toggle" aria-pressed={player.loop !== null} disabled={disabled || player.duration <= 0} onClick={player.toggleLoop}>ループ</button>
+      </div>
       {deck.can_reveal && !identity && (
         <p className="reveal-action">
           <button type="button" className="nibi-button nibi-button--link weak-action" disabled={revealing} onClick={onReveal}>A/Bの中身を表示する</button>
@@ -140,18 +145,20 @@ type AnswerEditorProps = {
   locked: boolean;
   heard: { a: boolean; b: boolean };
   draft: AnswerDraft;
+  loop: LoopRange | null;
+  wordCandidates: readonly string[];
   commentRef: RefObject<HTMLTextAreaElement | null>;
   error: string | null;
   onChange: (draft: AnswerDraft) => void;
 };
 
 /* 選好 → (選んだ後に)残せない問題とメモ(段階的な開示、nibi SPEC §6.7 / §2.13)。記録は画面下の操作欄。 */
-export function AnswerEditor({ question, locked, heard, draft, commentRef, error, onChange }: AnswerEditorProps) {
-  const revealed = draft.preference !== null;
+export function AnswerEditor({ question, locked, heard, draft, loop, wordCandidates, commentRef, error, onChange }: AnswerEditorProps) {
+  const revealed = draft.preference !== null || draft.held;
   // 押せない間は理由と次の一手を直下に(nibi 0006 / 0007 P-1)。
   const hint = locked
     ? `両方を聴くと選べます · ${!heard.a && !heard.b ? "A と B を押して聴いてください" : heard.a ? "あとは B を聴いてください" : "あとは A を聴いてください"}`
-    : revealed ? "" : "どちらかを選ぶと記録できます";
+    : draft.held ? "保留として記録します" : revealed ? "" : "どちらかを選ぶと記録できます";
   return (
     <section className="answer-panel" aria-labelledby="preference-title">
       <div className="answer-choice">
@@ -169,7 +176,7 @@ export function AnswerEditor({ question, locked, heard, draft, commentRef, error
                 aria-checked={draft.preference === value}
                 disabled={locked}
                 key={value}
-                onClick={() => onChange({ ...draft, preference: value })}
+                onClick={() => onChange({ ...draft, preference: value, held: false })}
               >
                 {side && <span className="preference-side">{side}</span>}
                 <span className="preference-strength">{strength}</span>
@@ -181,20 +188,30 @@ export function AnswerEditor({ question, locked, heard, draft, commentRef, error
           <p id="answer-hint" className="nibi-note-text submit-hint" aria-live="polite">{hint}</p>
           <p className="nibi-note-text key-hint">キー 1〜5 でも選べます</p>
         </div>
+        <div className="hold-row">
+          <button type="button" className="nibi-button nibi-button--toggle" aria-pressed={draft.held} disabled={locked} onClick={() => onChange({ ...draft, held: !draft.held, preference: null })}>この問いでは判断できない（保留）</button>
+        </div>
       </div>
       {revealed && (
         <>
           <section className="blocker-question" aria-labelledby="blocker-title">
             <h2 id="blocker-title" className="nibi-heading">残せない問題がありますか</h2>
             <div className="blocker-toggles" role="group" aria-labelledby="blocker-title">
-              <BlockerToggle slot="A" value={draft.blockerA} disabled={locked} onChange={(blockerA) => onChange({ ...draft, blockerA })} />
-              <BlockerToggle slot="B" value={draft.blockerB} disabled={locked} onChange={(blockerB) => onChange({ ...draft, blockerB })} />
+              <BlockerToggle slot="A" value={draft.blockerA} loop={loop} disabled={locked} onChange={(blockerA) => onChange({ ...draft, blockerA })} />
+              <BlockerToggle slot="B" value={draft.blockerB} loop={loop} disabled={locked} onChange={(blockerB) => onChange({ ...draft, blockerB })} />
             </div>
             <BlockerNote slot="A" value={draft.blockerA} onChange={(blockerA) => onChange({ ...draft, blockerA })} />
             <BlockerNote slot="B" value={draft.blockerB} onChange={(blockerB) => onChange({ ...draft, blockerB })} />
           </section>
           <section className="memo-section" aria-labelledby="memo-title">
-            <h2 id="memo-title" className="nibi-heading">メモ</h2>
+            <h2 id="memo-title" className="nibi-heading">メモ{draft.commentRange && <span className="range-stamp"> · {rangeText(draft.commentRange)}</span>}</h2>
+            {wordCandidates.length > 0 && (
+              <div className="word-chips">
+                {wordCandidates.map((word) => (
+                  <button type="button" key={word} className="nibi-button nibi-button--toggle" disabled={locked || !canToggleMemoWord(draft.comment, word)} aria-pressed={hasMemoWord(draft.comment, word)} onClick={() => onChange(toggleMemoWord(draft, word, loop))}><span>{word}</span></button>
+                ))}
+              </div>
+            )}
             <div className="nibi-field nibi-field--fill comment-field">
               <textarea
                 ref={commentRef}
@@ -205,7 +222,7 @@ export function AnswerEditor({ question, locked, heard, draft, commentRef, error
                 placeholder="任意"
                 disabled={locked}
                 value={draft.comment}
-                onChange={(event) => onChange({ ...draft, comment: event.currentTarget.value })}
+                onChange={(event) => onChange(changeComment(draft, event.currentTarget.value, loop))}
               />
             </div>
           </section>
@@ -218,13 +235,14 @@ export function AnswerEditor({ question, locked, heard, draft, commentRef, error
 
 /* 画面下の操作欄: 左に弱い「飛ばす」、選好を決めた後だけ右に主ボタン「記録して次へ」(§2.13、段階的な開示)。
    Plan付きSessionのskipの確認も同じ場所に出す。 */
-export function AnswerDock({ skippable, skipping, confirm, onSkip, canSubmit, showSubmit, submitting, onSubmit }: {
+export function AnswerDock({ skippable, skipping, confirm, onSkip, canSubmit, showSubmit, held, submitting, onSubmit }: {
   skippable: boolean;
   skipping: boolean;
   confirm: ReactNode;
   onSkip: () => void;
   canSubmit: boolean;
   showSubmit: boolean;
+  held: boolean;
   submitting: boolean;
   onSubmit: () => void;
 }) {
@@ -234,7 +252,7 @@ export function AnswerDock({ skippable, skipping, confirm, onSkip, canSubmit, sh
         <div className="screen-dock__inner answer-dock__inner">
           <button type="button" className="nibi-button nibi-button--link weak-action skip-action" aria-label="回答せずにこの比較を飛ばす" disabled={!skippable || skipping} onClick={onSkip}>{skipping ? "飛ばしています…" : "飛ばす"}</button>
           {showSubmit && (
-            <button type="button" className="nibi-button nibi-button--primary submit-answer" disabled={!canSubmit} onClick={onSubmit}>{submitting ? "記録中…" : "記録して次へ"}</button>
+            <button type="button" className="nibi-button nibi-button--primary submit-answer" disabled={!canSubmit} onClick={onSubmit}>{submitting ? "記録中…" : held ? "保留して次へ" : "記録して次へ"}</button>
           )}
         </div>
       )}
@@ -242,14 +260,14 @@ export function AnswerDock({ skippable, skipping, confirm, onSkip, canSubmit, sh
   );
 }
 
-function BlockerToggle({ slot, value, disabled, onChange }: { slot: "A" | "B"; value: BlockerDraft; disabled: boolean; onChange: (value: BlockerDraft) => void }) {
+function BlockerToggle({ slot, value, loop, disabled, onChange }: { slot: "A" | "B"; value: BlockerDraft; loop: LoopRange | null; disabled: boolean; onChange: (value: BlockerDraft) => void }) {
   return (
     <button
       type="button"
       className="nibi-button nibi-button--toggle blocker-chip"
       aria-pressed={value.selected}
       disabled={disabled}
-      onClick={() => onChange({ selected: !value.selected, note: "" })}
+      onClick={() => onChange(toggleBlocker(value, loop))}
     >
       {slot} に問題
     </button>
@@ -260,7 +278,7 @@ function BlockerNote({ slot, value, onChange }: { slot: "A" | "B"; value: Blocke
   if (!value.selected) return null;
   return (
     <label className="nibi-field nibi-field--fill blocker-note">
-      <span className="nibi-field__label">{slot} の問題</span>
+      <span className="nibi-field__label">{slot} の問題{value.range && <span className="range-stamp"> · {rangeText(value.range)}</span>}</span>
       <input
         className="nibi-field__input"
         maxLength={500}

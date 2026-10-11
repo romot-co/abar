@@ -13,11 +13,12 @@ def draft(
     *,
     idempotency_key: str,
     causation_id: str | None = None,
+    schema_version: int = 1,
 ) -> EventDraft:
     return EventDraft(
         event_id=new_id("ev_"),
         event_type=event_type,
-        schema_version=1,
+        schema_version=schema_version,
         ts=datetime.now(UTC),
         causation_id=causation_id,
         idempotency_key=idempotency_key,

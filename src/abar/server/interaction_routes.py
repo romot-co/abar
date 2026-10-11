@@ -10,7 +10,7 @@ from abar.app.actors import Actor
 from abar.app.queries import active_deck, session_completion
 from abar.app.repository import WorkspaceRepository
 from abar.app.views import ActionView, ActiveDeckView, SessionCompletionView
-from abar.compare.models import BlockerInput, Telemetry
+from abar.compare.models import BlockerInput, LoopTelemetry, Telemetry, TimeRange
 from abar.infrastructure.object_store import ImmutableObjectStore
 from abar.server.audio_tokens import AudioTokenStore
 from abar.server.dependencies import ServerDependencies
@@ -175,10 +175,34 @@ def build_interaction_router(
             repository,
             delivery_id,
             preference=body.preference,
-            blocker_a=BlockerInput(**body.blockers["a"].model_dump()),
-            blocker_b=BlockerInput(**body.blockers["b"].model_dump()),
+            held=body.held,
+            comment_range=None
+            if body.comment_range is None
+            else TimeRange(**body.comment_range.model_dump()),
+            blocker_a=BlockerInput(
+                body.blockers["a"].selected,
+                body.blockers["a"].note,
+                None
+                if body.blockers["a"].range is None
+                else TimeRange(**body.blockers["a"].range.model_dump()),
+            ),
+            blocker_b=BlockerInput(
+                body.blockers["b"].selected,
+                body.blockers["b"].note,
+                None
+                if body.blockers["b"].range is None
+                else TimeRange(**body.blockers["b"].range.model_dump()),
+            ),
             comment=body.comment,
-            telemetry=Telemetry(**body.telemetry.model_dump()),
+            telemetry=Telemetry(
+                body.telemetry.listen_ms,
+                body.telemetry.switches,
+                body.telemetry.answer_ms,
+                tuple(
+                    LoopTelemetry(TimeRange(**loop.range.model_dump()), loop.listen_ms)
+                    for loop in body.telemetry.loops
+                ),
+            ),
             idempotency_key=key,
         )
         state = repository.state()

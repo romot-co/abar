@@ -1,5 +1,6 @@
 """Pure data contracts for Compare Core."""
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -7,6 +8,16 @@ from abar.foundation.json_types import JSONValue
 
 type Presentation = Literal["open", "blind"]
 type VariantRef = str
+type VariantKind = Literal[
+    "candidate",
+    "current_best",
+    "baseline",
+    "control",
+    "reference",
+    "ablation",
+    "tap",
+    "symptom_region",
+]
 type RecipeName = Literal["native", "aligned", "matched", "matched-v2", "level-matched"]
 
 
@@ -71,6 +82,20 @@ class Variant:
     manifest_id: str
     resolved_params: dict[str, JSONValue]
     render_contract: Literal["renderable", "finite_rendered"]
+    kind: VariantKind = "candidate"
+
+    def __post_init__(self) -> None:
+        if self.kind not in {
+            "candidate",
+            "current_best",
+            "baseline",
+            "control",
+            "reference",
+            "ablation",
+            "tap",
+            "symptom_region",
+        }:
+            raise ValueError("unsupported Variant kind")
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,12 +158,35 @@ class Delivery:
 
 
 @dataclass(frozen=True, slots=True)
+class TimeRange:
+    start_seconds: float
+    end_seconds: float
+
+    def __post_init__(self) -> None:
+        if not (math.isfinite(self.start_seconds) and math.isfinite(self.end_seconds)):
+            raise ValueError("range endpoints must be finite")
+        if not 0 <= self.start_seconds < self.end_seconds:
+            raise ValueError("range must satisfy 0 <= start < end")
+
+
+@dataclass(frozen=True, slots=True)
+class LoopTelemetry:
+    range: TimeRange
+    listen_ms: dict[Literal["a", "b"], int]
+
+    def __post_init__(self) -> None:
+        if set(self.listen_ms) != {"a", "b"} or min(self.listen_ms.values()) < 0:
+            raise ValueError("loop telemetry requires non-negative A/B listening times")
+
+
+@dataclass(frozen=True, slots=True)
 class BlockerInput:
     selected: bool = False
     note: str | None = None
+    range: TimeRange | None = None
 
     def __post_init__(self) -> None:
-        if not self.selected and self.note is not None:
+        if not self.selected and (self.note is not None or self.range is not None):
             raise ValueError("unselected blocker note must be null")
         if self.note is not None and len(self.note) > 500:
             raise ValueError("blocker note exceeds 500 code points")
@@ -149,9 +197,13 @@ class Telemetry:
     listen_ms: dict[Literal["a", "b"], int]
     switches: int
     answer_ms: int
+    loops: tuple[LoopTelemetry, ...] = ()
 
     def __post_init__(self) -> None:
-        if min((*self.listen_ms.values(), self.switches, self.answer_ms)) < 0:
+        if (
+            set(self.listen_ms) != {"a", "b"}
+            or min((*self.listen_ms.values(), self.switches, self.answer_ms)) < 0
+        ):
             raise ValueError("telemetry values must be non-negative")
 
 
@@ -159,12 +211,18 @@ class Telemetry:
 class Judgment:
     id: str
     delivery_id: str
-    preference: Literal[1, 2, 3, 4, 5]
+    preference: Literal[1, 2, 3, 4, 5] | None
     blockers: dict[Literal["a", "b"], BlockerInput]
     comment: str | None
     identity_visible_at_answer: bool
     telemetry: Telemetry
+    held: bool = False
+    comment_range: TimeRange | None = None
 
     def __post_init__(self) -> None:
+        if self.held == (self.preference is not None):
+            raise ValueError("Judgment requires either preference or held")
+        if self.comment_range is not None and not self.comment:
+            raise ValueError("comment range requires a memo")
         if self.comment is not None and len(self.comment) > 500:
             raise ValueError("comparison memo exceeds 500 code points")

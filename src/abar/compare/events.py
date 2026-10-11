@@ -28,7 +28,12 @@ OBSERVATIONAL = (
 
 EVENT_SCHEMAS = {
     **{
-        event_type: EventSchema(EventAuthority.AUTHORITATIVE, frozenset({1}))
+        event_type: EventSchema(
+            EventAuthority.AUTHORITATIVE,
+            frozenset({1, 2})
+            if event_type in {"judgment.recorded", "variant.created"}
+            else frozenset({1}),
+        )
         for event_type in AUTHORITATIVE
     },
     **{

@@ -257,6 +257,7 @@ function CurrentBest({ project }: { project: Project }) {
       <div className="best-heading">
         <h2 id="current-best-heading" className="nibi-heading section-title">現在最良</h2>
         <p className="nibi-body best-id">{project.current_best ?? "—"}</p>
+        {(project.current_best_flags ?? []).map((flag) => <p className="nibi-note-text" key={`${flag.symptom_id}:${flag.session_id}`}>回帰の印: {flag.title}</p>)}
       </div>
       {targets.length === 0 && guards.length === 0 ? (
         <p className="nibi-body indicators-empty">指標はまだありません。</p>

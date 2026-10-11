@@ -15,11 +15,13 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from abar.app import commands
 from abar.app.actors import Actor
+from abar.app.diagnostic_queries import dictionary_list, symptom_list, symptom_view
 from abar.app.queries import entity, history, project_view, session_overview, session_result, status
 from abar.app.repository import WorkspaceError, WorkspaceRepository, default_workspace_path
 from abar.compare.bundles import build_command_bundle
 from abar.compare.models import RecipeRef
 from abar.foundation.json_types import JSONValue
+from abar.research.verification import VerificationReport
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 project_app = typer.Typer(no_args_is_help=True)
@@ -32,6 +34,10 @@ project_simplification_app = typer.Typer(no_args_is_help=True)
 material_app = typer.Typer(no_args_is_help=True)
 material_clip_app = typer.Typer(no_args_is_help=True)
 variant_app = typer.Typer(no_args_is_help=True)
+symptom_app = typer.Typer(no_args_is_help=True)
+verification_app = typer.Typer(no_args_is_help=True)
+baseline_app = typer.Typer(no_args_is_help=True)
+dictionary_app = typer.Typer(no_args_is_help=True)
 note_app = typer.Typer(no_args_is_help=True)
 indicator_app = typer.Typer(no_args_is_help=True)
 indicator_value_app = typer.Typer(no_args_is_help=True)
@@ -46,6 +52,10 @@ project_app.add_typer(project_simplification_app, name="simplification")
 app.add_typer(material_app, name="material")
 material_app.add_typer(material_clip_app, name="clip")
 app.add_typer(variant_app, name="variant")
+app.add_typer(symptom_app, name="symptom")
+app.add_typer(verification_app, name="verification")
+app.add_typer(dictionary_app, name="dictionary")
+project_app.add_typer(baseline_app, name="baseline")
 app.add_typer(note_app, name="note")
 app.add_typer(indicator_app, name="indicator")
 indicator_app.add_typer(indicator_value_app, name="value")
@@ -186,18 +196,29 @@ def recipe_set(
 @project_config_app.command("set")
 def config_set(
     context: typer.Context,
-    ready_session_limit: Annotated[int, typer.Option("--ready-session-limit", min=1)],
+    ready_session_limit: Annotated[int | None, typer.Option("--ready-session-limit", min=1)] = None,
+    prescreen_indicator: Annotated[str | None, typer.Option("--prescreen-indicator")] = None,
+    clear_prescreen_indicator: Annotated[bool, typer.Option("--clear-prescreen-indicator")] = False,
 ) -> None:
     cli = _ctx(context)
-    _agent_required(cli)
+    prescreen_requested = prescreen_indicator is not None or clear_prescreen_indicator
+    if prescreen_requested:
+        _human_only(cli)
+    else:
+        _agent_required(cli)
+    if ready_session_limit is None and not prescreen_requested:
+        raise typer.BadParameter("choose a Project configuration option")
     _run(
         cli,
         lambda repository: commands.configure_project(
             repository,
             ready_session_limit=ready_session_limit,
+            prescreen_indicator_id=prescreen_indicator,
+            clear_prescreen_indicator=clear_prescreen_indicator,
+            actor=Actor("human", "human") if prescreen_requested else None,
             idempotency_key=cli.idempotency_key,
         ),
-        "ready Session上限を更新しました",
+        "Project設定を更新しました",
     )
 
 
@@ -352,6 +373,21 @@ def variant_add(
     seeded: Annotated[bool, typer.Option("--seeded")] = False,
     params: Annotated[Path | None, typer.Option("--params", exists=True, dir_okay=False)] = None,
     label: Annotated[str | None, typer.Option("--label")] = None,
+    kind: Annotated[
+        Literal[
+            "candidate",
+            "current_best",
+            "baseline",
+            "control",
+            "reference",
+            "ablation",
+            "tap",
+            "symptom_region",
+        ],
+        typer.Option("--kind"),
+    ] = "candidate",
+    related: Annotated[str | None, typer.Option("--of")] = None,
+    note: Annotated[str | None, typer.Option("--note")] = None,
     provenance: Annotated[
         Path | None, typer.Option("--provenance", exists=True, dir_okay=False)
     ] = None,
@@ -388,6 +424,13 @@ def variant_add(
         None if provenance is None else _prepare(cli, lambda: _json_file(provenance))
     )
 
+    if related is not None or note is not None:
+        provenance_document = {**(provenance_document or {})}
+        if related is not None:
+            provenance_document["of"] = related
+        if note is not None:
+            provenance_document["note"] = note
+
     def register(repository: WorkspaceRepository) -> str:
         if archive_bytes is None:
             return commands.add_variant(
@@ -395,6 +438,7 @@ def variant_add(
                 manifest_document,
                 params=params_document,
                 label=label,
+                kind=kind,
                 provenance=provenance_document,
                 idempotency_key=cli.idempotency_key,
             )
@@ -404,6 +448,7 @@ def variant_add(
             archive_bytes,
             params=params_document,
             label=label,
+            kind=kind,
             provenance=provenance_document,
             idempotency_key=cli.idempotency_key,
         )
@@ -459,8 +504,10 @@ def session_create(
     first: Annotated[str, typer.Option("--a")],
     second: Annotated[str, typer.Option("--b")],
     focus: Annotated[
-        str, typer.Option("--focus", help="One criterion, single line, at most 200 characters")
-    ],
+        str | None,
+        typer.Option("--focus", help="One criterion, single line, at most 200 characters"),
+    ] = None,
+    symptom: Annotated[str | None, typer.Option("--symptom")] = None,
     size: Annotated[Literal["short", "standard"], typer.Option("--size")] = "short",
     evidence_count: Annotated[
         int | None,
@@ -493,6 +540,7 @@ def session_create(
             first_variant=first,
             second_variant=second,
             focus=focus,
+            symptom_id=symptom,
             size=size,
             evidence_count=evidence_count,
             recipe=None if recipe is None else RecipeRef.from_name(recipe),
@@ -879,7 +927,11 @@ def _run[ValueT](
     message: str,
 ) -> None:
     value = _perform(cli, operation)
-    _emit(cli, {"schema_version": 2, "result": value}, message)
+    output: dict[str, object] = {"schema_version": 2, "result": value}
+    if isinstance(value, str) and value.startswith("ps_"):
+        overview = _perform(cli, lambda repository: session_overview(repository, value))
+        output["warnings"] = list(overview.warnings)
+    _emit(cli, output, message)
 
 
 def _perform[ValueT](
@@ -1032,3 +1084,258 @@ def _json_file(path: Path) -> dict[str, JSONValue]:
 
 def _ctx(context: typer.Context) -> Context:
     return context.obj  # type: ignore[return-value]
+
+
+@symptom_app.command("add")
+def symptom_add(
+    context: typer.Context,
+    delivery_id: Annotated[str, typer.Option("--from-judgment")],
+    side: Annotated[Literal["a", "b"], typer.Option("--side")],
+    title: Annotated[str | None, typer.Option("--title")] = None,
+    context_seconds: Annotated[float, typer.Option("--context", min=0)] = 0.5,
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run(
+        cli,
+        lambda repository: commands.add_symptom(
+            repository,
+            delivery_id=delivery_id,
+            side=side,
+            title=title,
+            context_seconds=context_seconds,
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "症状を登録しました",
+    )
+
+
+@dictionary_app.command("add")
+def dictionary_add(
+    context: typer.Context,
+    term: Annotated[str, typer.Argument()],
+    definition: Annotated[str, typer.Option("--definition")],
+    indicator: Annotated[str | None, typer.Option("--indicator")] = None,
+    status: Annotated[
+        Literal["candidate", "validated", "rejected"], typer.Option("--status")
+    ] = "candidate",
+    evidence: Annotated[list[str] | None, typer.Option("--evidence")] = None,
+    scope: Annotated[str, typer.Option("--scope")] = "",
+    symptom: Annotated[list[str] | None, typer.Option("--symptom")] = None,
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run(
+        cli,
+        lambda repository: commands.add_dictionary_entry(
+            repository,
+            term=term,
+            definition=definition,
+            indicator_id=indicator,
+            status=status,
+            evidence_session_ids=tuple(evidence or ()),
+            scope=scope,
+            symptom_ids=tuple(symptom or ()),
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "辞書に語を登録しました",
+    )
+
+
+@dictionary_app.command("set")
+def dictionary_set(
+    context: typer.Context,
+    term: Annotated[str, typer.Argument()],
+    definition: Annotated[str | None, typer.Option("--definition")] = None,
+    indicator: Annotated[str | None, typer.Option("--indicator")] = None,
+    clear_indicator: Annotated[bool, typer.Option("--clear-indicator")] = False,
+    status: Annotated[
+        Literal["candidate", "validated", "rejected"] | None, typer.Option("--status")
+    ] = None,
+    evidence: Annotated[list[str] | None, typer.Option("--evidence")] = None,
+    clear_evidence: Annotated[bool, typer.Option("--clear-evidence")] = False,
+    scope: Annotated[str | None, typer.Option("--scope")] = None,
+    symptom: Annotated[list[str] | None, typer.Option("--symptom")] = None,
+    clear_symptoms: Annotated[bool, typer.Option("--clear-symptoms")] = False,
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    if (evidence and clear_evidence) or (symptom and clear_symptoms):
+        raise typer.BadParameter("choose either references or their removal")
+    _run(
+        cli,
+        lambda repository: commands.update_dictionary_entry(
+            repository,
+            term,
+            definition=definition,
+            indicator_id=indicator,
+            clear_indicator=clear_indicator,
+            status=status,
+            evidence_session_ids=()
+            if clear_evidence
+            else None
+            if evidence is None
+            else tuple(evidence),
+            scope=scope,
+            symptom_ids=() if clear_symptoms else None if symptom is None else tuple(symptom),
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "辞書の語を更新しました",
+    )
+
+
+@dictionary_app.command("list")
+def dictionary_terms(context: typer.Context) -> None:
+    _read(_ctx(context), dictionary_list, "辞書の一覧")
+
+
+@symptom_app.command("list")
+def symptoms_list(context: typer.Context) -> None:
+    _read(_ctx(context), symptom_list, "症状の一覧")
+
+
+@symptom_app.command("show")
+def symptom_show(context: typer.Context, symptom_id: Annotated[str, typer.Argument()]) -> None:
+    _read(_ctx(context), lambda repository: symptom_view(repository, symptom_id), "症状の記録")
+
+
+@symptom_app.command("note")
+def symptom_note(
+    context: typer.Context,
+    symptom_id: Annotated[str, typer.Argument()],
+    facts: Annotated[str | None, typer.Option("--facts")] = None,
+    hypotheses: Annotated[str | None, typer.Option("--hypotheses")] = None,
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run(
+        cli,
+        lambda repository: commands.update_symptom(
+            repository,
+            symptom_id,
+            facts=facts,
+            hypotheses=hypotheses,
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "症状の記録を更新しました",
+    )
+
+
+@symptom_app.command("resolve")
+def symptom_resolve(
+    context: typer.Context,
+    symptom_id: Annotated[str, typer.Argument()],
+    reason: Annotated[str, typer.Option("--reason")],
+    session: Annotated[str | None, typer.Option("--session")] = None,
+) -> None:
+    _transition_symptom_cli(context, symptom_id, "resolve", reason, session)
+
+
+@symptom_app.command("reopen")
+def symptom_reopen(
+    context: typer.Context,
+    symptom_id: Annotated[str, typer.Argument()],
+    reason: Annotated[str, typer.Option("--reason")],
+    session: Annotated[str | None, typer.Option("--session")] = None,
+) -> None:
+    _transition_symptom_cli(context, symptom_id, "reopen", reason, session)
+
+
+@symptom_app.command("withdraw")
+def symptom_withdraw(
+    context: typer.Context,
+    symptom_id: Annotated[str, typer.Argument()],
+    reason: Annotated[str, typer.Option("--reason")],
+) -> None:
+    _transition_symptom_cli(context, symptom_id, "withdraw", reason, None)
+
+
+def _transition_symptom_cli(
+    context: typer.Context,
+    symptom_id: str,
+    action: Literal["resolve", "reopen", "withdraw"],
+    reason: str,
+    session: str | None,
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run(
+        cli,
+        lambda repository: commands.transition_symptom(
+            repository,
+            symptom_id,
+            action=action,
+            reason=reason,
+            session_id=session,
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "症状の状態を記録しました",
+    )
+
+
+@verification_app.command("record")
+def verification_record(
+    context: typer.Context,
+    path: Annotated[Path, typer.Option("--json", exists=True, dir_okay=False)],
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    report = _prepare(
+        cli, lambda: VerificationReport.model_validate_json(path.read_text(encoding="utf-8"))
+    )
+    _run(
+        cli,
+        lambda repository: commands.record_verification(
+            repository, report, actor_id=cli.actor or "human", idempotency_key=cli.idempotency_key
+        ),
+        "検査結果を記録しました",
+    )
+
+
+@baseline_app.command("add")
+def baseline_add(
+    context: typer.Context,
+    variant_id: Annotated[str, typer.Argument()],
+    label: Annotated[str, typer.Option("--label")],
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run(
+        cli,
+        lambda repository: commands.record_baseline(
+            repository,
+            variant_id,
+            label=label,
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "基準版を記録しました",
+    )
+
+
+@project_best_app.command("flag")
+def best_flag(
+    context: typer.Context,
+    symptom: Annotated[str, typer.Option("--symptom")],
+    session: Annotated[str, typer.Option("--session")],
+    reason: Annotated[str, typer.Option("--reason")],
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run(
+        cli,
+        lambda repository: commands.flag_current_best(
+            repository,
+            symptom_id=symptom,
+            session_id=session,
+            reason=reason,
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "回帰の印を記録しました",
+    )

@@ -28,6 +28,7 @@ from abar.app.event_payloads import (
 from abar.app.events import child_key, draft
 from abar.app.repository import WorkspaceRepository
 from abar.app.state import ABARState
+from abar.app.verification_guards import verification_warnings
 from abar.compare.models import (
     ComparisonPlan,
     CriterionSnapshot,
@@ -76,7 +77,8 @@ def create_observation_session(
     *,
     first_variant: str,
     second_variant: str,
-    focus: str,
+    focus: str | None = None,
+    symptom_id: str | None = None,
     size: SessionSize = "short",
     evidence_count: int | None = None,
     recipe: RecipeRef | None = None,
@@ -94,6 +96,7 @@ def create_observation_session(
         first_variant=first_variant,
         second_variant=second_variant,
         focus=focus,
+        symptom_id=symptom_id,
         size=size,
         evidence_count=evidence_count,
         recipe=recipe,
@@ -140,6 +143,7 @@ def _create_project_session(
     proposed_variant: str | None = None,
     update_best: bool = False,
     focus: str | None = None,
+    symptom_id: str | None = None,
     size: SessionSize = "short",
     evidence_count: int | None = None,
     recipe: RecipeRef | None = None,
@@ -158,6 +162,7 @@ def _create_project_session(
         "second_variant": second_variant,
         "proposed_variant": proposed_variant,
         "focus": focus,
+        "symptom_id": symptom_id,
         "size": size,
         "recipe": None if recipe is None else _recipe_payload(recipe),
         "topic_key": topic_key,
@@ -182,12 +187,37 @@ def _create_project_session(
     project = state.project.project
     if project is None:
         raise CommandError("Project does not exist")
+    if symptom_id is not None:
+        symptom = state.research.symptoms.get(symptom_id)
+        if symptom is None:
+            raise CommandError("unknown Symptom")
+        symptom_focus = f"観点：{symptom.title}"  # noqa: RUF001
+        if focus is not None and focus != symptom_focus:
+            raise CommandError("--symptom determines the Session focus")
+        focus = symptom_focus
     if update_best:
         if proposed_variant is None:
             raise CommandError("--update-best requires proposed Variant")
         first_variant, second_variant = project.current_best_variant_id, proposed_variant
         if first_variant == second_variant:
             raise CommandError("Best Update proposal must differ from Current Best")
+        if any(
+            variant in state.research.baselines
+            or (
+                variant in state.compare.variants
+                and state.compare.variants[variant].kind == "baseline"
+            )
+            for variant in (first_variant, second_variant)
+        ):
+            raise CommandError("baseline Variants require an observation Session")
+        proposed = state.compare.variants.get(proposed_variant)
+        if proposed is not None and proposed.kind in {
+            "control",
+            "reference",
+            "tap",
+            "symptom_region",
+        }:
+            raise CommandError("diagnostic Variant kind cannot be a Best Update proposal")
         size = "standard"
         evidence_count = 3
         selected_recipe = project.primary_recipe
@@ -200,7 +230,7 @@ def _create_project_session(
         selected_recipe = recipe or project.primary_recipe
         selected_focus = focus
     assert first_variant is not None and second_variant is not None
-    validate_focus(selected_focus)
+    validate_focus(selected_focus, max_length=203 if symptom_id else 200)
     for variant in (first_variant, second_variant):
         if variant != "source" and variant not in state.compare.variants:
             raise CommandError("expected source or an existing bare Variant ID (without variant:)")
@@ -220,6 +250,7 @@ def _create_project_session(
         else observation_session_fingerprint(
             pair=(first_variant, second_variant),
             focus=selected_focus,
+            symptom_id=symptom_id,
             evidence_clip_ids=selected_clips,
             recipe=selected_recipe,
             same_check=same_check,
@@ -235,6 +266,7 @@ def _create_project_session(
         }:
             raise CommandError("an unfinished Session with the same fingerprint already exists")
     evidence_data: list[PreparedComparison] = []
+    warnings: list[str] = []
     render_cache = repository.render_memo
     for index, clip_id in enumerate(selected_clips, start=1):
         material_id = state.compare.clips[clip_id].material_id
@@ -249,6 +281,16 @@ def _create_project_session(
             state=state.compare,
             objects=repository.objects,
             render_cache=render_cache,
+        )
+        warnings.extend(
+            verification_warnings(
+                repository,
+                state,
+                built,
+                update_best=update_best,
+                symptom_id=symptom_id,
+                same_check=same_check,
+            )
         )
         evidence_data.append(built)
         if progress is not None:
@@ -311,6 +353,8 @@ def _create_project_session(
         "project_id": project.id,
         "core_session_id": session.id,
         "focus": selected_focus,
+        "symptom_id": symptom_id,
+        "warnings": list(dict.fromkeys(warnings)),
         "topic_key": topic_key,
         "size": size,
         "pair": [first_variant, second_variant],
@@ -333,6 +377,8 @@ def _create_project_session(
         project_id=project.id,
         core_session_id=session.id,
         focus=selected_focus,
+        symptom_id=symptom_id,
+        warnings=tuple(dict.fromkeys(warnings)),
         topic_key=topic_key,
         size=size,
         pair=(first_variant, second_variant),
@@ -374,6 +420,7 @@ def _create_project_session(
             draft(
                 "project_session.created",
                 project_session_payload,
+                schema_version=2,
                 idempotency_key=child_key(key, index),
             )
         )

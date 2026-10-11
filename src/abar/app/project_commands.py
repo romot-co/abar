@@ -79,29 +79,58 @@ def configure_project(
     *,
     recipe: RecipeRef | None = None,
     ready_session_limit: int | None = None,
+    prescreen_indicator_id: str | None = None,
+    clear_prescreen_indicator: bool = False,
+    actor: Actor | None = None,
     idempotency_key: str | None = None,
 ) -> bool:
+    prescreen_requested = prescreen_indicator_id is not None or clear_prescreen_indicator
+    if prescreen_requested:
+        if actor is None or actor.role != "human":
+            raise CommandError("human authority is required for prescreen selection")
+        if prescreen_indicator_id is not None and clear_prescreen_indicator:
+            raise CommandError("choose either a prescreen Indicator or its removal")
     key = operation_key(idempotency_key)
+    request_data: dict[str, JSONValue] = {
+        "recipe": None if recipe is None else recipe_payload(recipe),
+        "ready_session_limit": ready_session_limit,
+    }
+    if prescreen_requested:
+        request_data.update(
+            {
+                "prescreen_indicator_id": prescreen_indicator_id,
+                "clear_prescreen_indicator": clear_prescreen_indicator,
+                "actor_id": actor.id if actor is not None else None,
+            }
+        )
     fingerprint = request_hash(
         "project.configure",
-        {
-            "recipe": None if recipe is None else recipe_payload(recipe),
-            "ready_session_limit": ready_session_limit,
-        },
+        request_data,
     )
     if (
         existing_operation(
             repository,
             key,
-            "project.config.changed",
+            "project.prescreen_indicator.changed"
+            if prescreen_requested
+            else "project.config.changed",
             request_hash=fingerprint,
         )
         is not None
     ):
         return True
-    project = repository.state().project.project
+    state = repository.state()
+    project = state.project.project
     if project is None:
         raise CommandError("Project does not exist")
+    if prescreen_indicator_id is not None:
+        if prescreen_indicator_id not in state.research.indicators:
+            raise CommandError("unknown prescreen Indicator")
+        if not any(
+            entry.indicator_id == prescreen_indicator_id and entry.status == "validated"
+            for entry in state.research.dictionary.values()
+        ):
+            raise CommandError("prescreen Indicator requires a validated dictionary entry")
     payload: dict[str, JSONValue] = {
         "project_id": project.id,
         "request_hash": fingerprint,
@@ -112,9 +141,35 @@ def configure_project(
         if ready_session_limit < 1:
             raise CommandError("ready Session limit must be positive")
         payload["ready_session_limit"] = ready_session_limit
-    if len(payload) == 2:
+    config_changed = len(payload) > 2
+    prescreen_changed = prescreen_requested and (
+        prescreen_indicator_id != state.research.prescreen_indicator_id
+    )
+    if not config_changed and not prescreen_changed:
         return False
-    repository.events.append(draft("project.config.changed", payload, idempotency_key=key))
+    with repository.events.transaction(causation_id=key) as tx:
+        if config_changed:
+            tx.append(
+                draft(
+                    "project.config.changed",
+                    payload,
+                    idempotency_key=child_key(key, 0) if prescreen_requested else key,
+                )
+            )
+        if prescreen_requested:
+            assert actor is not None
+            tx.append(
+                draft(
+                    "project.prescreen_indicator.changed",
+                    {
+                        "project_id": project.id,
+                        "indicator_id": prescreen_indicator_id,
+                        "actor_id": actor.id,
+                        "request_hash": fingerprint,
+                    },
+                    idempotency_key=key,
+                )
+            )
     return True
 
 

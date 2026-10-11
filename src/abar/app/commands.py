@@ -14,6 +14,8 @@ from typing import cast
 
 from abar.app import (
     catalog_commands,
+    diagnostic_commands,
+    dictionary_commands,
     materialization_commands,
     observation_commands,
     project_commands,
@@ -49,6 +51,14 @@ def _serialized[**P, R](command: Callable[P, R]) -> Callable[P, R]:
     return run
 
 
+add_symptom = _serialized(diagnostic_commands.add_symptom)
+add_dictionary_entry = _serialized(dictionary_commands.add_dictionary_entry)
+update_dictionary_entry = _serialized(dictionary_commands.update_dictionary_entry)
+update_symptom = _serialized(diagnostic_commands.update_symptom)
+transition_symptom = _serialized(diagnostic_commands.transition_symptom)
+record_verification = _serialized(diagnostic_commands.record_verification)
+record_baseline = _serialized(diagnostic_commands.record_baseline)
+flag_current_best = _serialized(diagnostic_commands.flag_current_best)
 add_clip = _serialized(catalog_commands.add_clip)
 add_material = _serialized(catalog_commands.add_material)
 add_materials = _serialized(catalog_commands.add_materials)
@@ -83,8 +93,10 @@ __all__ = [
     "SessionPreparationProgress",
     "abandon_session",
     "add_clip",
+    "add_dictionary_entry",
     "add_material",
     "add_materials",
+    "add_symptom",
     "add_variant",
     "add_variant_archive",
     "change_brief",
@@ -96,18 +108,24 @@ __all__ = [
     "create_simplification",
     "decide_simplification",
     "export_project",
+    "flag_current_best",
     "import_audio",
     "init_project",
     "materialize_variant",
     "operation_key",
     "pause_session",
+    "record_baseline",
     "record_indicator_value",
     "record_judgment",
+    "record_verification",
     "register_indicator",
     "reveal_session",
     "set_current_best_manual",
     "skip_delivery",
     "start_session",
+    "transition_symptom",
+    "update_dictionary_entry",
     "update_indicator",
+    "update_symptom",
     "write_note",
 ]

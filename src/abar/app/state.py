@@ -29,7 +29,14 @@ def reduce_state(state: ABARState, event: EventEnvelope) -> ABARState:
     if event.event_type in COMPARE_SCHEMAS:
         return replace(state, compare=reduce_compare(state.compare, event))
     if event.event_type in PROJECT_SCHEMAS:
-        return replace(state, project=reduce_project(state.project, event))
+        return replace(
+            state,
+            project=reduce_project(state.project, event),
+            research=replace(state.research, current_best_flags=())
+            if event.event_type == "current_best.changed"
+            and event.payload["from_variant_id"] != event.payload["to_variant_id"]
+            else state.research,
+        )
     if event.event_type in RESEARCH_SCHEMAS:
         return replace(state, research=reduce_research(state.research, event))
     return state

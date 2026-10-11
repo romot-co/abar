@@ -76,9 +76,20 @@ def _check_no_project(repository: WorkspaceRepository) -> None:
     assert repository.state().project.project is None
 
 
+def _check_diagnosis(repository: WorkspaceRepository) -> None:
+    state = repository.state()
+    assert state.research.symptoms
+    assert state.research.current_best_flags
+    assert any(
+        judgment.held and judgment.blockers["b"].range
+        for judgment in state.compare.judgments.values()
+    )
+
+
 CHECKS: dict[str, Callable[[WorkspaceRepository], None]] = {
     "standard": _check_standard,
     "fresh": _check_fresh,
+    "diagnosis": _check_diagnosis,
     "all-done": _check_all_done,
     "quick-listen": _check_quick_listen,
     "simplification": _check_simplification,
@@ -167,5 +178,54 @@ def _event_count(workspace: Path) -> int:
     repository = WorkspaceRepository.open(workspace)
     try:
         return len(repository.events.read_all())
+    finally:
+        repository.close()
+
+
+def test_mock_promotes_human_ranged_blocker_and_records_scoped_verification(tmp_path: Path) -> None:
+    from abar.compare.models import BlockerInput, TimeRange
+
+    (workspace,) = seed_scenarios(tmp_path, ("fresh",))
+    repository = WorkspaceRepository.open(workspace)
+    try:
+        state = repository.state()
+        observation = next(
+            session
+            for session in state.research.project_sessions.values()
+            if len(session.evidence_item_ids) == 1
+        )
+        commands.start_session(repository, observation.core_session_id, allocation_seed=2)
+        delivery = next(
+            delivery
+            for delivery in repository.state().compare.deliveries.values()
+            if delivery.session_id == observation.core_session_id
+        )
+        commands.record_judgment(
+            repository,
+            delivery.id,
+            held=True,
+            blocker_b=BlockerInput(True, "ミョイン", TimeRange(0.2, 0.8)),
+        )
+        previous_judgments = dict(repository.state().compare.judgments)
+    finally:
+        repository.close()
+    agent = MockAgent(workspace, keep_ready=2)
+    assert any("症状に登録" in line for line in agent.tick())
+    repository = WorkspaceRepository.open(workspace)
+    try:
+        state = repository.state()
+        symptom = next(iter(state.research.symptoms.values()))
+        assert symptom.title == "ミョイン"
+        assert any(
+            report.variant_id == symptom.variant_id and report.material_id == symptom.material_id
+            for report in state.research.verifications.values()
+        )
+        assert state.compare.judgments == previous_judgments
+    finally:
+        repository.close()
+    agent.tick()
+    repository = WorkspaceRepository.open(workspace)
+    try:
+        assert len(repository.state().research.symptoms) == 1
     finally:
         repository.close()

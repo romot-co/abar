@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type Action, type Deck, type Judgment } from "../api";
 import { humanError, isNetworkError, isSkipConfirmationRequired } from "../errors";
 import { useComparisonPlayer } from "../useComparisonPlayer";
-import { EMPTY_DRAFT, buildRequest, type AnswerDraft } from "./answerDraft";
+import { EMPTY_DRAFT, buildRequest, toggleBlocker, type AnswerDraft } from "./answerDraft";
 import { AnswerDock, AnswerEditor, DeckHeader, ListeningPanel, PausedPanel, SkipConfirmBar } from "./DeckPanels";
 import { SessionSummary } from "./SessionSummary";
 import { useDeckShortcuts } from "./useDeckShortcuts";
@@ -111,7 +111,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
   const busy = answer.isPending || skip.isPending || finishedDelivery === deliveryId;
   const heardBoth = player.heard.a && player.heard.b;
   const canAnswer = deliveryId !== null && heardBoth && !player.loading && player.error === null && !busy;
-  const canSubmit = canAnswer && draft.preference !== null;
+  const canSubmit = canAnswer && (draft.preference !== null || draft.held);
   const canSkip = deliveryId !== null && !busy;
   const submit = useCallback(() => {
     if (!deliveryId || !canSubmit || inFlightRef.current === deliveryId) return;
@@ -153,14 +153,17 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
     canSkip,
     canSubmit,
     preference: draft.preference,
+    held: draft.held,
+    onToggleLoop: player.toggleLoop,
+    onToggleHeld: () => setDraft((value) => ({ ...value, held: !value.held, preference: null })),
     onToggleHelp: () => setShowHelp((value) => !value),
     onSkip: () => requestSkip(false),
     onSwitchSlot: () => void player.switchSlot(),
-    onPreference: (preference: 1 | 2 | 3 | 4 | 5) => setDraft((value) => ({ ...value, preference })),
-    onToggleBlocker: (slot: "a" | "b") => setDraft((value) => { const key = slot === "a" ? "blockerA" : "blockerB"; return { ...value, [key]: { selected: !value[key].selected, note: "" } }; }),
+    onPreference: (preference: 1 | 2 | 3 | 4 | 5) => setDraft((value) => ({ ...value, preference, held: false })),
+    onToggleBlocker: (slot: "a" | "b") => setDraft((value) => { const key = slot === "a" ? "blockerA" : "blockerB"; return { ...value, [key]: toggleBlocker(value[key], player.loop) }; }),
     onFocusComment: () => commentRef.current?.focus(),
     onSubmit: submit,
-  }), [answering, canAnswer, canSkip, canSubmit, draft.preference, player.switchSlot, requestSkip, setDraft, skipConfirm, submit]);
+  }), [answering, canAnswer, canSkip, canSubmit, draft.preference, draft.held, player.loop, player.toggleLoop, player.switchSlot, requestSkip, setDraft, skipConfirm, submit]);
   useDeckShortcuts(shortcuts);
 
   if (completedSessionId) {
@@ -211,7 +214,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           {actionError && <InlineError>{actionError}</InlineError>}
           {skipError && <InlineError>{skipError}</InlineError>}
           {revealError && <InlineError>{revealError}</InlineError>}
-          {showHelp && <aside className="nibi-notice shortcut-help" aria-label="キーボード操作">Space A/B切替 · 1〜5 選好 · A/B 問題の指摘 · N メモ · Enter 記録 · 0 飛ばす · ? この一覧（ボタンにフォーカスがあるときの Space・Enter はそのボタンを押します）</aside>}
+          {showHelp && <aside className="nibi-notice shortcut-help" aria-label="キーボード操作">Space A/B切替 · 1〜5 選好 · A/B 問題の指摘 · L ループ · H 保留 · N メモ · Enter 記録 · 0 飛ばす · ? この一覧（ボタンにフォーカスがあるときの Space・Enter はそのボタンを押します）</aside>}
         </div>
         <ListeningPanel
           player={player}
@@ -226,6 +229,8 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
             locked={!canAnswer}
             heard={player.heard}
             draft={draft}
+            loop={player.loop}
+            wordCandidates={deck.word_candidates ?? []}
             commentRef={commentRef}
             error={answerError}
             onChange={setDraft}
@@ -244,7 +249,8 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           />
         ) : null}
         onSkip={() => requestSkip(false)}
-        showSubmit={draft.preference !== null}
+        showSubmit={draft.preference !== null || draft.held}
+        held={draft.held}
         canSubmit={canSubmit}
         submitting={answer.isPending}
         onSubmit={submit}

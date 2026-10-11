@@ -69,9 +69,11 @@ export type OrientedAnswer =
   | { kind: "directed"; position: Preference }
   /** 両側が同じ音(同一音の確認)か、どちらの端か分からない: 向きを持たず、強さだけを左右対称に示す。 */
   | { kind: "symmetric"; distance: 0 | 1 | 2 }
+  | { kind: "held" }
   | { kind: "missing" };
 
-export function orientAnswer(item: RelistenItemView, ends: GaugeEnds, preference: Preference | null): OrientedAnswer {
+export function orientAnswer(item: RelistenItemView, ends: GaugeEnds, preference: Preference | null, held = item.judgment?.held ?? false): OrientedAnswer {
+  if (held) return { kind: "held" };
   if (preference === null) return { kind: "missing" };
   if (ends.bySlot) return { kind: "directed", position: preference };
   const a = identityKey(item.identity_by_slot.A);
@@ -91,10 +93,11 @@ export type Strength = "clear" | "slight";
 export type RowGauge = {
   side: "left" | "right" | "center" | null;
   blocks: Strength[];
-  word: "明確" | "わずか" | "互角" | "差を報告" | "飛ばした" | "未回答";
+  word: "明確" | "わずか" | "互角" | "差を報告" | "飛ばした" | "未回答" | "保留";
 };
 
 export function rowGauge(answer: OrientedAnswer, skipped = false): RowGauge {
+  if (answer.kind === "held") return { side: null, blocks: [], word: "保留" };
   if (answer.kind === "missing") return { side: null, blocks: [], word: skipped ? "飛ばした" : "未回答" };
   if (answer.kind === "symmetric") {
     if (answer.distance === 0) return { side: "center", blocks: [], word: "互角" };
@@ -142,6 +145,7 @@ export function supportChart(answers: readonly OrientedAnswer[], required: numbe
 
 /** ゲージの読み上げ(と見た目の意味): 端の名前へ正規化した支持。 */
 export function answerWords(answer: OrientedAnswer, ends: GaugeEnds): string {
+  if (answer.kind === "held") return "保留";
   if (answer.kind === "missing") return "未回答";
   if (answer.kind === "symmetric") return answer.distance === 0 ? "差なし" : `差を報告（${answer.distance === 2 ? "明確" : "わずか"}）`;
   if (answer.position === 3) return "互角";

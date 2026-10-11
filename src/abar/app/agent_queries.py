@@ -5,6 +5,11 @@ from dataclasses import asdict
 from typing import Literal, cast
 
 from abar.app.dashboard_queries import indicator_summaries, session_cards
+from abar.app.diagnostic_queries import (
+    dictionary_entries,
+    symptom_summaries,
+    verification_documents,
+)
 from abar.app.query_support import (
     public_session_status,
     recipe_label,
@@ -21,6 +26,7 @@ from abar.app.views import (
     EntityView,
     HistoryView,
     IndicatorValueSnapshotView,
+    LoopTelemetryView,
     MaterialSnapshotView,
     ProjectSessionJudgmentView,
     ProjectSessionSnapshotView,
@@ -28,6 +34,7 @@ from abar.app.views import (
     ResolvedOperandSnapshotView,
     ResultBlockerView,
     TelemetryView,
+    TimeRangeView,
 )
 from abar.compare.sealing import public_delivery
 
@@ -41,7 +48,12 @@ def project_view(repository: WorkspaceRepository, *, since: int = 0) -> ProjectV
     events = tuple(item for item in all_events if item.event_seq > since)[:1000]
     return ProjectView(
         project_id=project.id,
+        dictionary=dictionary_entries(state),
+        prescreen_indicator_id=state.research.prescreen_indicator_id,
         name=project.name,
+        symptoms=symptom_summaries(state),
+        baselines=state.research.baselines,
+        verifications=verification_documents(state),
         brief=project.brief_text,
         brief_revision=project.brief_revision,
         brief_history=tuple(
@@ -235,10 +247,17 @@ def _project_session_documents(state: ABARState) -> tuple[ProjectSessionSnapshot
                     delivery_id=delivery.id,
                     sequence_index=delivery.sequence_index,
                     preference=judgment.preference,
+                    held=judgment.held,
+                    comment_range=None
+                    if judgment.comment_range is None
+                    else TimeRangeView(**asdict(judgment.comment_range)),
                     blockers={
                         slot: ResultBlockerView(
                             selected=blocker.selected,
                             note=blocker.note,
+                            range=None
+                            if blocker.range is None
+                            else TimeRangeView(**asdict(blocker.range)),
                         )
                         for slot, blocker in judgment.blockers.items()
                     },
@@ -248,6 +267,9 @@ def _project_session_documents(state: ABARState) -> tuple[ProjectSessionSnapshot
                         listen_ms=judgment.telemetry.listen_ms,
                         switches=judgment.telemetry.switches,
                         answer_ms=judgment.telemetry.answer_ms,
+                        loops=tuple(
+                            LoopTelemetryView(**asdict(loop)) for loop in judgment.telemetry.loops
+                        ),
                     ),
                     identity_by_slot=identity_by_slot,
                 )
@@ -261,6 +283,8 @@ def _project_session_documents(state: ABARState) -> tuple[ProjectSessionSnapshot
             ProjectSessionSnapshotView(
                 project_session_id=project_session.id,
                 focus=project_session.focus,
+                symptom_id=project_session.symptom_id,
+                warnings=project_session.warnings,
                 topic_key=project_session.topic_key,
                 size=project_session.size,
                 recipe=recipe_label(project_session.recipe),
