@@ -5,15 +5,17 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from abar.compare.models import RecipeRef, VariantRef
+from abar.compare.models import RecipeRef, TimeRange, VariantRef
 from abar.research.session_sizes import SessionSize, resolve_evidence_count
 
 _INDICATOR_ID = re.compile(r"^ind_[a-z0-9][a-z0-9_-]*_v[1-9][0-9]*$")
 
 
-def validate_focus(focus: str) -> None:
-    if not focus.strip() or len(focus) > 200 or "\n" in focus:
-        raise ValueError("focus must be a non-empty single line of at most 200 code points")
+def validate_focus(focus: str, *, max_length: int = 200) -> None:
+    if not focus.strip() or len(focus) > max_length or "\n" in focus:
+        raise ValueError(
+            f"focus must be a non-empty single line of at most {max_length} code points"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,9 +39,11 @@ class ProjectSession:
     created_by_type: Literal["agent", "human"]
     created_by_id: str
     fingerprint: str
+    symptom_id: str | None = None
+    warnings: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        validate_focus(self.focus)
+        validate_focus(self.focus, max_length=203 if self.symptom_id else 200)
         resolve_evidence_count(self.size, len(self.evidence_item_ids))
         if len(self.evidence_clip_ids) != len(self.evidence_item_ids):
             raise ValueError("Project Session requires one Clip for each evidence item")
@@ -101,4 +105,38 @@ class NoteRevision:
     markdown: str
     content_sha: str
     actor_id: str
+    event_seq: int
+
+
+@dataclass(frozen=True, slots=True)
+class Symptom:
+    id: str
+    project_id: str
+    title: str
+    source_delivery_id: str
+    source_slot: Literal["a", "b"]
+    variant_id: str
+    material_id: str
+    clip_id: str
+    range: "TimeRange"
+    context_seconds: float
+    audio_pcm_sha: str
+    status: Literal["open", "resolved", "withdrawn"]
+    facts: str
+    hypotheses: str
+    dictionary_terms: tuple[str, ...]
+    created_event_seq: int
+
+    def __post_init__(self) -> None:
+        validate_focus(self.title)
+        if not math.isfinite(self.context_seconds) or self.context_seconds < 0:
+            raise ValueError("symptom context must be finite and non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class BestFlag:
+    symptom_id: str
+    session_id: str
+    reason: str
+    variant_id: str
     event_seq: int

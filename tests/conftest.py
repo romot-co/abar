@@ -9,7 +9,7 @@ from abar.app.events import child_key, draft
 from abar.app.repository import WorkspaceRepository
 from abar.compare.audio.content import decode_wav_bytes, encode_float32_wav
 from abar.compare.audio.importing import import_canonical_wav_bytes
-from abar.compare.models import AudioObject
+from abar.compare.models import AudioObject, VariantKind
 from abar.foundation.json_types import JSONValue
 
 
@@ -40,6 +40,7 @@ def persist_finite_variant(
     *,
     label: str,
     same_as_source: bool,
+    kind: VariantKind = "candidate",
 ) -> str:
     state = repository.state()
     project = state.project.project
@@ -105,4 +106,4 @@ def persist_finite_variant(
             "channel_layouts": ["mono"],
         },
     }
-    return commands.add_variant(repository, manifest, label=label)
+    return commands.add_variant(repository, manifest, label=label, kind=kind)

@@ -21,6 +21,9 @@ export function conclusion(result: SessionResultView | null, ends: GaugeEnds, ax
   const required = result.favored_required_count;
   const total = result.evidence_count;
   const evidence = result.best_update_evidence;
+  if (result.evidence_count > 0 && result.held_count === result.evidence_count) {
+    return { headline: "この問いでは判断できませんでした", detail: `保留 ${result.held_count} 件。現在最良は変わりません。` };
+  }
   if (evidence) {
     if (result.current_best_updated) {
       return {
@@ -34,7 +37,7 @@ export function conclusion(result: SessionResultView | null, ends: GaugeEnds, ax
   const counts = Object.keys(result.variant_labels).map((key) => ({ key, count: result.evidence_direction_counts[key] ?? 0 }));
   const ties = result.evidence_direction_counts.tie ?? 0;
   const need = `優勢には ${total} 件中 ${required} 件が必要です。`;
-  const unchanged = "現在最良は変わりません。";
+  const unchanged = `${result.held_count ? `保留 ${result.held_count} 件。` : ""}現在最良は変わりません。`;
   if (result.favored_variant_id !== null) {
     return { headline: `${nameOf(result.favored_variant_id)} が優勢でした`, detail: `${need}${unchanged}` };
   }
@@ -55,8 +58,10 @@ export function conclusion(result: SessionResultView | null, ends: GaugeEnds, ax
 // 更新しなかった理由を、サーバーの判定順(未回答 → 問題の報告 → 必要数 → 強さの合計)に合わせて一つだけ言う。
 function keepReason(result: SessionResultView): string {
   const evidence = result.best_update_evidence;
+
   const required = result.favored_required_count;
   if (!evidence) return "";
+  if ((result.held_count ?? 0) > 0) return `保留 ${result.held_count} 件があるため、更新の条件を満たしませんでした。`;
   if (evidence.answered_count < evidence.evidence_count) return "飛ばした比較があるため、更新の条件を満たしませんでした。";
   if (evidence.blocker_count > 0) return "提案に残せない問題が報告されたため、更新しませんでした。";
   if (evidence.favorable_count < required) {

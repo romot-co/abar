@@ -73,6 +73,7 @@ def observation_session_fingerprint(
     recipe: RecipeRef,
     same_check: bool,
     repeat_check: bool,
+    symptom_id: str | None = None,
 ) -> str:
     document: dict[str, JSONValue] = {
         "kind": "observation",
@@ -83,6 +84,8 @@ def observation_session_fingerprint(
         "same_check": same_check,
         "repeat_check": repeat_check,
     }
+    if symptom_id is not None:
+        document["symptom_id"] = symptom_id
     return canonical_sha256(document)
 
 

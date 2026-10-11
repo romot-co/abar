@@ -7,6 +7,7 @@ import type { RelistenItemView, SessionResultView } from "../generated";
 import { Icon } from "../Icon";
 import { Mark, type MarkKind } from "../Mark";
 import { axisNames, shortenPair, type CandidateName } from "./candidateNames";
+import { variantKindLabel } from "./variantKinds";
 import { answerWords, gaugeEnds, identityKey, orientAnswer, rowGauge, supportChart, type GaugeEnds, type OrientedAnswer, type Preference, type RowGauge, type SupportChart } from "./gauge";
 import { conclusion } from "./resultCopy";
 import { InlineError } from "../InlineError";
@@ -84,7 +85,7 @@ export function SessionSummary({ sessionId, onBack, onNext }: { sessionId: strin
           <section className="nibi-panel tally-panel" aria-label="支持の数">
             <Tally result={result} ends={ends} axis={axis} names={[leftName, rightName]} plan={data.current_best_check} />
             <SupportChartView chart={supportChart(oriented.filter((_, index) => answers[index]?.role === "evidence"), result.favored_required_count, result.evidence_count)} />
-            {!ends.bySlot && <NamesDisclosure names={[leftName, rightName]} />}
+            {!ends.bySlot && <NamesDisclosure names={[leftName, rightName]} kinds={[ends.left.key, ends.right.key].map((key) => data.items.flatMap((item) => Object.values(item.identity_by_slot)).find((identity) => identityKey(identity) === key)?.kind)} />}
           </section>
         )}
 
@@ -170,7 +171,7 @@ function Tally({ result, ends, axis, names, plan }: { result: SessionResultView;
   const count = (key: string) => result.evidence_direction_counts[key] ?? 0;
   const ties = result.evidence_direction_counts.tie ?? 0;
   const answered = Object.values(result.evidence_direction_counts).reduce((total, value) => total + value, 0);
-  const missing = Math.max(0, result.evidence_count - answered);
+  const missing = Math.max(0, result.evidence_count - answered - (result.held_count ?? 0));
   const roles = plan || axis.aliased;
   const favored = result.favored_variant_id;
   return (
@@ -188,6 +189,7 @@ function Tally({ result, ends, axis, names, plan }: { result: SessionResultView;
       <span className={favored === ends.left.key ? "nibi-display tally-count start favored" : "nibi-display tally-count start"} aria-label={`${axis.left} ${count(ends.left.key)} 件`}>{count(ends.left.key)}</span>
       <span className="tally-middle">
         <span className="nibi-body">互角 {ties}</span>
+        {(result.held_count ?? 0) > 0 && <span className="nibi-body">保留 {result.held_count}</span>}
         {missing > 0 && <span className="nibi-body">未回答 {missing}</span>}
       </span>
       <span className={favored === ends.right.key ? "nibi-display tally-count end favored" : "nibi-display tally-count end"} aria-label={`${axis.right} ${count(ends.right.key)} 件`}>{count(ends.right.key)}</span>
@@ -214,7 +216,7 @@ function SupportChartView({ chart }: { chart: SupportChart }) {
   );
 }
 
-function NamesDisclosure({ names }: { names: [CandidateName, CandidateName] }) {
+function NamesDisclosure({ names, kinds }: { names: [CandidateName, CandidateName]; kinds: (string | null | undefined)[] }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="nibi-disclosure nibi-disclosure--link names-disclosure">
@@ -230,6 +232,7 @@ function NamesDisclosure({ names }: { names: [CandidateName, CandidateName] }) {
                 {name.tokens.map((token, tokenIndex) => (
                   <span key={tokenIndex} className={token.differs ? "candidate-token differs" : "candidate-token"}>{tokenIndex > 0 ? " " : ""}{token.text}</span>
                 ))}
+                {variantKindLabel(kinds[index]) && <span> · {variantKindLabel(kinds[index])}</span>}
               </span>
             </p>
           ))}
@@ -295,14 +298,16 @@ function answerNote(item: RelistenItemView, ends: GaugeEnds): string {
     const upper = slot === "a" ? "A" : "B";
     const key = identityKey(item.identity_by_slot[upper]);
     const name = ends.bySlot ? upper : key === ends.left.key ? ends.left.label : key === ends.right.key ? ends.right.label : upper;
-    notes.push(`${name} に問題${blocker.note ? `（${blocker.note}）` : ""}`);
+    const detail = [blocker.range ? `${blocker.range.start_seconds.toFixed(2)}–${blocker.range.end_seconds.toFixed(2)} s` : null, blocker.note].filter(Boolean).join(" ");
+    notes.push(`${name} に問題${detail ? `（${detail}）` : ""}`);
   }
-  if (item.judgment.comment) notes.push(item.judgment.comment);
+  if (item.judgment.comment) notes.push(`${item.judgment.comment}${item.judgment.comment_range ? `（${item.judgment.comment_range.start_seconds.toFixed(2)}–${item.judgment.comment_range.end_seconds.toFixed(2)} s）` : ""}`);
   return notes.join(" · ");
 }
 
 function checkResult(item: RelistenItemView, result: SessionResultView | null): { kind: MarkKind; words: string } {
   const preference = preferenceOf(item);
+  if (item.judgment?.held) return { kind: "unknown", words: "保留" };
   if (preference === null) return { kind: "unknown", words: item.skipped ? "飛ばした" : "未回答" };
   if (item.role === "same") {
     if (preference === 3) return { kind: "pass", words: "一致" };
@@ -310,7 +315,7 @@ function checkResult(item: RelistenItemView, result: SessionResultView | null): 
   }
   const value = result?.repeat_result;
   const kind: MarkKind = value === "same_category" || value === "same_direction" ? "pass" : value === "reversed" ? "fail" : "unknown";
-  return { kind, words: repeatResultLabel(value) };
+  return { kind, words: value === "missing" && result?.repeat_held ? "保留" : repeatResultLabel(value) };
 }
 
 function repeatResultLabel(value: string | undefined): string {

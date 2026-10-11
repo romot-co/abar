@@ -123,3 +123,15 @@ test('an observation separates favoured, all ties, not enough answers, a split a
 test('a session outside a Project records only', () => {
   assert.equal(conclusion(null, gaugeEnds(null, []), { left: 'A', right: 'B' }, null).headline, '比較を記録しました');
 });
+
+test('held has no center dot, support or tie vote and is named in the conclusion', () => {
+  const held = item(best, proposal, null);
+  held.judgment = { preference: null, held: true, blockers: {}, comment: null };
+  const ends = gaugeEnds(planResult({}), []);
+  const answer = orientAnswer(held, ends, null);
+  assert.deepEqual(rowGauge(answer), { side: null, blocks: [], word: '保留' });
+  assert.equal(answerWords(answer, ends), '保留');
+  assert.deepEqual(supportChart([answer], 2, 3).left, []);
+  const result = { ...planResult({ answered_count: 0 }), held_count: 3, evidence_direction_counts: { v_new: 0, v_best: 0, tie: 0 }, favored_variant_id: null };
+  assert.equal(conclusion(result, ends, { left: 'best', right: 'new' }, 'new').headline, 'この問いでは判断できませんでした');
+});

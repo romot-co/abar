@@ -9,6 +9,9 @@ type ShortcutOptions = {
   canSkip: boolean;
   canSubmit: boolean;
   preference: Preference | null;
+  held: boolean;
+  onToggleLoop: () => void;
+  onToggleHeld: () => void;
   onToggleHelp: () => void;
   onSkip: () => void;
   onSwitchSlot: () => void;
@@ -51,13 +54,19 @@ export function useDeckShortcuts(options: ShortcutOptions): void {
         if (control) return;
         event.preventDefault();
         if (!event.repeat) options.onSwitchSlot();
+      } else if (key === "l" && !event.repeat) {
+        event.preventDefault();
+        options.onToggleLoop();
+      } else if (key === "h" && options.canAnswer && !event.repeat) {
+        event.preventDefault();
+        options.onToggleHeld();
       } else if (/^[1-5]$/.test(key) && options.canAnswer) {
         event.preventDefault();
         options.onPreference(Number(key) as Preference);
-      } else if ((key === "a" || key === "b") && options.preference !== null && options.canAnswer) {
+      } else if ((key === "a" || key === "b") && (options.preference !== null || options.held) && options.canAnswer) {
         event.preventDefault();
         options.onToggleBlocker(key);
-      } else if (key === "n" && options.preference !== null && options.canAnswer) {
+      } else if (key === "n" && (options.preference !== null || options.held) && options.canAnswer) {
         event.preventDefault();
         options.onFocusComment();
       } else if (event.key === "Enter") {

@@ -2,7 +2,7 @@
 
 import hashlib
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast
 
@@ -14,7 +14,7 @@ from abar.compare.audio.clip_selection import manual_clip_id
 from abar.compare.audio.importing import import_input_audio_file, import_material_file, slice_audio
 from abar.compare.bundles import validate_command_archive
 from abar.compare.manifests import VariantManifest
-from abar.compare.models import Clip, RecipeRef
+from abar.compare.models import Clip, RecipeRef, VariantKind
 from abar.compare.variants import register_variant
 from abar.foundation.json_types import JSONValue
 from abar.foundation.time_ids import new_id
@@ -336,6 +336,7 @@ def add_variant(
     *,
     params: dict[str, JSONValue] | None = None,
     label: str | None = None,
+    kind: VariantKind = "candidate",
     provenance: dict[str, JSONValue] | None = None,
     idempotency_key: str | None = None,
 ) -> str:
@@ -346,6 +347,7 @@ def add_variant(
             "manifest": manifest_document,
             "params": params,
             "label": label,
+            "kind": kind,
             "provenance": provenance,
         },
     )
@@ -358,6 +360,13 @@ def add_variant(
         label=label,
         provenance=provenance,
     )
+    registration = replace(registration, variant=replace(registration.variant, kind=kind))
+    if provenance is not None and provenance.get("of") is not None:
+        related = provenance["of"]
+        if not isinstance(related, str) or (
+            related != "source" and related not in repository.state().compare.variants
+        ):
+            raise CommandError("unknown related Variant")
     manifest = registration.manifest
     try:
         archive_bytes = repository.objects.read(manifest.source_archive.object_id)
@@ -411,6 +420,7 @@ def add_variant(
                 {
                     "variant_id": registration.variant.id,
                     "label": registration.variant.label,
+                    "kind": registration.variant.kind,
                     "manifest_id": registration.variant.manifest_id,
                     "resolved_params": registration.variant.resolved_params,
                     "render_contract": registration.variant.render_contract,
@@ -418,6 +428,7 @@ def add_variant(
                     "request_hash": fingerprint,
                 },
                 idempotency_key=child_key(key, 0),
+                schema_version=2,
             )
         )
         if provenance is not None:
@@ -438,6 +449,7 @@ def add_variant_archive(
     *,
     params: dict[str, JSONValue] | None = None,
     label: str | None = None,
+    kind: VariantKind = "candidate",
     provenance: dict[str, JSONValue] | None = None,
     idempotency_key: str | None = None,
 ) -> str:
@@ -475,6 +487,7 @@ def add_variant_archive(
         resolved_manifest,
         params=params,
         label=label,
+        kind=kind,
         provenance=provenance,
         idempotency_key=idempotency_key,
     )

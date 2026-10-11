@@ -37,7 +37,14 @@ from abar.app.events import child_key, draft
 from abar.app.repository import WorkspaceRepository
 from abar.compare.audio.content import decode_wav_bytes, encode_float32_wav
 from abar.compare.audio.importing import import_canonical_wav_bytes
-from abar.compare.models import AudioObject, BlockerInput, Telemetry
+from abar.compare.models import (
+    AudioObject,
+    BlockerInput,
+    RecipeRef,
+    Telemetry,
+    TimeRange,
+    VariantKind,
+)
 from abar.foundation.json_types import JSONValue
 from abar.infrastructure.object_store import ImmutableObjectStore
 
@@ -65,6 +72,7 @@ def _finite_map_variant(
     label: str,
     color_hz: float,
     depth: float,
+    kind: VariantKind = "candidate",
 ) -> str:
     """素材ごとに軽い変調を加えたRawRender済みVariantを登録する(tests/conftest.pyと同型)。"""
     state = repository.state()
@@ -132,7 +140,7 @@ def _finite_map_variant(
             "channel_layouts": ["mono"],
         },
     }
-    return commands.add_variant(repository, manifest, label=label)
+    return commands.add_variant(repository, manifest, label=label, kind=kind)
 
 
 def _answer_all(
@@ -655,9 +663,73 @@ def _delete_object(repository: WorkspaceRepository, object_id: str) -> None:
     path.unlink()
 
 
+def seed_diagnosis(workspace: Path) -> None:
+    """Completed fixture with ranged held evidence, Symptom and a regression flag."""
+    with tempfile.TemporaryDirectory(prefix="abar-seed-") as tmp:
+        repository = WorkspaceRepository.open(workspace)
+        try:
+            _start_project(
+                repository, Path(tmp), name="診断: 2.1", brief="Keep the air and natural tail"
+            )
+            variant = _finite_map_variant(
+                repository,
+                label="diagnostic-ablation",
+                color_hz=660.0,
+                depth=0.012,
+                kind="ablation",
+            )
+            session_id = commands.create_observation_session(
+                repository,
+                first_variant="source",
+                second_variant=variant,
+                focus="観点：尾のミョイン",  # noqa: RUF001
+                recipe=RecipeRef("native"),
+                actor_id="agent:dev-seed",
+            )
+            core = repository.state().research.project_sessions[session_id].core_session_id
+            commands.start_session(repository, core, allocation_seed=1)
+            delivery = next(
+                item
+                for item in repository.state().compare.deliveries.values()
+                if item.session_id == core
+            )
+            commands.record_judgment(
+                repository,
+                delivery.id,
+                held=True,
+                blocker_b=BlockerInput(True, "ミョイン", TimeRange(0.2, 0.8)),
+                comment="尾の質感",
+                comment_range=TimeRange(0.2, 0.8),
+                telemetry=Telemetry({"a": 1500, "b": 1600}, 2, 4000),
+            )
+            symptom = commands.add_symptom(
+                repository, delivery_id=delivery.id, side="b", actor_id="agent:dev-seed"
+            )
+            regression = commands.create_observation_session(
+                repository,
+                first_variant="source",
+                second_variant=variant,
+                symptom_id=symptom,
+                actor_id="agent:dev-seed",
+            )
+            core = repository.state().research.project_sessions[regression].core_session_id
+            commands.start_session(repository, core, allocation_seed=2)
+            _answer_all(repository, core, preferences=[3])
+            commands.flag_current_best(
+                repository,
+                symptom_id=symptom,
+                session_id=regression,
+                reason="dev fixture regression",
+                actor_id="agent:dev-seed",
+            )
+        finally:
+            repository.close()
+
+
 SCENARIOS: dict[str, Callable[[Path], None]] = {
     "standard": lambda workspace: seed(workspace, project_name="標準: Xifa"),
     "fresh": seed_fresh,
+    "diagnosis": seed_diagnosis,
     "all-done": seed_all_done,
     "quick-listen": seed_quick_listen,
     "simplification": seed_simplification,

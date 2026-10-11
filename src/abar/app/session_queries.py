@@ -1,6 +1,7 @@
 """Sealed, bounded application queries."""
 
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Literal, cast
 
 from abar.app.query_support import labeled_identity, recipe_label, variant_label
@@ -17,6 +18,7 @@ from abar.app.views import (
     SessionCompletionView,
     SessionOverviewView,
     SessionResultView,
+    TimeRangeView,
 )
 from abar.compare.models import Delivery
 from abar.compare.sealing import public_delivery
@@ -38,6 +40,8 @@ def session_overview(
         project_session_id=project_session_id,
         status=runtime.status,
         focus=project_session.focus,
+        symptom_id=project_session.symptom_id,
+        warnings=project_session.warnings,
         topic_key=project_session.topic_key,
         recipe=recipe_label(project_session.recipe),
         evidence_count=len(project_session.evidence_item_ids),
@@ -105,6 +109,8 @@ def session_result_from_state(state: ABARState, project_session_id: str) -> Sess
             variant_id: variant_label(state, variant_id) for variant_id in project_session.pair
         },
         evidence_direction_counts=result.evidence_direction_counts,
+        held_count=result.held_count,
+        repeat_held=result.repeat_held,
         score_by_variant=result.score_by_variant,
         favored_variant_id=result.favored_variant_id,
         favored_variant_label=None
@@ -167,7 +173,7 @@ def _evidence_result_views(
         blockers_by_variant: dict[str, tuple[str, ...]] = {}
         favored: str | None = None
         if judgment is not None:
-            signed_for_a = 3 - judgment.preference
+            signed_for_a = 0 if judgment.preference is None else 3 - judgment.preference
             variant_a = variant_by_slot["A"]
             variant_b = variant_by_slot["B"]
             score_by_variant = {variant_a: signed_for_a, variant_b: -signed_for_a}
@@ -186,6 +192,7 @@ def _evidence_result_views(
                 material_name=material.name,
                 sequence_index=delivery.sequence_index,
                 preference=None if judgment is None else judgment.preference,
+                held=False if judgment is None else judgment.held,
                 comment=None if judgment is None else judgment.comment,
                 identity_visible_at_answer=None
                 if judgment is None
@@ -331,6 +338,10 @@ def active_deck(
     audio = tuple(
         DeckAudioView(
             slot=slot,  # type: ignore[arg-type]
+            duration_seconds=state.compare.audio[
+                prepared.output_audio_by_input_key[input_key]
+            ].frames
+            / state.compare.audio[prepared.output_audio_by_input_key[input_key]].sample_rate,
             url=audio_url(
                 delivery.id,
                 slot,
@@ -341,13 +352,13 @@ def active_deck(
     )
     if project_session is None:
         label = None
-        question = "どちらを残しますか?"
+        question = "どちらを残しますか？"  # noqa: RUF001
     elif plan is not None:
         label = "目的"
-        question = "今の目的なら、どちらを残しますか?"
+        question = "今の目的なら、どちらを残しますか？"  # noqa: RUF001
     else:
-        label = "今回の確認"
-        question = "この焦点では、どちらを残しますか?"
+        label = "観点"
+        question = "この観点では、どちらを残しますか？"  # noqa: RUF001
     return ActiveDeckView(
         session_id=session_id if project_session is None else project_session.id,
         status=cast(Literal["active", "paused"], runtime.status),
@@ -424,6 +435,12 @@ def session_completion(
                 audio=tuple(
                     DeckAudioView(
                         slot=slot,  # type: ignore[arg-type]
+                        duration_seconds=state.compare.audio[
+                            prepared.output_audio_by_input_key[input_key]
+                        ].frames
+                        / state.compare.audio[
+                            prepared.output_audio_by_input_key[input_key]
+                        ].sample_rate,
                         url=audio_url(
                             delivery.id,
                             slot,
@@ -439,10 +456,17 @@ def session_completion(
                 if judgment is None
                 else ResultJudgmentView(
                     preference=judgment.preference,
+                    held=judgment.held,
+                    comment_range=None
+                    if judgment.comment_range is None
+                    else TimeRangeView(**asdict(judgment.comment_range)),
                     blockers={
                         slot: ResultBlockerView(
                             selected=blocker.selected,
                             note=blocker.note,
+                            range=None
+                            if blocker.range is None
+                            else TimeRangeView(**asdict(blocker.range)),
                         )
                         for slot, blocker in judgment.blockers.items()
                     },

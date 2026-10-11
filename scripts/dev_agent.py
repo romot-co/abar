@@ -24,12 +24,16 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from abar.app import commands
 from abar.app.actors import Actor
 from abar.app.queries import session_result
 from abar.app.repository import WorkspaceDegraded, WorkspaceRepository
 from abar.app.state import ABARState
+from abar.compare.models import TimeRange
+from abar.foundation.json_types import JSONValue
+from abar.research.verification import VerificationCheck, VerificationReport
 
 try:  # `python scripts/dev_agent.py` と `import scripts.dev_agent`(テスト)の両方で読めるようにする
     from dev_seed import _finite_map_variant  # pyright: ignore[reportPrivateUsage]
@@ -71,6 +75,8 @@ class MockAgent:
                 self.started = True
             try:
                 log = self._report_finished(repository, state)
+                log.extend(self._promote_ranged_blockers(repository))
+                log.extend(self._prepare_regression_checks(repository))
                 log.extend(self._refill(repository))
             except commands.CommandError as error:
                 # 実エージェントと同じく、拒否は記録して次の巡回で続ける。
@@ -92,8 +98,155 @@ class MockAgent:
             )
             log.append(line)
             commands.write_note(repository, _append_note(repository, line), actor_id=ACTOR_ID)
+            if (
+                project_session.topic_key
+                and project_session.topic_key.startswith("dev-regression:")
+                and project_session.symptom_id
+            ):
+                project = repository.state().project.project
+                assert project is not None
+                if (
+                    result.favored_variant_id is not None
+                    and result.favored_variant_id != project.current_best_variant_id
+                    and project.current_best_variant_id in project_session.pair
+                ):
+                    commands.flag_current_best(
+                        repository,
+                        symptom_id=project_session.symptom_id,
+                        session_id=project_session_id,
+                        reason="症状の再発確認で旧版が優勢",
+                        actor_id=ACTOR_ID,
+                        idempotency_key=f"dev-flag:{project_session_id}",
+                    )
             if result.current_best_updated:
                 log.extend(self._measure_current_best(repository))
+        return log
+
+    def _promote_ranged_blockers(self, repository: WorkspaceRepository) -> list[str]:
+        log: list[str] = []
+        state = repository.state()
+        registered = {
+            (symptom.source_delivery_id, symptom.source_slot)
+            for symptom in state.research.symptoms.values()
+        }
+        for delivery in state.compare.deliveries.values():
+            runtime = state.compare.session_runtime[delivery.session_id]
+            judgment = state.compare.effective_judgment(delivery.id)
+            if runtime.status != "ended" or not runtime.revealed or judgment is None:
+                continue
+            for side in ("a", "b"):
+                blocker = judgment.blockers[side]
+                if (
+                    not blocker.selected
+                    or blocker.range is None
+                    or (delivery.id, side) in registered
+                ):
+                    continue
+                try:
+                    symptom_id = commands.add_symptom(
+                        repository,
+                        delivery_id=delivery.id,
+                        side=side,
+                        actor_id=ACTOR_ID,
+                        idempotency_key=f"dev-symptom:{delivery.id}:{side}",
+                    )
+                except (commands.CommandError, ValueError) as error:
+                    log.append(f"症状を登録できません: {error}")
+                    continue
+                symptom = repository.state().research.symptoms[symptom_id]
+                self._record_fixture_verification(
+                    repository, symptom.variant_id, material_id=symptom.material_id
+                )
+                log.append(f"範囲付きの問題を症状に登録: {symptom.title}")
+        return log
+
+    def _record_fixture_verification(
+        self, repository: WorkspaceRepository, variant_id: str, *, material_id: str | None = None
+    ) -> None:
+        # The mock owns finite full renders. Verify these facts only; no external
+        # measurement, detector or human judgment is invented by the fixture.
+        state = repository.state()
+        project = state.project.project
+        assert project is not None
+        for material in project.material_ids:
+            if material_id is not None and material != material_id:
+                continue
+            if variant_id == "source":
+                audio = state.compare.audio[state.compare.materials[material].source_audio_id]
+            else:
+                manifest = state.compare.manifests[state.compare.variants[variant_id].manifest_id]
+                renderer = cast(dict[str, JSONValue], manifest["renderer"])
+                mapping = cast(dict[str, dict[str, JSONValue]], renderer["finite_map"])
+                audio = state.compare.audio[str(mapping[material]["audio_object_id"])]
+            report = VerificationReport(
+                schema_version=1,
+                producer="ABAR dev finite-map fixture (not atra)",
+                variant_id=variant_id,
+                material_id=material,
+                final_wav_sha256=f"sha256:{hashlib.sha256(repository.objects.read(audio.object_id)).hexdigest()}",
+                checks=[
+                    VerificationCheck(
+                        id="exp.provenance.match",
+                        verdict="pass",
+                        details={"source": "dev finite_map manifest"},
+                    ),
+                    VerificationCheck(id="exp.output.measured_is_final", verdict="skip"),
+                ],
+            )
+            commands.record_verification(
+                repository,
+                report,
+                actor_id=ACTOR_ID,
+                idempotency_key=f"dev-verification:{variant_id}:{material}",
+            )
+
+    def _prepare_regression_checks(self, repository: WorkspaceRepository) -> list[str]:
+        state = repository.state()
+        project = state.project.project
+        if project is None or not state.project.best_history:
+            return []
+        previous = state.project.best_history[-1].from_variant_id
+        if previous == project.current_best_variant_id:
+            return []
+        log: list[str] = []
+        for symptom in state.research.symptoms.values():
+            topic = f"dev-regression:{symptom.id}:{state.project.last_best_change_seq}"
+            if symptom.status == "withdrawn" or any(
+                session.topic_key == topic
+                for session in repository.state().research.project_sessions.values()
+            ):
+                continue
+            if _ready_count(repository.state()) >= self.keep_ready:
+                break
+            source = state.compare.audio[
+                state.compare.materials[symptom.material_id].source_audio_id
+            ]
+            region = TimeRange(
+                max(0, symptom.range.start_seconds - symptom.context_seconds),
+                min(
+                    source.frames / source.sample_rate,
+                    symptom.range.end_seconds + symptom.context_seconds,
+                ),
+            )
+            clip = commands.add_clip(
+                repository,
+                symptom.material_id,
+                start_seconds=region.start_seconds,
+                duration_seconds=region.end_seconds - region.start_seconds,
+                role="symptom",
+                idempotency_key=f"dev-symptom-clip:{symptom.id}",
+            )
+            commands.create_observation_session(
+                repository,
+                first_variant=previous,
+                second_variant=project.current_best_variant_id,
+                symptom_id=symptom.id,
+                clip_ids=(clip,),
+                topic_key=topic,
+                actor_id=ACTOR_ID,
+                idempotency_key=topic,
+            )
+            log.append(f"症状の再発確認を準備: {symptom.title}")
         return log
 
     def _measure_current_best(self, repository: WorkspaceRepository) -> list[str]:
@@ -151,6 +304,12 @@ class MockAgent:
             variant = _finite_map_variant(repository, label=label, color_hz=color, depth=depth)
             project = repository.state().project.project
             assert project is not None
+            self._record_fixture_verification(repository, variant)
+            commands.write_note(
+                repository,
+                _append_note(repository, f"{label} は高域の密度と尾の質感を変えるはず (模擬候補)"),
+                actor_id=ACTOR_ID,
+            )
             try:
                 if generation % 2 == 1:
                     commands.create_best_update_session(
@@ -163,7 +322,7 @@ class MockAgent:
                         repository,
                         first_variant=project.current_best_variant_id,
                         second_variant=variant,
-                        focus=focus,
+                        focus=f"観点：{focus}",  # noqa: RUF001
                         size="short" if generation % 4 == 2 else "standard",
                         same_check=generation % 4 == 0,
                         repeat_check=generation % 4 == 0,

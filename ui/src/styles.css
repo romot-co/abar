@@ -300,3 +300,17 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* Shared timeline: keep three sliders as siblings in the accessibility tree. */
+.timeline { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--nibi-size-gap-x); }
+.timeline .position-slider { --loop-from: 0; --loop-to: 1; min-width: 0; position: relative; }
+.position-seek { position: absolute; inset: 0; z-index: 1; }
+.position-seek:focus-visible { outline: var(--nibi-stroke-focus) solid var(--nibi-color-focus); outline-offset: var(--nibi-stroke-focus-offset); }
+.loop-band { position: absolute; top: 50%; left: calc(var(--loop-from) * 100%); width: calc((var(--loop-to) - var(--loop-from)) * 100%); height: var(--nibi-slider-thumb-grabbed); translate: 0 -50%; border-radius: calc(var(--nibi-slider-thumb) / 4); background: var(--nibi-color-halo); pointer-events: none; }
+.loop-handle { position: absolute; top: 50%; width: calc(var(--nibi-slider-thumb) / 2); height: var(--nibi-slider-thumb-grabbed); translate: -50% -50%; border-radius: calc(var(--nibi-slider-thumb) / 4); background: var(--nibi-color-thumb); cursor: ew-resize; z-index: 2; touch-action: none; }
+.loop-handle--start { left: calc(var(--loop-from) * 100%); }
+.loop-handle--end { left: calc(var(--loop-to) * 100%); }
+.loop-handle:focus-visible { outline: var(--nibi-stroke-focus) solid var(--nibi-color-focus); outline-offset: var(--nibi-stroke-focus-offset); }
+.position-slider .nibi-slider__thumb { z-index: 3; pointer-events: none; }
+.range-stamp { color: var(--nibi-color-text-value); font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hold-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--nibi-grid-y) / 2) var(--nibi-size-gap-x); }

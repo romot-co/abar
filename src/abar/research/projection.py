@@ -3,15 +3,18 @@
 from dataclasses import dataclass, field, replace
 from typing import Literal, cast
 
-from abar.compare.models import RecipeRef
+from abar.compare.models import RecipeRef, TimeRange
 from abar.foundation.events import EventEnvelope
 from abar.foundation.json_types import JSONValue
 from abar.research.models import (
+    BestFlag,
     Indicator,
     IndicatorValue,
     NoteRevision,
     ProjectSession,
+    Symptom,
 )
+from abar.research.verification import VerificationReport
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +25,12 @@ class ResearchState:
         default_factory=dict[tuple[str, str, str], tuple[IndicatorValue, ...]]
     )
     notes: tuple[NoteRevision, ...] = ()
+    symptoms: dict[str, Symptom] = field(default_factory=dict[str, Symptom])
+    verifications: dict[str, VerificationReport] = field(
+        default_factory=dict[str, VerificationReport]
+    )
+    baselines: dict[str, str] = field(default_factory=dict[str, str])
+    current_best_flags: tuple[BestFlag, ...] = ()
 
 
 def reduce_research(state: ResearchState, event: EventEnvelope) -> ResearchState:
@@ -47,11 +56,76 @@ def reduce_research(state: ResearchState, event: EventEnvelope) -> ResearchState
             created_by_type=cast(Literal["agent", "human"], p["created_by_type"]),
             created_by_id=_str(p, "created_by_id"),
             fingerprint=_str(p, "fingerprint"),
+            symptom_id=cast(str | None, p.get("symptom_id")) if event.schema_version == 2 else None,
+            warnings=tuple(cast(list[str], p.get("warnings", [])))
+            if event.schema_version == 2
+            else (),
         )
         return replace(
             state,
             project_sessions={**state.project_sessions, project_session.id: project_session},
         )
+    if event.event_type == "symptom.opened":
+        symptom = Symptom(
+            id=_str(p, "id"),
+            project_id=_str(p, "project_id"),
+            title=_str(p, "title"),
+            source_delivery_id=_str(p, "source_delivery_id"),
+            source_slot=cast(Literal["a", "b"], p["source_slot"]),
+            variant_id=_str(p, "variant_id"),
+            material_id=_str(p, "material_id"),
+            clip_id=_str(p, "clip_id"),
+            range=TimeRange(**cast(dict[str, float], p["range"])),
+            context_seconds=cast(float, p["context_seconds"]),
+            audio_pcm_sha=_str(p, "audio_pcm_sha"),
+            status=cast(Literal["open", "resolved", "withdrawn"], p["status"]),
+            facts=_str(p, "facts"),
+            hypotheses=_str(p, "hypotheses"),
+            dictionary_terms=tuple(cast(list[str], p["dictionary_terms"])),
+            created_event_seq=event.event_seq,
+        )
+        return replace(state, symptoms={**state.symptoms, symptom.id: symptom})
+    if event.event_type == "symptom.updated":
+        symptom_id = _str(p, "symptom_id")
+        symptom = replace(
+            state.symptoms[symptom_id],
+            facts=_str(p, "facts"),
+            hypotheses=_str(p, "hypotheses"),
+            dictionary_terms=tuple(cast(list[str], p["dictionary_terms"])),
+        )
+        return replace(state, symptoms={**state.symptoms, symptom_id: symptom})
+    if event.event_type in {"symptom.resolved", "symptom.reopened", "symptom.withdrawn"}:
+        symptom_id = _str(p, "symptom_id")
+        status = {
+            "symptom.resolved": "resolved",
+            "symptom.reopened": "open",
+            "symptom.withdrawn": "withdrawn",
+        }[event.event_type]
+        symptom = replace(
+            state.symptoms[symptom_id],
+            status=cast(Literal["open", "resolved", "withdrawn"], status),
+        )
+        return replace(state, symptoms={**state.symptoms, symptom_id: symptom})
+    if event.event_type == "verification.recorded":
+        report = VerificationReport.model_validate(p["report"])
+        return replace(
+            state, verifications={**state.verifications, _str(p, "verification_id"): report}
+        )
+    if event.event_type == "baseline.recorded":
+        return replace(
+            state, baselines={**state.baselines, _str(p, "variant_id"): _str(p, "label")}
+        )
+    if event.event_type == "current_best.flagged":
+        if _str(p, "symptom_id") not in state.symptoms:
+            raise ValueError("flag references an unknown Symptom")
+        flag = BestFlag(
+            _str(p, "symptom_id"),
+            _str(p, "session_id"),
+            _str(p, "reason"),
+            _str(p, "variant_id"),
+            event.event_seq,
+        )
+        return replace(state, current_best_flags=(*state.current_best_flags, flag))
     if event.event_type == "indicator.registered":
         indicator = Indicator(
             id=_str(p, "indicator_id"),

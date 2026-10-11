@@ -146,6 +146,7 @@ export type BlockerRequest = {
      * Note
      */
     note?: string | null;
+    range?: TimeRangeRequest | null;
     /**
      * Selected
      */
@@ -285,6 +286,10 @@ export type CriterionSnapshotView = {
  */
 export type DeckAudioView = {
     /**
+     * Duration Seconds
+     */
+    duration_seconds?: number | null;
+    /**
      * Slot
      */
     slot: 'A' | 'B';
@@ -349,6 +354,10 @@ export type EvidenceResultView = {
      */
     favored_variant_label: string | null;
     /**
+     * Held
+     */
+    held?: boolean;
+    /**
      * Identity Visible At Answer
      */
     identity_visible_at_answer?: boolean | null;
@@ -400,6 +409,32 @@ export type EvidenceResultView = {
     variant_label_by_slot: {
         [key: string]: string;
     };
+};
+
+/**
+ * FlagView
+ */
+export type FlagView = {
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Session Id
+     */
+    session_id: string;
+    /**
+     * Symptom Id
+     */
+    symptom_id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Variant Id
+     */
+    variant_id: string;
 };
 
 /**
@@ -619,11 +654,42 @@ export type JudgmentRequest = {
      * Comment
      */
     comment?: string | null;
+    comment_range?: TimeRangeRequest | null;
+    /**
+     * Held
+     */
+    held?: boolean;
     /**
      * Preference
      */
-    preference: 1 | 2 | 3 | 4 | 5;
+    preference?: 1 | 2 | 3 | 4 | 5 | null;
     telemetry: TelemetryRequest;
+};
+
+/**
+ * LoopTelemetryRequest
+ */
+export type LoopTelemetryRequest = {
+    /**
+     * Listen Ms
+     */
+    listen_ms: {
+        [key: string]: number;
+    };
+    range: TimeRangeRequest;
+};
+
+/**
+ * LoopTelemetryView
+ */
+export type LoopTelemetryView = {
+    /**
+     * Listen Ms
+     */
+    listen_ms: {
+        [key: string]: number;
+    };
+    range: TimeRangeView;
 };
 
 /**
@@ -729,7 +795,7 @@ export type ObservationSessionRequest = {
     /**
      * Focus
      */
-    focus: string;
+    focus?: string | null;
     /**
      * Recipe
      */
@@ -751,6 +817,10 @@ export type ObservationSessionRequest = {
      */
     size?: 'short' | 'standard';
     /**
+     * Symptom Id
+     */
+    symptom_id?: string | null;
+    /**
      * Topic Key
      */
     topic_key?: string | null;
@@ -768,6 +838,10 @@ export type ProjectDashboardView = {
      * Current Best
      */
     current_best: string | null;
+    /**
+     * Current Best Flags
+     */
+    current_best_flags?: Array<FlagView>;
     health: HealthView;
     /**
      * Indicators
@@ -831,10 +905,15 @@ export type ProjectSessionJudgmentView = {
      * Comment
      */
     comment: string | null;
+    comment_range?: TimeRangeView | null;
     /**
      * Delivery Id
      */
     delivery_id: string;
+    /**
+     * Held
+     */
+    held?: boolean;
     /**
      * Identity By Slot
      */
@@ -848,7 +927,7 @@ export type ProjectSessionJudgmentView = {
     /**
      * Preference
      */
-    preference: 1 | 2 | 3 | 4 | 5;
+    preference: 1 | 2 | 3 | 4 | 5 | null;
     /**
      * Sequence Index
      */
@@ -887,15 +966,29 @@ export type ProjectSessionSnapshotView = {
      */
     status: 'ready' | 'active' | 'paused' | 'done' | 'closed' | 'blocked';
     /**
+     * Symptom Id
+     */
+    symptom_id?: string | null;
+    /**
      * Topic Key
      */
     topic_key: string | null;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
 };
 
 /**
  * ProjectView
  */
 export type ProjectView = {
+    /**
+     * Baselines
+     */
+    baselines?: {
+        [key: string]: string;
+    };
     /**
      * Brief
      */
@@ -962,9 +1055,21 @@ export type ProjectView = {
      */
     sessions: Array<SessionCardView>;
     /**
+     * Symptoms
+     */
+    symptoms?: Array<SymptomSummaryView>;
+    /**
      * Timeline
      */
     timeline: Array<TimelineEntryView>;
+    /**
+     * Verifications
+     */
+    verifications?: {
+        [key: string]: {
+            [key: string]: JsonValueOutput;
+        };
+    };
 };
 
 /**
@@ -1092,6 +1197,7 @@ export type ResultBlockerView = {
      * Note
      */
     note: string | null;
+    range?: TimeRangeView | null;
     /**
      * Selected
      */
@@ -1112,10 +1218,15 @@ export type ResultJudgmentView = {
      * Comment
      */
     comment: string | null;
+    comment_range?: TimeRangeView | null;
+    /**
+     * Held
+     */
+    held?: boolean;
     /**
      * Preference
      */
-    preference: 1 | 2 | 3 | 4 | 5;
+    preference: 1 | 2 | 3 | 4 | 5 | null;
 };
 
 /**
@@ -1126,6 +1237,7 @@ export type RevealedIdentityView = {
      * Audio Id
      */
     audio_id: string;
+    kind?: VariantKind | null;
     /**
      * Label
      */
@@ -1183,9 +1295,17 @@ export type SessionCardView = {
      */
     status: 'ready' | 'active' | 'paused' | 'done' | 'closed' | 'blocked';
     /**
+     * Symptom Id
+     */
+    symptom_id?: string | null;
+    /**
      * Topic Key
      */
     topic_key?: string | null;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
 };
 
 /**
@@ -1269,6 +1389,10 @@ export type SessionResultView = {
      */
     favored_variant_label: string | null;
     /**
+     * Held Count
+     */
+    held_count?: number;
+    /**
      * Project Session Id
      */
     project_session_id: string;
@@ -1276,6 +1400,10 @@ export type SessionResultView = {
      * Recipe
      */
     recipe: string;
+    /**
+     * Repeat Held
+     */
+    repeat_held?: boolean;
     /**
      * Repeat Result
      */
@@ -1384,6 +1512,10 @@ export type StatusView = {
      * Current Best
      */
     current_best: string | null;
+    /**
+     * Current Best Flags
+     */
+    current_best_flags?: Array<FlagView>;
     health: HealthView;
     /**
      * In Use
@@ -1409,6 +1541,32 @@ export type StatusView = {
      * Schema Version
      */
     schema_version?: 2;
+    /**
+     * Symptoms
+     */
+    symptoms?: Array<SymptomSummaryView>;
+};
+
+/**
+ * SymptomSummaryView
+ */
+export type SymptomSummaryView = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Listen Count
+     */
+    listen_count: number;
+    /**
+     * Status
+     */
+    status: 'open' | 'resolved' | 'withdrawn';
+    /**
+     * Title
+     */
+    title: string;
 };
 
 /**
@@ -1425,6 +1583,10 @@ export type TelemetryRequest = {
     listen_ms: {
         [key: string]: number;
     };
+    /**
+     * Loops
+     */
+    loops?: Array<LoopTelemetryRequest>;
     /**
      * Switches
      */
@@ -1446,9 +1608,41 @@ export type TelemetryView = {
         [key: string]: number;
     };
     /**
+     * Loops
+     */
+    loops?: Array<LoopTelemetryView>;
+    /**
      * Switches
      */
     switches: number;
+};
+
+/**
+ * TimeRangeRequest
+ */
+export type TimeRangeRequest = {
+    /**
+     * End Seconds
+     */
+    end_seconds: number;
+    /**
+     * Start Seconds
+     */
+    start_seconds: number;
+};
+
+/**
+ * TimeRangeView
+ */
+export type TimeRangeView = {
+    /**
+     * End Seconds
+     */
+    end_seconds: number;
+    /**
+     * Start Seconds
+     */
+    start_seconds: number;
 };
 
 /**
@@ -1497,6 +1691,8 @@ export type ValidationError = {
     type: string;
 };
 
+export type VariantKind = 'candidate' | 'current_best' | 'baseline' | 'control' | 'reference' | 'ablation' | 'tap' | 'symptom_region';
+
 /**
  * VariantMaterializationRequest
  */
@@ -1537,6 +1733,7 @@ export type VariantMaterializationView = {
  * VariantRequest
  */
 export type VariantRequest = {
+    kind?: VariantKind;
     /**
      * Label
      */

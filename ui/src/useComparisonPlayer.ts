@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckAudioView } from "./generated";
 import { prepareLoopBuffers } from "./loopBuffers";
+import { initialLoop, loopPosition, type LoopRange } from "./deck/loopRange";
 
 type Slot = "a" | "b";
 type Mode = "auto" | "manual";
 export type ComparisonAudio = { delivery_id: string; audio: DeckAudioView[] };
-export type PlayerTelemetry = { switches: number; listenMs: { a: number; b: number }; answerMs: number };
+export type PlayerTelemetry = { switches: number; listenMs: { a: number; b: number }; answerMs: number; loops: { range: LoopRange; listenMs: { a: number; b: number } }[] };
 type DeliveryStatus = { id: string | null; loading: boolean; error: string | null; heard: Record<Slot, boolean> };
 
 function initialStatus(id: string | null): DeliveryStatus {
@@ -17,11 +18,19 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [loopDuration, setLoopDuration] = useState(0);
+  const presentedDurationRef = useRef(0);
+  const [loopState, setLoopState] = useState<{ id: string | null; range: LoopRange | null }>({ id: null, range: null });
+  const loopRef = useRef<LoopRange | null>(null);
+  const rememberedLoopRef = useRef<LoopRange | null>(null);
+  const loopsRef = useRef(new Map<string, { range: LoopRange; listenMs: { a: number; b: number } }>());
+  const previousCycleRef = useRef(0);
   // loading/error/heard are keyed by delivery so the first render of a new comparison
   // never inherits the previous comparison's "both heard" state before the reset effect runs.
   const deliveryId = comparison?.delivery_id ?? null;
   const [status, setStatus] = useState<DeliveryStatus>(() => initialStatus(deliveryId));
   const current = status.id === deliveryId ? status : initialStatus(deliveryId);
+  const loop = loopState.id === deliveryId ? loopState.range : null;
   const { loading, error, heard } = current;
   const deliveryRef = useRef(deliveryId);
   const contextRef = useRef<AudioContext | null>(null);
@@ -65,7 +74,7 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     const context = contextRef.current;
     const started = startedAtContextRef.current;
     if (!context || started === null || !playingRef.current || durationRef.current <= 0) return offsetRef.current;
-    return (offsetRef.current + Math.max(0, context.currentTime - started)) % durationRef.current;
+    return loopPosition(offsetRef.current, context.currentTime - started, durationRef.current, loopRef.current).position;
   }, []);
 
   const startSources = useCallback((offset: number) => {
@@ -80,6 +89,8 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     b.buffer = buffers.b;
     a.loop = true;
     b.loop = true;
+    for (const source of [a, b]) { source.loopStart = loopRef.current?.start ?? 0; source.loopEnd = loopRef.current?.end ?? 0; }
+    previousCycleRef.current = 0;
     a.connect(gains.a);
     b.connect(gains.b);
     a.start(when, offset);
@@ -93,7 +104,15 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
   const account = useCallback((slot: Slot) => {
     if (activeSinceRef.current === null) return;
     const now = performance.now();
-    listenRef.current[slot] += now - activeSinceRef.current;
+    const elapsed = now - activeSinceRef.current;
+    listenRef.current[slot] += elapsed;
+    const range = loopRef.current;
+    if (range) {
+      const key = `${range.start.toFixed(3)}:${range.end.toFixed(3)}`;
+      const value = loopsRef.current.get(key) ?? { range: { ...range }, listenMs: { a: 0, b: 0 } };
+      value.listenMs[slot] += elapsed;
+      loopsRef.current.set(key, value);
+    }
     activeSinceRef.current = now;
   }, []);
 
@@ -188,12 +207,16 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
 
   const urlA = comparison?.audio.find((item) => item.slot === "A")?.url;
   const urlB = comparison?.audio.find((item) => item.slot === "B")?.url;
+  const presentedA = comparison?.audio.find((item) => item.slot === "A")?.duration_seconds;
+  const presentedB = comparison?.audio.find((item) => item.slot === "B")?.duration_seconds;
   useEffect(() => {
     deliveryRef.current = deliveryId;
     setActiveSlot("a");
     setPlaying(false);
     setPosition(0);
     setDuration(0);
+    setLoopDuration(0);
+    presentedDurationRef.current = 0;
     setStatus(initialStatus(deliveryId));
     offsetRef.current = 0;
     startedAtContextRef.current = null;
@@ -206,6 +229,10 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     activeSlotRef.current = "a";
     modeRef.current = "auto";
     previousPositionRef.current = 0;
+    previousCycleRef.current = 0;
+    loopRef.current = null;
+    rememberedLoopRef.current = null;
+    loopsRef.current.clear();
     if (deliveryId === null || !urlA || !urlB) return;
 
     let cancelled = false;
@@ -230,6 +257,8 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
         if (cancelled) return;
         buffersRef.current = prepareLoopBuffers(context, a, b);
         durationRef.current = buffersRef.current.a.duration;
+        presentedDurationRef.current = Math.min(presentedA ?? a.duration, presentedB ?? b.duration);
+        setLoopDuration(presentedDurationRef.current);
         setDuration(durationRef.current);
         update(deliveryId, (value) => ({ ...value, loading: false }));
         // Browsers may reject this before the first user gesture; the Play button remains available.
@@ -246,10 +275,12 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     const tick = () => {
       if (playingRef.current) {
         const now = currentPosition();
-        if (modeRef.current === "auto" && now + 0.05 < previousPositionRef.current) {
+        const cycle = loopPosition(offsetRef.current, context.currentTime - (startedAtContextRef.current ?? context.currentTime), durationRef.current, loopRef.current).cycle;
+        if (modeRef.current === "auto" && (cycle - previousCycleRef.current) % 2 === 1) {
           crossfadeTo(activeSlotRef.current === "a" ? "b" : "a");
         }
         previousPositionRef.current = now;
+        previousCycleRef.current = cycle;
         setPosition(now);
       }
       animationRef.current = requestAnimationFrame(tick);
@@ -267,10 +298,10 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
       buffersRef.current = null;
       gainsRef.current = null;
     };
-  }, [crossfadeTo, currentPosition, deliveryId, stopSources, update, urlA, urlB]);
+  }, [crossfadeTo, currentPosition, deliveryId, stopSources, update, urlA, urlB, presentedA, presentedB]);
 
   const seek = useCallback((seconds: number) => {
-    const target = Math.max(0, Math.min(seconds, durationRef.current));
+    const target = Math.max(loopRef.current?.start ?? 0, Math.min(seconds, loopRef.current?.end ?? durationRef.current));
     const resume = playingRef.current;
     stopSources();
     offsetRef.current = target;
@@ -280,16 +311,33 @@ export function useComparisonPlayer(comparison: ComparisonAudio | null) {
     if (resume) startSources(target);
   }, [startSources, stopSources]);
 
+  const setLoop = useCallback((range: LoopRange | null) => {
+    if (range && (!Number.isFinite(range.start) || !Number.isFinite(range.end) || range.start < 0 || range.end <= range.start || range.end > presentedDurationRef.current)) return;
+    account(activeSlotRef.current);
+    const position = currentPosition();
+    loopRef.current = range;
+    if (range) rememberedLoopRef.current = range;
+    setLoopState({ id: deliveryRef.current, range });
+    // Restart together so Web Audio and logical position use the same loop epoch.
+    seek(range && (position < range.start || position >= range.end) ? range.start : position);
+  }, [account, currentPosition, seek]);
+
+  const toggleLoop = useCallback(() => {
+    if (durationRef.current <= 0) return;
+    setLoop(loopRef.current ? null : rememberedLoopRef.current ?? initialLoop(currentPosition(), presentedDurationRef.current));
+  }, [currentPosition, setLoop]);
+
   const snapshotTelemetry = useCallback((): PlayerTelemetry => {
     account(activeSlotRef.current);
     return {
+      loops: [...loopsRef.current.values()].map((value) => ({ range: value.range, listenMs: { a: Math.round(value.listenMs.a), b: Math.round(value.listenMs.b) } })),
       switches: switchesRef.current,
       listenMs: { a: Math.round(listenRef.current.a), b: Math.round(listenRef.current.b) },
       answerMs: answerStartedRef.current === null ? 0 : Math.round(performance.now() - answerStartedRef.current),
     };
   }, [account]);
 
-  return { activeSlot, playing, position, duration, loading, error, heard, play, pause, switchSlot, selectSlot, seek, snapshotTelemetry };
+  return { loop, loopDuration, setLoop, toggleLoop, activeSlot, playing, position, duration, loading, error, heard, play, pause, switchSlot, selectSlot, seek, snapshotTelemetry };
 }
 
 export type ComparisonPlayer = ReturnType<typeof useComparisonPlayer>;

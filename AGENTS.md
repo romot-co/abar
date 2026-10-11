@@ -212,3 +212,92 @@ promising target or guard must continue to earn its role through human A/B evide
 ## Simplification boundary
 
 If a simpler Variant is byte-identical after the primary Recipe across an explicit Clip scope, create a Simplification Plan. Only the human may accept it. Perceptual equivalence without byte identity is handled by the manual-best emergency path, with the supporting Session cited in the acknowledgement and note.
+
+## Local diagnosis in ABAR 2.1
+
+Observation Sessions use `--focus "観点：<one criterion>"`. Keep the question oriented
+as choosing which sound to retain, including when both sounds are poor. Do not ask
+which is worse. A Symptom-linked Session supplies this focus through `--symptom <id>`;
+omit `--focus` or use the exact same text. The five preference strengths remain unchanged.
+A human may hold an answer when this question cannot be judged. Held answers are neither
+ties nor missing input; they cannot supply Best Update evidence. Optional loop listening
+times describe what was heard and never establish a sufficient-listening threshold.
+
+Use these comparison-building templates within the same Session type:
+
+- Diagnosis: compare candidate and ablation, two taps, candidate and control, candidate
+  and reference, or candidate and current best in a fixed symptom region. Do not update
+  current best from a local question. Byte-identical observation pairs remain valid.
+- Adoption: use `project session best-update` against the complete Project brief with the
+  existing three-evidence rule. Do not submit a candidate that clearly lost an earlier
+  short comparison under the relevant Symptom. This is candidate screening, not a new
+  adoption vote or a metric threshold.
+- Recurrence: after current best changes, compare it once with previous best on the same
+  fixed symptom Clips. Cite the completed human comparison when recording a regression
+  with `project best flag`. A byte-identical recurrence comparison is valid.
+
+Before preparing a Session, write a bounded prediction in the Project note:
+`<candidate> is expected to change <perceptual quality>`. After the human answers,
+record the observation alongside that prediction. Do not show candidate names, kinds,
+or predictions in the sealed listening screen.
+
+### Symptoms and source kinds
+
+After a Session ends and reveals its identities, register an existing ranged human
+blocker with `symptom add --from-judgment <delivery_id> --side a|b`. The default title
+preserves its note. If it is empty, multiline, or over 200 characters, obtain a suitable
+human wording instead of silently truncating or replacing it. A Symptom records the
+Material timeline, original Delivery and side, exact presented audio identity, and
+context. Recipe alignment is accounted for when deriving the Material time range.
+It does not change the brief or current best. A tie or a held answer never establishes
+that a symptom is absent.
+
+Use `symptom note --facts ... --hypotheses ...` to separate observations and explanations.
+Resolve a Symptom only with bounded supporting listening evidence; cite its Session and
+reason with `symptom resolve --reason ... --session ...`. Reopen when human listening
+reports recurrence; withdraw an invalid or superseded record with an explicit reason.
+Keep contradictory observations in the record. Resolution is observational and never
+retroactively changes an adoption decision.
+
+Register source kinds with `variant add --kind candidate|current_best|baseline|control|reference|ablation|tap|symptom_region`.
+Use `--of <variant_id> --note <provenance>` for a derived diagnostic source. Kind describes
+registered provenance; the Project's authority determines which Variant is actually
+current best. Use `project baseline add <variant_id> --label ...` to retain a known full
+output. Baseline Sessions are observation-only. A control, reference, tap, or symptom
+region cannot be proposed for Best Update. Winning against a diagnostic counterpart
+never grants adoption authority. Kinds are disclosed only through the existing reveal
+boundary.
+
+### External verification
+
+Use `verification record --json <file>` before Session preparation when an external
+report is available. ABAR records the producer, Variant, Material, final full WAV hash,
+and scoped pass/fail/skip checks. It does not run atra or compute those checks. Unknown
+check IDs are retained. Confirm `exp.candidate.acted_on_target` externally before asking
+about a target mechanism; a skip or an absent report is not a pass.
+
+Session preparation applies the latest report only to selected Materials and matching
+counterpart/Symptom scopes. The hash must describe the current full output. No report
+preserves the existing workflow. A fail has these effects:
+
+| Check | Observation | Best Update |
+| --- | --- | --- |
+| `exp.provenance.match` | Reject | Reject |
+| `exp.region.excerpt_from_full` | Reject | Reject |
+| `exp.baseline.reproduce` | Reject | Reject |
+| `exp.output.measured_is_final` | Warn | Warn |
+| `exp.sources.distinct` | Warn (except explicit same-check) | Reject |
+| `exp.candidate.acted_on_target` | Warn | Reject |
+| `exp.candidate.no_op` | Warn | Reject |
+| `exp.control.matched` | Warn | Not applicable |
+
+Warnings are available in the Session's JSON views. Mechanical audio safety remains in
+render/import validation, and proxy measurements remain observational Indicators.
+Diagnostic records, verification, baselines, and regression flags never vote on current
+best. Flags are bound to the current best at recording and clear when it changes.
+
+Additional canonical agent writes are `symptom add`, `symptom note`, `symptom resolve`,
+`symptom reopen`, `symptom withdraw`, `verification record`, `project baseline add`, and
+`project best flag --symptom <id> --session <id> --reason ...`. Read with `symptom list`
+and `symptom show`. Continue using the same explicit Workspace, JSON actor, and one
+idempotency key for each logical write.

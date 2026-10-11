@@ -12,6 +12,7 @@ from abar.compare.models import (
     PreparedPair,
     RecipeRef,
     Session,
+    TimeRange,
 )
 from abar.foundation.json_types import JSONValue
 
@@ -146,6 +147,14 @@ def delivery_payload(delivery: Delivery) -> dict[str, JSONValue]:
     }
 
 
+def range_payload(value: TimeRange | None) -> dict[str, JSONValue] | None:
+    return (
+        None
+        if value is None
+        else {"start_seconds": value.start_seconds, "end_seconds": value.end_seconds}
+    )
+
+
 def judgment_payload(judgment: Judgment) -> dict[str, JSONValue]:
     listen_ms: dict[str, JSONValue] = {
         str(slot): value for slot, value in judgment.telemetry.listen_ms.items()
@@ -154,8 +163,14 @@ def judgment_payload(judgment: Judgment) -> dict[str, JSONValue]:
         "judgment_id": judgment.id,
         "delivery_id": judgment.delivery_id,
         "preference": judgment.preference,
+        "held": judgment.held,
+        "comment_range": range_payload(judgment.comment_range),
         "blockers": {
-            slot: {"selected": value.selected, "note": value.note}
+            slot: {
+                "selected": value.selected,
+                "note": value.note,
+                "range": range_payload(value.range),
+            }
             for slot, value in judgment.blockers.items()
         },
         "comment": judgment.comment,
@@ -164,5 +179,12 @@ def judgment_payload(judgment: Judgment) -> dict[str, JSONValue]:
             "listen_ms": listen_ms,
             "switches": judgment.telemetry.switches,
             "answer_ms": judgment.telemetry.answer_ms,
+            "loops": [
+                {
+                    "range": range_payload(loop.range),
+                    "listen_ms": {str(k): v for k, v in loop.listen_ms.items()},
+                }
+                for loop in judgment.telemetry.loops
+            ],
         },
     }

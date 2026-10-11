@@ -48,7 +48,7 @@ def test_key_hint_only_with_keys_and_no_gap_after_choosing(
         expect(hint).to_have_attribute("aria-live", "polite")
         box = hint.bounding_box()
         assert box is None or box["height"] <= 1
-        scale = page.locator(".preference-scale").bounding_box()
+        scale = page.locator(".hold-row" if touch else ".preference-scale").bounding_box()
         after = page.locator(".key-hint" if not touch else ".blocker-question").bounding_box()
         # 残せない問題の A / B は見出しの下に、読む順に左揃え
         heading = page.get_by_role("heading", name="残せない問題がありますか").bounding_box()

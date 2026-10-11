@@ -17,6 +17,8 @@ class ProjectSessionResult:
     same_result: Literal["tie", "difference_reported", "missing"]
     repeat_result: Literal["same_category", "same_direction", "near", "reversed", "missing"]
     difference_profile: Literal["clear", "mixed", "subtle"]
+    held_count: int = 0
+    repeat_held: bool = False
 
 
 def calculate_result(
@@ -31,6 +33,7 @@ def calculate_result(
     scores: dict[str, int] = {pair[0]: 0, pair[1]: 0}
     blockers: dict[str, list[str]] = {pair[0]: [], pair[1]: []}
     magnitudes: list[int] = []
+    held_count = 0
     for item_id in project_session.evidence_item_ids:
         delivery = deliveries_by_item.get(item_id)
         judgment = judgments_by_delivery.get(delivery.id) if delivery is not None else None
@@ -42,18 +45,21 @@ def calculate_result(
             key: str(entry.provenance_ref.get("variant_ref", "source"))
             for key, entry in by_key.items()
         }
-        signed_for_a = 3 - judgment.preference
         variant_a = variant_by_key[delivery.slot_assignment["A"]]
         variant_b = variant_by_key[delivery.slot_assignment["B"]]
-        if signed_for_a > 0:
-            counts[variant_a] += 1
-        elif signed_for_a < 0:
-            counts[variant_b] += 1
+        if judgment.preference is None:
+            held_count += 1
         else:
-            counts["tie"] += 1
-        scores[variant_a] += signed_for_a
-        scores[variant_b] -= signed_for_a
-        magnitudes.append(signed_for_a if variant_a == pair[0] else -signed_for_a)
+            signed_for_a = 3 - judgment.preference
+            if signed_for_a > 0:
+                counts[variant_a] += 1
+            elif signed_for_a < 0:
+                counts[variant_b] += 1
+            else:
+                counts["tie"] += 1
+            scores[variant_a] += signed_for_a
+            scores[variant_b] -= signed_for_a
+            magnitudes.append(signed_for_a if variant_a == pair[0] else -signed_for_a)
         for slot, variant in (("a", variant_a), ("b", variant_b)):
             blocker = judgment.blockers[slot]  # type: ignore[index]
             if blocker.selected:
@@ -67,7 +73,7 @@ def calculate_result(
     if project_session.same_check_item_id is not None:
         delivery = deliveries_by_item.get(project_session.same_check_item_id)
         judgment = judgments_by_delivery.get(delivery.id) if delivery is not None else None
-        if judgment is not None:
+        if judgment is not None and judgment.preference is not None:
             same_result = "tie" if judgment.preference == 3 else "difference_reported"
     repeat_result = _repeat_result(
         project_session,
@@ -94,6 +100,14 @@ def calculate_result(
         same_result=same_result,
         repeat_result=repeat_result,
         difference_profile=profile,
+        held_count=held_count,
+        repeat_held=any(
+            judgment.held
+            for item_id in (project_session.repeat_of_item_id, project_session.repeat_check_item_id)
+            if item_id is not None
+            and (delivery := deliveries_by_item.get(item_id)) is not None
+            and (judgment := judgments_by_delivery.get(delivery.id)) is not None
+        ),
     )
 
 
@@ -113,10 +127,11 @@ def _repeat_result(
         return "missing"
     first = judgments_by_delivery.get(first_delivery.id)
     second = judgments_by_delivery.get(second_delivery.id)
-    if first is None or second is None:
+    if first is None or second is None or first.held or second.held:
         return "missing"
 
     def normalized(judgment: Judgment, delivery: Delivery) -> int:
+        assert judgment.preference is not None
         score_a = 3 - judgment.preference
         return score_a if delivery.slot_assignment["A"] == "p1" else -score_a
 

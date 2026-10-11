@@ -73,7 +73,7 @@ jobs:
       - name: Install wheel without invoking Node
         run: |
           python -m venv /tmp/abar-wheel-smoke
-          /tmp/abar-wheel-smoke/bin/pip install dist/abar-2.0.0-py3-none-any.whl
+          /tmp/abar-wheel-smoke/bin/pip install dist/abar-2.1.0-py3-none-any.whl
           /tmp/abar-wheel-smoke/bin/abar --help
           /tmp/abar-wheel-smoke/bin/python -c \
             "from importlib.resources import files; assert (files('abar.server') / 'static' / 'index.html').is_file()"

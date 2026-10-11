@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from abar.compare.models import VariantKind
 from abar.foundation.json_types import JSONValue
 
 
@@ -48,6 +49,8 @@ class IndicatorSummaryView(PublicView):
 
 
 class SessionCardView(PublicView):
+    symptom_id: str | None = None
+    warnings: tuple[str, ...] = ()
     topic_key: str | None = None
     project_session_id: str
     focus: str
@@ -69,7 +72,24 @@ class SimplificationPromptView(PublicView):
     scope_clip_ids: tuple[str, ...]
 
 
+class SymptomSummaryView(PublicView):
+    id: str
+    title: str
+    status: Literal["open", "resolved", "withdrawn"]
+    listen_count: int
+
+
+class FlagView(PublicView):
+    symptom_id: str
+    title: str
+    session_id: str
+    reason: str
+    variant_id: str
+
+
 class StatusView(PublicView):
+    symptoms: tuple[SymptomSummaryView, ...] = ()
+    current_best_flags: tuple[FlagView, ...] = ()
     schema_version: Literal[2] = 2
     health: HealthView
     project_name: str | None
@@ -153,10 +173,21 @@ class CriterionSnapshotView(PublicView):
     source_event_seq: int | None
 
 
+class TimeRangeView(PublicView):
+    start_seconds: float
+    end_seconds: float
+
+
+class LoopTelemetryView(PublicView):
+    range: TimeRangeView
+    listen_ms: dict[Literal["a", "b"], int]
+
+
 class TelemetryView(PublicView):
     listen_ms: dict[Literal["a", "b"], int]
     switches: int
     answer_ms: int
+    loops: tuple[LoopTelemetryView, ...] = ()
 
 
 class ResolvedOperandSnapshotView(PublicView):
@@ -166,6 +197,7 @@ class ResolvedOperandSnapshotView(PublicView):
 
 
 class RevealedIdentityView(PublicView):
+    kind: VariantKind | None = None
     audio_id: str
     provenance: dict[str, JSONValue]
     label: str | None = None
@@ -174,7 +206,9 @@ class RevealedIdentityView(PublicView):
 class ProjectSessionJudgmentView(PublicView):
     delivery_id: str
     sequence_index: int
-    preference: Literal[1, 2, 3, 4, 5]
+    preference: Literal[1, 2, 3, 4, 5] | None
+    held: bool = False
+    comment_range: TimeRangeView | None = None
     blockers: dict[Literal["a", "b"], "ResultBlockerView"]
     comment: str | None
     identity_visible_at_answer: bool
@@ -183,6 +217,8 @@ class ProjectSessionJudgmentView(PublicView):
 
 
 class ProjectSessionSnapshotView(PublicView):
+    symptom_id: str | None = None
+    warnings: tuple[str, ...] = ()
     project_session_id: str
     focus: str
     topic_key: str | None
@@ -195,6 +231,7 @@ class ProjectSessionSnapshotView(PublicView):
 
 
 class ProjectDashboardView(PublicView):
+    current_best_flags: tuple[FlagView, ...] = ()
     schema_version: Literal[2] = 2
     health: HealthView
     project_id: str | None
@@ -208,6 +245,9 @@ class ProjectDashboardView(PublicView):
 
 
 class ProjectView(PublicView):
+    symptoms: tuple[SymptomSummaryView, ...] = ()
+    baselines: dict[str, str] = {}
+    verifications: dict[str, dict[str, JSONValue]] = {}
     schema_version: Literal[2] = 2
     project_id: str
     name: str
@@ -242,6 +282,7 @@ class EntityView(PublicView):
 
 
 class DeckAudioView(PublicView):
+    duration_seconds: float | None = None
     slot: Literal["A", "B"]
     url: str
 
@@ -265,6 +306,7 @@ class ActiveDeckView(PublicView):
 
 
 class EvidenceResultView(PublicView):
+    held: bool = False
     comment: str | None = None
     identity_visible_at_answer: bool | None = None
     listen_ms: dict[Literal["a", "b"], int] | None = None
@@ -285,6 +327,8 @@ class EvidenceResultView(PublicView):
 
 
 class SessionOverviewView(PublicView):
+    symptom_id: str | None = None
+    warnings: tuple[str, ...] = ()
     project_session_id: str
     status: str
     focus: str
@@ -297,6 +341,8 @@ class SessionOverviewView(PublicView):
 
 
 class SessionResultView(PublicView):
+    repeat_held: bool = False
+    held_count: int = 0
     project_session_id: str
     recipe: str
     evidence_count: int
@@ -318,10 +364,13 @@ class SessionResultView(PublicView):
 class ResultBlockerView(PublicView):
     selected: bool
     note: str | None
+    range: TimeRangeView | None = None
 
 
 class ResultJudgmentView(PublicView):
-    preference: Literal[1, 2, 3, 4, 5]
+    preference: Literal[1, 2, 3, 4, 5] | None
+    held: bool = False
+    comment_range: TimeRangeView | None = None
     blockers: dict[Literal["a", "b"], ResultBlockerView]
     comment: str | None
 

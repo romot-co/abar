@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from statistics import median
 from typing import Literal
 
+from abar.app.diagnostic_queries import current_best_flags, symptom_summaries
 from abar.app.query_support import public_session_status, recipe_label, variant_label
 from abar.app.repository import WorkspaceRepository
 from abar.app.session_queries import session_result_from_state
@@ -57,6 +58,8 @@ def status(repository: WorkspaceRepository) -> StatusView:
         active_count=sum(item.status in {"active", "paused"} for item in sessions),
         ready_limit=None if project is None else project.ready_session_limit,
         material_count=0 if project is None else len(project.material_ids),
+        symptoms=symptom_summaries(state),
+        current_best_flags=current_best_flags(state),
     )
 
 
@@ -94,6 +97,7 @@ def project_dashboard(repository: WorkspaceRepository) -> ProjectDashboardView:
         health=health,
         project_id=project.id,
         name=project.name,
+        current_best_flags=current_best_flags(state),
         brief=project.brief_text,
         current_best=variant_label(state, project.current_best_variant_id),
         primary_recipe=recipe_label(project.primary_recipe),
@@ -120,6 +124,8 @@ def session_cards(
                 project_session_id=item.id,
                 topic_key=item.topic_key,
                 focus=item.focus,
+                symptom_id=item.symptom_id,
+                warnings=item.warnings,
                 recipe=recipe_label(item.recipe),
                 comparison_count=len(state.compare.sessions[item.core_session_id].items),
                 answered_count=sum(
@@ -234,7 +240,7 @@ def _session_outcome(state: ABARState, project_session: ProjectSession) -> str:
     if plan is not None:
         if result.current_best_updated:
             return f"{variant_label(state, plan.proposed_variant_id)} に更新"
-        return "現在最良を維持"
+        return "現在最良を維持" + (f" · 保留 {result.held_count}" if result.held_count else "")
     if result.favored_variant_id is not None:
         outcome = f"{variant_label(state, result.favored_variant_id)} 優勢"
     elif result.evidence_direction_counts["tie"] == len(project_session.evidence_item_ids):
@@ -248,11 +254,13 @@ def _session_outcome(state: ABARState, project_session: ProjectSession) -> str:
             f"互角 {counts['tie']}",
         ]
         evidence_count = len(project_session.evidence_item_ids)
-        missing = evidence_count - sum(counts.values())
+        missing = evidence_count - sum(counts.values()) - result.held_count
         if missing:
             parts.append(f"未回答 {missing}")
         required = favored_count(evidence_count)
         outcome = f"{' / '.join(parts)}（{required}件の優勢条件に未達）"  # noqa: RUF001
+    if result.held_count:
+        outcome += f" · 保留 {result.held_count}"
     if any(result.blockers_by_variant.values()):
         outcome += " · blocker"
     return outcome

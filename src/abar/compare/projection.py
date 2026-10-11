@@ -11,6 +11,7 @@ from abar.compare.models import (
     CriterionSnapshot,
     Delivery,
     Judgment,
+    LoopTelemetry,
     Material,
     PreparedPair,
     RecipeRef,
@@ -18,7 +19,9 @@ from abar.compare.models import (
     Session,
     SessionItem,
     Telemetry,
+    TimeRange,
     Variant,
+    VariantKind,
 )
 from abar.foundation.events import EventEnvelope
 from abar.foundation.json_types import JSONValue
@@ -107,6 +110,9 @@ def reduce_compare(state: CompareState, event: EventEnvelope) -> CompareState:
         variant = Variant(
             id=_str(p, "variant_id"),
             label=cast(str | None, p.get("label")),
+            kind=cast(VariantKind, p.get("kind", "candidate"))
+            if event.schema_version == 2
+            else "candidate",
             manifest_id=_str(p, "manifest_id"),
             resolved_params=cast(dict[str, JSONValue], p["resolved_params"]),
             render_contract=cast(Literal["renderable", "finite_rendered"], p["render_contract"]),
@@ -268,11 +274,16 @@ def reduce_compare(state: CompareState, event: EventEnvelope) -> CompareState:
         judgment = Judgment(
             id=_str(p, "judgment_id"),
             delivery_id=_str(p, "delivery_id"),
-            preference=cast(Literal[1, 2, 3, 4, 5], p["preference"]),
+            preference=cast(Literal[1, 2, 3, 4, 5] | None, p["preference"]),
+            held=cast(bool, p.get("held", False)) if event.schema_version == 2 else False,
+            comment_range=_time_range(p.get("comment_range"))
+            if event.schema_version == 2
+            else None,
             blockers={
                 cast(Literal["a", "b"], slot): BlockerInput(
                     selected=cast(bool, value["selected"]),
                     note=cast(str | None, value.get("note")),
+                    range=_time_range(value.get("range")) if event.schema_version == 2 else None,
                 )
                 for slot, value in blockers_payload.items()
             },  # type: ignore[arg-type]
@@ -282,6 +293,17 @@ def reduce_compare(state: CompareState, event: EventEnvelope) -> CompareState:
                 listen_ms=cast(dict[Literal["a", "b"], int], telemetry_payload["listen_ms"]),
                 switches=cast(int, telemetry_payload["switches"]),
                 answer_ms=cast(int, telemetry_payload["answer_ms"]),
+                loops=tuple(
+                    LoopTelemetry(
+                        range=TimeRange(**cast(dict[str, float], value["range"])),
+                        listen_ms=cast(dict[Literal["a", "b"], int], value["listen_ms"]),
+                    )
+                    for value in cast(
+                        list[dict[str, JSONValue]], telemetry_payload.get("loops", [])
+                    )
+                )
+                if event.schema_version == 2
+                else (),
             ),
         )
         if judgment.delivery_id in state.judgments:
@@ -346,3 +368,7 @@ def _int(payload: dict[str, JSONValue], key: str) -> int:
 
 def _list_dict(payload: dict[str, JSONValue], key: str) -> list[dict[str, JSONValue]]:
     return cast(list[dict[str, JSONValue]], payload[key])
+
+
+def _time_range(value: JSONValue) -> TimeRange | None:
+    return None if value is None else TimeRange(**cast(dict[str, float], value))
