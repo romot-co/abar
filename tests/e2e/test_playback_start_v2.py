@@ -4,7 +4,7 @@
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from scripts.dev_seed import seed
 from tests.e2e.test_project_ui_v2 import live_server
@@ -77,7 +77,27 @@ def test_pending_autoplay_owns_only_one_source_pair(
         page.locator(".slot-switcher button").nth(1).click()
         page.locator(".slot-switcher button").nth(1).click()
         if action != "keep":
+            # Hold the return refresh so stale "active" data cannot briefly offer a direct
+            # reopen of a now-paused Session. This previously depended on CI network timing.
+            page.evaluate("""() => {
+                const originalFetch = window.fetch;
+                window.refreshProbe = { pending: [], held: true };
+                window.fetch = (input, init) => {
+                    if (input === '/api/project' && refreshProbe.held) {
+                        return new Promise(resolve => refreshProbe.pending.push(
+                            () => resolve(originalFetch(input, init))
+                        ));
+                    }
+                    return originalFetch(input, init);
+                };
+            }""")
             page.get_by_role("button", name="受信箱", exact=True).click()
+            page.wait_for_function("refreshProbe.pending.length > 0")
+            expect(page.get_by_role("heading", name="途中の試聴", exact=True)).not_to_be_visible()
+            page.evaluate("""() => {
+                refreshProbe.held = false;
+                refreshProbe.pending.splice(0).forEach(release => release());
+            }""")
             page.get_by_role("heading", name="途中の試聴", exact=True).wait_for()
         if action == "replace":
             # 一時停止中のSessionは次の一手の面の「続きから」で再開する

@@ -83,9 +83,11 @@ export function App() {
       )}
       {screen === "deck" && (
         <DeckScreen
-          onBack={() => {
+          onBack={async () => {
+            // Pause/answer changes the Session status. Refresh before exposing inbox actions
+            // so "続きから" cannot reopen a paused Session using stale "active" data.
+            await refresh();
             setScreen("project");
-            void refresh();
           }}
         />
       )}
