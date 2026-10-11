@@ -88,6 +88,10 @@ export type ActiveDeckView = {
      * Status
      */
     status: 'active' | 'paused' | null;
+    /**
+     * Word Candidates
+     */
+    word_candidates?: Array<string>;
 };
 
 /**
@@ -254,6 +258,14 @@ export type ClipSnapshotView = {
  */
 export type ConfigRequest = {
     /**
+     * Clear Prescreen Indicator
+     */
+    clear_prescreen_indicator?: boolean;
+    /**
+     * Prescreen Indicator Id
+     */
+    prescreen_indicator_id?: string | null;
+    /**
      * Ready Session Limit
      */
     ready_session_limit?: number | null;
@@ -297,6 +309,40 @@ export type DeckAudioView = {
      * Url
      */
     url: string;
+};
+
+/**
+ * DictionaryEntryView
+ */
+export type DictionaryEntryView = {
+    /**
+     * Definition
+     */
+    definition: string;
+    /**
+     * Evidence Session Ids
+     */
+    evidence_session_ids: Array<string>;
+    /**
+     * Indicator Id
+     */
+    indicator_id: string | null;
+    /**
+     * Scope
+     */
+    scope: string;
+    /**
+     * Status
+     */
+    status: 'candidate' | 'validated' | 'rejected';
+    /**
+     * Symptom Ids
+     */
+    symptom_ids: Array<string>;
+    /**
+     * Term
+     */
+    term: string;
 };
 
 /**
@@ -1007,6 +1053,10 @@ export type ProjectView = {
     current_best: string;
     current_best_evidence: BestUpdateEvidenceView | null;
     /**
+     * Dictionary
+     */
+    dictionary?: Array<DictionaryEntryView>;
+    /**
      * In Use
      */
     in_use: string | null;
@@ -1030,6 +1080,10 @@ export type ProjectView = {
      * Note Markdown
      */
     note_markdown: string | null;
+    /**
+     * Prescreen Indicator Id
+     */
+    prescreen_indicator_id?: string | null;
     /**
      * Previous Best
      */

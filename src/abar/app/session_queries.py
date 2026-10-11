@@ -361,6 +361,7 @@ def active_deck(
         question = "この観点では、どちらを残しますか？"  # noqa: RUF001
     return ActiveDeckView(
         session_id=session_id if project_session is None else project_session.id,
+        word_candidates=tuple(state.research.dictionary) if project_session is not None else (),
         status=cast(Literal["active", "paused"], runtime.status),
         delivery_id=delivery.id,
         sequence_index=delivery.sequence_index,

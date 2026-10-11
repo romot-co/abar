@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from abar.app import commands
 from abar.app.actors import Actor
-from abar.app.diagnostic_queries import symptom_list, symptom_view
+from abar.app.diagnostic_queries import dictionary_list, symptom_list, symptom_view
 from abar.app.queries import entity, history, project_view, session_overview, session_result, status
 from abar.app.repository import WorkspaceError, WorkspaceRepository, default_workspace_path
 from abar.compare.bundles import build_command_bundle
@@ -37,6 +37,7 @@ variant_app = typer.Typer(no_args_is_help=True)
 symptom_app = typer.Typer(no_args_is_help=True)
 verification_app = typer.Typer(no_args_is_help=True)
 baseline_app = typer.Typer(no_args_is_help=True)
+dictionary_app = typer.Typer(no_args_is_help=True)
 note_app = typer.Typer(no_args_is_help=True)
 indicator_app = typer.Typer(no_args_is_help=True)
 indicator_value_app = typer.Typer(no_args_is_help=True)
@@ -53,6 +54,7 @@ material_app.add_typer(material_clip_app, name="clip")
 app.add_typer(variant_app, name="variant")
 app.add_typer(symptom_app, name="symptom")
 app.add_typer(verification_app, name="verification")
+app.add_typer(dictionary_app, name="dictionary")
 project_app.add_typer(baseline_app, name="baseline")
 app.add_typer(note_app, name="note")
 app.add_typer(indicator_app, name="indicator")
@@ -194,18 +196,29 @@ def recipe_set(
 @project_config_app.command("set")
 def config_set(
     context: typer.Context,
-    ready_session_limit: Annotated[int, typer.Option("--ready-session-limit", min=1)],
+    ready_session_limit: Annotated[int | None, typer.Option("--ready-session-limit", min=1)] = None,
+    prescreen_indicator: Annotated[str | None, typer.Option("--prescreen-indicator")] = None,
+    clear_prescreen_indicator: Annotated[bool, typer.Option("--clear-prescreen-indicator")] = False,
 ) -> None:
     cli = _ctx(context)
-    _agent_required(cli)
+    prescreen_requested = prescreen_indicator is not None or clear_prescreen_indicator
+    if prescreen_requested:
+        _human_only(cli)
+    else:
+        _agent_required(cli)
+    if ready_session_limit is None and not prescreen_requested:
+        raise typer.BadParameter("choose a Project configuration option")
     _run(
         cli,
         lambda repository: commands.configure_project(
             repository,
             ready_session_limit=ready_session_limit,
+            prescreen_indicator_id=prescreen_indicator,
+            clear_prescreen_indicator=clear_prescreen_indicator,
+            actor=Actor("human", "human") if prescreen_requested else None,
             idempotency_key=cli.idempotency_key,
         ),
-        "ready Session上限を更新しました",
+        "Project設定を更新しました",
     )
 
 
@@ -1096,6 +1109,87 @@ def symptom_add(
         ),
         "症状を登録しました",
     )
+
+
+@dictionary_app.command("add")
+def dictionary_add(
+    context: typer.Context,
+    term: Annotated[str, typer.Argument()],
+    definition: Annotated[str, typer.Option("--definition")],
+    indicator: Annotated[str | None, typer.Option("--indicator")] = None,
+    status: Annotated[
+        Literal["candidate", "validated", "rejected"], typer.Option("--status")
+    ] = "candidate",
+    evidence: Annotated[list[str] | None, typer.Option("--evidence")] = None,
+    scope: Annotated[str, typer.Option("--scope")] = "",
+    symptom: Annotated[list[str] | None, typer.Option("--symptom")] = None,
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    _run(
+        cli,
+        lambda repository: commands.add_dictionary_entry(
+            repository,
+            term=term,
+            definition=definition,
+            indicator_id=indicator,
+            status=status,
+            evidence_session_ids=tuple(evidence or ()),
+            scope=scope,
+            symptom_ids=tuple(symptom or ()),
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "辞書に語を登録しました",
+    )
+
+
+@dictionary_app.command("set")
+def dictionary_set(
+    context: typer.Context,
+    term: Annotated[str, typer.Argument()],
+    definition: Annotated[str | None, typer.Option("--definition")] = None,
+    indicator: Annotated[str | None, typer.Option("--indicator")] = None,
+    clear_indicator: Annotated[bool, typer.Option("--clear-indicator")] = False,
+    status: Annotated[
+        Literal["candidate", "validated", "rejected"] | None, typer.Option("--status")
+    ] = None,
+    evidence: Annotated[list[str] | None, typer.Option("--evidence")] = None,
+    clear_evidence: Annotated[bool, typer.Option("--clear-evidence")] = False,
+    scope: Annotated[str | None, typer.Option("--scope")] = None,
+    symptom: Annotated[list[str] | None, typer.Option("--symptom")] = None,
+    clear_symptoms: Annotated[bool, typer.Option("--clear-symptoms")] = False,
+) -> None:
+    cli = _ctx(context)
+    _agent_required(cli)
+    if (evidence and clear_evidence) or (symptom and clear_symptoms):
+        raise typer.BadParameter("choose either references or their removal")
+    _run(
+        cli,
+        lambda repository: commands.update_dictionary_entry(
+            repository,
+            term,
+            definition=definition,
+            indicator_id=indicator,
+            clear_indicator=clear_indicator,
+            status=status,
+            evidence_session_ids=()
+            if clear_evidence
+            else None
+            if evidence is None
+            else tuple(evidence),
+            scope=scope,
+            symptom_ids=() if clear_symptoms else None if symptom is None else tuple(symptom),
+            actor_id=cli.actor or "human",
+            idempotency_key=cli.idempotency_key,
+        ),
+        "辞書の語を更新しました",
+    )
+
+
+@dictionary_app.command("list")
+def dictionary_terms(context: typer.Context) -> None:
+    _read(_ctx(context), dictionary_list, "辞書の一覧")
 
 
 @symptom_app.command("list")

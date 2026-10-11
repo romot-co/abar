@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { EMPTY_DRAFT, buildRequest, toggleBlocker, changeComment } from '../src/deck/answerDraft.ts';
+import { EMPTY_DRAFT, buildRequest, toggleBlocker, changeComment, hasMemoWord, canToggleMemoWord, toggleMemoWord } from '../src/deck/answerDraft.ts';
 
 const loop = { start: 0.2, end: 0.8 };
 const measured = () => ({ listenMs: { a: 40, b: 50 }, switches: 1, answerMs: 100, loops: [{ range: loop, listenMs: { a: 40, b: 50 } }] });
@@ -28,4 +28,34 @@ test('memo stamps only the first input and clears when emptied', () => {
   assert.deepEqual(changeComment(next, '', null).commentRange, null);
   const plain = changeComment(EMPTY_DRAFT, 'plain', null);
   assert.equal(changeComment(plain, 'plain more', loop).commentRange, null);
+});
+
+test('suggestions toggle memo text, stamp first input and clear the stamp with the last word', () => {
+  const first = toggleMemoWord(EMPTY_DRAFT, 'ミョイン', loop);
+  assert.equal(first.comment, 'ミョイン');
+  assert.deepEqual(first.commentRange, loop);
+  const second = toggleMemoWord(first, '尾が揺れる', { start: 1, end: 2 });
+  assert.equal(second.comment, 'ミョイン 尾が揺れる');
+  assert.deepEqual(second.commentRange, loop);
+  const removed = toggleMemoWord(second, 'ミョイン', null);
+  assert.equal(removed.comment, '尾が揺れる');
+  assert.deepEqual(removed.commentRange, loop);
+  const empty = toggleMemoWord(removed, '尾が揺れる', null);
+  assert.equal(empty.comment, '');
+  assert.equal(empty.commentRange, null);
+  const plain = changeComment(EMPTY_DRAFT, '手書きのメモ', null);
+  assert.equal(toggleMemoWord(plain, 'ミョイン', loop).commentRange, null);
+});
+
+test('suggestion matching preserves sentences, multiword terms and regex punctuation', () => {
+  assert.equal(hasMemoWord('尾が揺れる', '尾'), false);
+  assert.equal(hasMemoWord('既存 phase (A+B) 続き', 'phase (A+B)'), true);
+  const sentence = changeComment(EMPTY_DRAFT, '尾が揺れる', null);
+  const added = toggleMemoWord(sentence, '尾', null);
+  assert.equal(added.comment, '尾が揺れる 尾');
+  assert.equal(toggleMemoWord(added, '尾', null).comment, '尾が揺れる');
+  const full = changeComment(EMPTY_DRAFT, 'x'.repeat(500), null);
+  assert.equal(canToggleMemoWord(full.comment, '尾'), false);
+  assert.equal(canToggleMemoWord('x'.repeat(498) + ' 尾', '尾'), true);
+  assert.equal(toggleMemoWord(full, '尾', loop), full);
 });

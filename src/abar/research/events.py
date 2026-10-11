@@ -16,6 +16,9 @@ OBSERVATIONAL = (
     "verification.recorded",
     "baseline.recorded",
     "current_best.flagged",
+    "dictionary.entry.recorded",
+    "dictionary.entry.updated",
+    "project.prescreen_indicator.changed",
 )
 
 EVENT_SCHEMAS = {

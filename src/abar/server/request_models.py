@@ -145,6 +145,8 @@ class BriefRequest(RequestModel):
 class ConfigRequest(RequestModel):
     recipe: Literal["native", "aligned", "matched", "matched-v2", "level-matched"] | None = None
     ready_session_limit: Annotated[int | None, Field(gt=0)] = None
+    prescreen_indicator_id: str | None = None
+    clear_prescreen_indicator: bool = False
 
 
 class ManualBestRequest(RequestModel):

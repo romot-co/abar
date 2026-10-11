@@ -14,7 +14,7 @@ from abar.app.queries import session_result
 from abar.app.repository import WorkspaceRepository
 from abar.app.views import ActionView, SessionResultView, VariantMaterializationView
 from abar.compare.models import RecipeRef
-from abar.server.dependencies import Capability, ServerDependencies
+from abar.server.dependencies import AccessError, Capability, ServerDependencies
 from abar.server.request_models import (
     BestUpdateSessionRequest,
     BriefRequest,
@@ -178,13 +178,20 @@ def build_automation_router(dependencies: ServerDependencies) -> APIRouter:
     def config(
         body: ConfigRequest,
         key: Annotated[str, Depends(dependencies.idempotency_key)],
-        _actor: Annotated[str, Depends(dependencies.actor_id)],
+        authenticated_actor: Annotated[Actor, Depends(dependencies.actor)],
         repository: WorkspaceRepository = repository_dependency,
     ) -> ActionView:
+        if (body.prescreen_indicator_id is not None or body.clear_prescreen_indicator) and (
+            authenticated_actor.role != "human"
+        ):
+            raise AccessError("human interaction capability is required for prescreen selection")
         changed = commands.configure_project(
             repository,
             recipe=None if body.recipe is None else RecipeRef.from_name(body.recipe),
             ready_session_limit=body.ready_session_limit,
+            prescreen_indicator_id=body.prescreen_indicator_id,
+            clear_prescreen_indicator=body.clear_prescreen_indicator,
+            actor=authenticated_actor,
             idempotency_key=key,
         )
         return ActionView(result="changed" if changed else "unchanged")

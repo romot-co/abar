@@ -244,7 +244,19 @@ class ProjectDashboardView(PublicView):
     pending_simplifications: tuple[SimplificationPromptView, ...]
 
 
+class DictionaryEntryView(PublicView):
+    term: str
+    definition: str
+    indicator_id: str | None
+    status: Literal["candidate", "validated", "rejected"]
+    evidence_session_ids: tuple[str, ...]
+    scope: str
+    symptom_ids: tuple[str, ...]
+
+
 class ProjectView(PublicView):
+    dictionary: tuple[DictionaryEntryView, ...] = ()
+    prescreen_indicator_id: str | None = None
     symptoms: tuple[SymptomSummaryView, ...] = ()
     baselines: dict[str, str] = {}
     verifications: dict[str, dict[str, JSONValue]] = {}
@@ -288,6 +300,7 @@ class DeckAudioView(PublicView):
 
 
 class ActiveDeckView(PublicView):
+    word_candidates: tuple[str, ...] = ()
     schema_version: Literal[2] = 2
     session_id: str | None
     status: Literal["active", "paused"] | None

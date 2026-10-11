@@ -5,7 +5,11 @@ from dataclasses import asdict
 from typing import Literal, cast
 
 from abar.app.dashboard_queries import indicator_summaries, session_cards
-from abar.app.diagnostic_queries import symptom_summaries, verification_documents
+from abar.app.diagnostic_queries import (
+    dictionary_entries,
+    symptom_summaries,
+    verification_documents,
+)
 from abar.app.query_support import (
     public_session_status,
     recipe_label,
@@ -44,6 +48,8 @@ def project_view(repository: WorkspaceRepository, *, since: int = 0) -> ProjectV
     events = tuple(item for item in all_events if item.event_seq > since)[:1000]
     return ProjectView(
         project_id=project.id,
+        dictionary=dictionary_entries(state),
+        prescreen_indicator_id=state.research.prescreen_indicator_id,
         name=project.name,
         symptoms=symptom_summaries(state),
         baselines=state.research.baselines,

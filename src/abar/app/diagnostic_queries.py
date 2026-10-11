@@ -5,7 +5,7 @@ from typing import cast
 
 from abar.app.repository import WorkspaceRepository
 from abar.app.state import ABARState
-from abar.app.views import EntityView, FlagView, SymptomSummaryView
+from abar.app.views import DictionaryEntryView, EntityView, FlagView, SymptomSummaryView
 from abar.foundation.json_types import JSONValue
 
 
@@ -22,6 +22,24 @@ def symptom_summaries(state: ABARState) -> tuple[SymptomSummaryView, ...]:
             ),
         )
         for symptom in state.research.symptoms.values()
+    )
+
+
+def dictionary_entries(state: ABARState) -> tuple[DictionaryEntryView, ...]:
+    return tuple(
+        DictionaryEntryView(**asdict(entry)) for entry in state.research.dictionary.values()
+    )
+
+
+def dictionary_list(repository: WorkspaceRepository) -> EntityView:
+    return EntityView(
+        entity_id="dictionary",
+        kind="dictionary_list",
+        document={
+            "entries": [
+                entry.model_dump(mode="json") for entry in dictionary_entries(repository.state())
+            ]
+        },
     )
 
 

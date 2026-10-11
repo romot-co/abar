@@ -705,6 +705,15 @@ def seed_diagnosis(workspace: Path) -> None:
             symptom = commands.add_symptom(
                 repository, delivery_id=delivery.id, side="b", actor_id="agent:dev-seed"
             )
+            commands.add_dictionary_entry(
+                repository,
+                term="ミョイン",
+                definition="Development fixture: the listener's word, with unverified meaning.",
+                evidence_session_ids=(session_id,),
+                scope="Development fixture only",
+                symptom_ids=(symptom,),
+                actor_id="agent:dev-seed",
+            )
             regression = commands.create_observation_session(
                 repository,
                 first_variant="source",

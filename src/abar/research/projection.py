@@ -8,6 +8,7 @@ from abar.foundation.events import EventEnvelope
 from abar.foundation.json_types import JSONValue
 from abar.research.models import (
     BestFlag,
+    DictionaryEntry,
     Indicator,
     IndicatorValue,
     NoteRevision,
@@ -31,10 +32,47 @@ class ResearchState:
     )
     baselines: dict[str, str] = field(default_factory=dict[str, str])
     current_best_flags: tuple[BestFlag, ...] = ()
+    dictionary: dict[str, DictionaryEntry] = field(default_factory=dict[str, DictionaryEntry])
+    prescreen_indicator_id: str | None = None
 
 
 def reduce_research(state: ResearchState, event: EventEnvelope) -> ResearchState:
     p = event.payload
+    if event.event_type in {"dictionary.entry.recorded", "dictionary.entry.updated"}:
+        entry = DictionaryEntry(
+            term=_dictionary_text(p, "term"),
+            definition=_dictionary_text(p, "definition"),
+            indicator_id=cast(str | None, p.get("indicator_id")),
+            status=cast(Literal["candidate", "validated", "rejected"], p["status"]),
+            evidence_session_ids=tuple(cast(list[str], p["evidence_session_ids"])),
+            scope=_dictionary_text(p, "scope"),
+            symptom_ids=tuple(cast(list[str], p["symptom_ids"])),
+        )
+        if entry.indicator_id is not None and entry.indicator_id not in state.indicators:
+            raise ValueError("dictionary references an unknown Indicator")
+        if any(session not in state.project_sessions for session in entry.evidence_session_ids):
+            raise ValueError("dictionary references an unknown Project Session")
+        if any(symptom not in state.symptoms for symptom in entry.symptom_ids):
+            raise ValueError("dictionary references an unknown Symptom")
+        existing = state.dictionary.get(entry.term)
+        if (event.event_type == "dictionary.entry.recorded") != (existing is None):
+            raise ValueError("dictionary entry must be registered before updating")
+        symptoms = {
+            key: replace(
+                symptom,
+                dictionary_terms=(
+                    *tuple(term for term in symptom.dictionary_terms if term != entry.term),
+                    *((entry.term,) if key in entry.symptom_ids else ()),
+                ),
+            )
+            for key, symptom in state.symptoms.items()
+        }
+        return replace(state, dictionary={**state.dictionary, entry.term: entry}, symptoms=symptoms)
+    if event.event_type == "project.prescreen_indicator.changed":
+        indicator_id = cast(str | None, p["indicator_id"])
+        if indicator_id is not None and indicator_id not in state.indicators:
+            raise ValueError("prescreen setting references an unknown Indicator")
+        return replace(state, prescreen_indicator_id=indicator_id)
     if event.event_type == "project_session.created":
         project_session = ProjectSession(
             id=_str(p, "project_session_id"),
@@ -196,6 +234,13 @@ def _recipe(payload: dict[str, JSONValue]) -> RecipeRef:
 
 def _str(payload: dict[str, JSONValue], key: str) -> str:
     return cast(str, payload[key])
+
+
+def _dictionary_text(payload: dict[str, JSONValue], key: str) -> str:
+    value = payload[key]
+    if not isinstance(value, str):
+        raise ValueError(f"dictionary {key} must be text")
+    return value
 
 
 def _int(payload: dict[str, JSONValue], key: str) -> int:

@@ -15,6 +15,7 @@ from typing import cast
 from abar.app import (
     catalog_commands,
     diagnostic_commands,
+    dictionary_commands,
     materialization_commands,
     observation_commands,
     project_commands,
@@ -51,6 +52,8 @@ def _serialized[**P, R](command: Callable[P, R]) -> Callable[P, R]:
 
 
 add_symptom = _serialized(diagnostic_commands.add_symptom)
+add_dictionary_entry = _serialized(dictionary_commands.add_dictionary_entry)
+update_dictionary_entry = _serialized(dictionary_commands.update_dictionary_entry)
 update_symptom = _serialized(diagnostic_commands.update_symptom)
 transition_symptom = _serialized(diagnostic_commands.transition_symptom)
 record_verification = _serialized(diagnostic_commands.record_verification)
@@ -90,6 +93,7 @@ __all__ = [
     "SessionPreparationProgress",
     "abandon_session",
     "add_clip",
+    "add_dictionary_entry",
     "add_material",
     "add_materials",
     "add_symptom",
@@ -120,6 +124,7 @@ __all__ = [
     "skip_delivery",
     "start_session",
     "transition_symptom",
+    "update_dictionary_entry",
     "update_indicator",
     "update_symptom",
     "write_note",

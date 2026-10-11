@@ -230,6 +230,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
             heard={player.heard}
             draft={draft}
             loop={player.loop}
+            wordCandidates={deck.word_candidates ?? []}
             commentRef={commentRef}
             error={answerError}
             onChange={setDraft}

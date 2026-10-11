@@ -47,3 +47,32 @@ export function toggleBlocker(value: BlockerDraft, loop: LoopRange | null): Bloc
 export function changeComment(draft: AnswerDraft, comment: string, loop: LoopRange | null): AnswerDraft {
   return { ...draft, comment, commentRange: !comment ? null : draft.comment ? draft.commentRange : loop ? { ...loop } : null };
 }
+
+// Match a complete suggestion, so a short word never removes part of another sentence.
+function wordPattern(word: string): RegExp {
+  return new RegExp(`(^|\\s)${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`, "u");
+}
+
+export function hasMemoWord(comment: string, word: string): boolean {
+  return wordPattern(word).test(comment);
+}
+
+export function canToggleMemoWord(comment: string, word: string): boolean {
+  const separatorLength = comment && !/\s$/u.test(comment) ? 1 : 0;
+  return hasMemoWord(comment, word) || comment.length + separatorLength + word.length <= 500;
+}
+
+export function toggleMemoWord(draft: AnswerDraft, word: string, loop: LoopRange | null): AnswerDraft {
+  const match = wordPattern(word).exec(draft.comment);
+  let comment: string;
+  if (match) {
+    comment = draft.comment.slice(0, match.index) + draft.comment.slice(match.index + match[0].length);
+    if (match.index === 0) comment = comment.trimStart();
+    if (!comment.trim()) comment = "";
+  } else {
+    const separator = draft.comment && !/\s$/u.test(draft.comment) ? " " : "";
+    comment = draft.comment + separator + word;
+    if (comment.length > 500) return draft;
+  }
+  return changeComment(draft, comment, loop);
+}

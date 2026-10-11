@@ -301,3 +301,38 @@ Additional canonical agent writes are `symptom add`, `symptom note`, `symptom re
 `project best flag --symptom <id> --session <id> --reason ...`. Read with `symptom list`
 and `symptom show`. Continue using the same explicit Workspace, JSON actor, and one
 idempotency key for each logical write.
+
+## Perceptual dictionary
+
+Keep the listener's words in the Project dictionary with
+`dictionary add <term> --definition <meaning> [--indicator <id>] [--symptom <id>]`.
+Entries are observational. Start with `candidate`; an empty dictionary is valid.
+Use `dictionary set <term> --status validated --evidence <completed-session-id> --scope <scope>`
+to record a bounded externally established relation. Repeat `--evidence` and `--symptom`
+for multiple references. Keep confounds, contradictory examples, false negatives and
+false positives in the definition, scope, and Project note; ABAR does not compute or
+validate a detector. `validated` records a reported status, not ABAR certification.
+Use `rejected` for a disproven relation without erasing its record.
+
+Read the full records with `dictionary list` or `project show`. Definitions, status,
+Indicator links, scope and evidence can be updated with `dictionary set`; omitted
+fields retain their existing values. Use `--clear-indicator`, `--clear-evidence` and
+`--clear-symptoms` to remove the respective current links. Historical events remain.
+Symptom records also list their linked dictionary terms.
+
+The listening screen offers every dictionary term as an optional memo suggestion,
+regardless of status. A suggestion is language, not a tag, a preference or a detector
+verdict. Selecting it writes into the memo and uses the same range-stamp rule as typing.
+
+Only the human selects a validated dictionary entry's Indicator for prescreening:
+`project config set --prescreen-indicator <id>`. Only the human can clear that selection
+with `project config set --clear-prescreen-indicator`. These commands use the human
+CLI path, without `--json --actor`. Never select or clear it on the human's behalf.
+When generating candidates, consult `project show` for the selected Indicator and its
+current dictionary status, listening evidence and scope. If it is no longer validated
+or the material/mechanism is outside that scope, do not apply it as a prescreen.
+ABAR stores the human's selection; the external agent performs any measurement or
+screening. It never changes the sealed Best Update rules or grants adoption authority.
+
+Additional canonical agent writes are `dictionary add` and `dictionary set`, using the
+same explicit Workspace, JSON actor and per-operation idempotency key.

@@ -18,6 +18,7 @@ def test_cli_exposes_only_v2_top_level_surface() -> None:
         "indicator",
         "symptom",
         "verification",
+        "dictionary",
     ):
         assert command in result.stdout
     for removed in ("crank", "candidate", "board", "deck"):
@@ -36,5 +37,8 @@ def test_agent_document_tracks_standard_loop_commands() -> None:
         "verification record",
         "project baseline add",
         "project best flag",
+        "dictionary add",
+        "dictionary set",
+        "prescreen-indicator",
     ):
         assert command in document

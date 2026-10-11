@@ -84,6 +84,30 @@ class Indicator:
 
 
 @dataclass(frozen=True, slots=True)
+class DictionaryEntry:
+    term: str
+    definition: str
+    indicator_id: str | None = None
+    status: Literal["candidate", "validated", "rejected"] = "candidate"
+    evidence_session_ids: tuple[str, ...] = ()
+    scope: str = ""
+    symptom_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        validate_focus(self.term)
+        if "\r" in self.term:
+            raise ValueError("dictionary term must be a single line")
+        if not self.definition.strip():
+            raise ValueError("dictionary definition is required")
+        if self.status not in {"candidate", "validated", "rejected"}:
+            raise ValueError("unknown dictionary status")
+        if len(set(self.evidence_session_ids)) != len(self.evidence_session_ids):
+            raise ValueError("dictionary evidence Sessions must be distinct")
+        if len(set(self.symptom_ids)) != len(self.symptom_ids):
+            raise ValueError("dictionary Symptoms must be distinct")
+
+
+@dataclass(frozen=True, slots=True)
 class IndicatorValue:
     indicator_id: str
     subject_id: str

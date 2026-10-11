@@ -6,7 +6,7 @@ import type { ComparisonPlayer } from "../useComparisonPlayer";
 import type { AnswerDraft, BlockerDraft } from "./answerDraft";
 import { shortenPair } from "./candidateNames";
 import { rangeText, type LoopRange } from "./loopRange";
-import { changeComment, toggleBlocker } from "./answerDraft";
+import { canToggleMemoWord, changeComment, hasMemoWord, toggleBlocker, toggleMemoWord } from "./answerDraft";
 import { PositionSlider } from "./PositionSlider";
 import { InlineError } from "../InlineError";
 
@@ -146,13 +146,14 @@ type AnswerEditorProps = {
   heard: { a: boolean; b: boolean };
   draft: AnswerDraft;
   loop: LoopRange | null;
+  wordCandidates: readonly string[];
   commentRef: RefObject<HTMLTextAreaElement | null>;
   error: string | null;
   onChange: (draft: AnswerDraft) => void;
 };
 
 /* 選好 → (選んだ後に)残せない問題とメモ(段階的な開示、nibi SPEC §6.7 / §2.13)。記録は画面下の操作欄。 */
-export function AnswerEditor({ question, locked, heard, draft, loop, commentRef, error, onChange }: AnswerEditorProps) {
+export function AnswerEditor({ question, locked, heard, draft, loop, wordCandidates, commentRef, error, onChange }: AnswerEditorProps) {
   const revealed = draft.preference !== null || draft.held;
   // 押せない間は理由と次の一手を直下に(nibi 0006 / 0007 P-1)。
   const hint = locked
@@ -204,6 +205,13 @@ export function AnswerEditor({ question, locked, heard, draft, loop, commentRef,
           </section>
           <section className="memo-section" aria-labelledby="memo-title">
             <h2 id="memo-title" className="nibi-heading">メモ{draft.commentRange && <span className="range-stamp"> · {rangeText(draft.commentRange)}</span>}</h2>
+            {wordCandidates.length > 0 && (
+              <div className="word-chips">
+                {wordCandidates.map((word) => (
+                  <button type="button" key={word} className="nibi-button nibi-button--toggle" disabled={locked || !canToggleMemoWord(draft.comment, word)} aria-pressed={hasMemoWord(draft.comment, word)} onClick={() => onChange(toggleMemoWord(draft, word, loop))}><span>{word}</span></button>
+                ))}
+              </div>
+            )}
             <div className="nibi-field nibi-field--fill comment-field">
               <textarea
                 ref={commentRef}

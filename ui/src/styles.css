@@ -314,3 +314,6 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 .position-slider .nibi-slider__thumb { z-index: 3; pointer-events: none; }
 .range-stamp { color: var(--nibi-color-text-value); font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hold-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--nibi-grid-y) / 2) var(--nibi-size-gap-x); }
+.word-chips { display: flex; flex-wrap: wrap; gap: var(--nibi-grid-y) var(--nibi-grid-x); }
+.word-chips .nibi-button { max-width: 100%; height: auto; min-height: var(--nibi-size-control); padding-block: var(--nibi-grid-y); white-space: normal; }
+.word-chips .nibi-button > span { min-width: 0; overflow-wrap: anywhere; }
